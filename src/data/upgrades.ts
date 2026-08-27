@@ -1,4 +1,4 @@
-import type { PlayerStats } from '../world/types';
+import type { PlayerStats, WeaponState } from '../world/types';
 
 interface UpgradeBase {
   readonly id: string;
@@ -30,7 +30,23 @@ export interface WeaponUpgradeDef extends UpgradeBase {
   readonly weaponId: string;
 }
 
-export type UpgradeDef = StatUpgradeDef | WeaponUpgradeDef;
+/**
+ * Modifies one weapon the player already owns.
+ *
+ * The distinction from `StatUpgradeDef` is the point: a stat upgrade multiplies
+ * every weapon, this multiplies exactly one. Without it the only way to invest
+ * in a weapon is to re-take it, which caps out, and the run collapses into a
+ * single viable build.
+ *
+ * Offered only while `weaponId` is owned — see `rollUpgrades`.
+ */
+export interface WeaponModUpgradeDef extends UpgradeBase {
+  readonly kind: 'weaponMod';
+  readonly weaponId: string;
+  readonly apply: (state: WeaponState) => void;
+}
+
+export type UpgradeDef = StatUpgradeDef | WeaponUpgradeDef | WeaponModUpgradeDef;
 
 export const UPGRADES: readonly UpgradeDef[] = [
   {
@@ -52,7 +68,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
   {
     kind: 'stat',
     id: 'damage',
-    name: 'Sharpened Bolts',
+    name: 'Whetstone',
     description: '+25% damage',
     maxStacks: 5,
     apply: (stats) => {
@@ -80,23 +96,47 @@ export const UPGRADES: readonly UpgradeDef[] = [
     },
   },
   {
-    kind: 'stat',
+    kind: 'weaponMod',
     id: 'multishot',
+    weaponId: 'bolt',
     name: 'Split Shot',
-    description: '+1 projectile',
+    description: 'Auto Bolt fires +1 projectile',
     maxStacks: 4,
-    apply: (stats) => {
-      stats.projectiles += 1;
+    apply: (weapon) => {
+      weapon.projectiles += 1;
     },
   },
   {
-    kind: 'stat',
+    kind: 'weaponMod',
     id: 'pierce',
+    weaponId: 'bolt',
     name: 'Piercing Tip',
-    description: 'Projectiles pierce one more enemy',
+    description: 'Auto Bolt pierces one more enemy',
     maxStacks: 3,
-    apply: (stats) => {
-      stats.pierce += 1;
+    apply: (weapon) => {
+      weapon.pierce += 1;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'orbit-reach',
+    weaponId: 'orbit',
+    name: 'Long Reach',
+    description: 'Orbit Blades swing wider, and the blades grow with the ring',
+    maxStacks: 3,
+    apply: (weapon) => {
+      weapon.areaMul += 0.18;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'nova-blast',
+    weaponId: 'nova',
+    name: 'Wide Blast',
+    description: 'Shockwave covers more ground',
+    maxStacks: 3,
+    apply: (weapon) => {
+      weapon.areaMul += 0.2;
     },
   },
   {

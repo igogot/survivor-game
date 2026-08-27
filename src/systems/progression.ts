@@ -42,11 +42,22 @@ export function progressionSystem(world: World): void {
   world.offered = offers;
 }
 
-/** Picks up to `count` distinct upgrades that are not already at max stacks. */
+/**
+ * Whether an upgrade can do anything for the player right now.
+ *
+ * A weapon modifier names a weapon; offering it before that weapon is owned
+ * would put a card on the screen that changes nothing, which is worse than a
+ * weak card because it looks like a choice.
+ */
+export function isOfferable(world: World, upgrade: UpgradeDef): boolean {
+  if ((world.stacks.get(upgrade.id) ?? 0) >= upgrade.maxStacks) return false;
+  if (upgrade.kind !== 'weaponMod') return true;
+  return world.weapons.some((weapon) => weapon.defId === upgrade.weaponId);
+}
+
+/** Picks up to `count` distinct upgrades that can actually affect this run. */
 export function rollUpgrades(world: World, count = 3): UpgradeDef[] {
-  const available = UPGRADES.filter(
-    (upgrade) => (world.stacks.get(upgrade.id) ?? 0) < upgrade.maxStacks,
-  );
+  const available = UPGRADES.filter((upgrade) => isOfferable(world, upgrade));
   return world.rng.shuffled(available).slice(0, count);
 }
 
@@ -60,14 +71,21 @@ export function applyUpgrade(world: World, id: string): void {
 
   const stacks = world.stacks.get(id) ?? 0;
   if (stacks >= def.maxStacks) return;
+  if (!isOfferable(world, def)) return;
 
   const player = world.player;
   const maxHpBefore = player.stats.maxHp;
 
   if (def.kind === 'stat') {
     def.apply(player.stats);
-  } else {
+  } else if (def.kind === 'weapon') {
     grantWeapon(world, def.weaponId);
+  } else {
+    // Guarded by isOfferable above, so the weapon is owned. Skipping rather
+    // than throwing keeps a bad id from ending a run.
+    const weapon = world.weapons.find((owned) => owned.defId === def.weaponId);
+    if (weapon === undefined) return;
+    def.apply(weapon);
   }
 
   world.stacks.set(id, stacks + 1);

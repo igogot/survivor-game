@@ -2,7 +2,7 @@ import { Application, Container, Sprite, TilingSprite } from 'pixi.js';
 import type { Texture } from 'pixi.js';
 import { CONFIG } from '../config';
 import { TAU, lerp } from '../core/math';
-import { orbitCount, orbitDistance, weaponById } from '../data/weapons';
+import { orbitCount, orbitDistance, orbitRadius, weaponById } from '../data/weapons';
 import {
   CIRCLE_TEXTURE_SIZE,
   GEM_TEXTURE_SIZE,
@@ -192,7 +192,7 @@ export class GameRenderer {
     for (let i = 0; i < weapons.length; i++) {
       const def = weaponById(weapons[i].defId);
       if (def === undefined || def.kind !== 'orbit') continue;
-      needed += orbitCount(def, weapons[i].level);
+      needed += orbitCount(def, weapons[i]);
     }
 
     this.resize(this.orbSprites, this.orbLayer, needed, this.textures.circle);
@@ -203,8 +203,9 @@ export class GameRenderer {
       const def = weaponById(state.defId);
       if (def === undefined || def.kind !== 'orbit') continue;
 
-      const count = orbitCount(def, state.level);
-      const distance = orbitDistance(def, state.level);
+      const count = orbitCount(def, state);
+      const distance = orbitDistance(def, state);
+      const radius = orbitRadius(def, state);
       const angle = lerp(state.pangle, state.angle, alpha);
 
       for (let orb = 0; orb < count; orb++) {
@@ -214,7 +215,7 @@ export class GameRenderer {
           playerX + Math.cos(a) * distance,
           playerY + Math.sin(a) * distance,
         );
-        sprite.scale.set((def.orbRadius * 2) / CIRCLE_TEXTURE_SIZE);
+        sprite.scale.set((radius * 2) / CIRCLE_TEXTURE_SIZE);
         sprite.tint = def.color;
       }
     }

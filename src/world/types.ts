@@ -9,8 +9,6 @@ export interface PlayerStats {
   moveSpeed: number;
   damageMul: number;
   attackSpeedMul: number;
-  projectiles: number;
-  pierce: number;
   pickupRadius: number;
 }
 
@@ -97,6 +95,24 @@ export interface WeaponState {
   cooldown: number;
   angle: number;
   pangle: number;
+  /**
+   * Modifiers raised by upgrades that name this weapon.
+   *
+   * `PlayerStats` multiplies every weapon the player owns; these multiply
+   * exactly one. That split is what makes investing in a specific weapon
+   * possible, and it is the whole point of the distinction.
+   */
+  damageMul: number;
+  attackSpeedMul: number;
+  /** Scales the weapon's footprint: orbit reach and blade size, nova radius. */
+  areaMul: number;
+  /**
+   * Bolt-only, the same way `angle` and `pangle` are orbit-only. Both were
+   * player stats until it became clear that nothing but the bolt ever read
+   * them, which made them look global while behaving otherwise.
+   */
+  projectiles: number;
+  pierce: number;
 }
 
 /**
