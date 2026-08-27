@@ -5,6 +5,7 @@ import {
   orbitCount,
   orbitDistance,
   orbitRadius,
+  orbitSpin,
   weaponById,
   weaponCooldown,
   weaponDamage,
@@ -100,7 +101,7 @@ function stepOrbit(world: World, def: OrbitWeaponDef, state: WeaponState, dt: nu
   // interpolates between `pangle` and `angle`, and a wrap would run that
   // interpolation backwards for one frame every couple of seconds.
   state.pangle = state.angle;
-  state.angle += def.spin * dt;
+  state.angle += orbitSpin(def, state) * dt;
 
   state.cooldown -= dt;
   if (state.cooldown > 0) return;

@@ -35,16 +35,21 @@ const PREFERENCE = [
   'orbit',
   'damage',
   'haste',
+  // Rate before reach, and both before the remaining stats: a weapon-specific
+  // multiplier pays out on one weapon but pays more, and the bot leans on nova
+  // and the blades for its kills. Leaving these at the bottom of the list, as
+  // they were when they had no rate line to compete with, measured a player who
+  // never takes them while they still crowd every roll — the worst reading of
+  // the pool rather than the honest one.
+  'nova-cadence',
+  'orbit-spin',
   'multishot',
+  'nova-blast',
+  'orbit-reach',
   'vitality',
   'pierce',
   'magnet',
   'boots',
-  // Per-weapon modifiers go last, so the order above is byte-for-byte the one
-  // the previous numbers were measured with. Reordering the instrument at the
-  // same time as the thing it measures would make the two indistinguishable.
-  'nova-blast',
-  'orbit-reach',
 ];
 
 /**

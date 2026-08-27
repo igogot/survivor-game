@@ -195,3 +195,67 @@ describe('effectSystem', () => {
     expect(world.effectPool.allocated).toBe(world.effectPool.available);
   });
 });
+
+/**
+ * The second upgrade line each of these weapons got: rate, where the first one
+ * bought only reach. Reach covers more ground but kills nothing faster, so a
+ * weapon with reach alone stops scaling exactly when the horde stops thinning.
+ */
+describe('rate upgrades', () => {
+  it('turns the blade ring faster and cuts more often', () => {
+    const world = new World(30);
+    grantWeapon(world, 'orbit');
+
+    const state = weaponState(world, 'orbit');
+    weaponSystem(world, DT);
+    const baseSpin = state.angle;
+    const basePulse = state.cooldown;
+
+    world.pendingLevels = 1;
+    applyUpgrade(world, 'orbit-spin');
+
+    state.angle = 0;
+    state.cooldown = 0;
+    weaponSystem(world, DT);
+
+    expect(state.angle).toBeCloseTo(baseSpin * 1.5);
+    expect(state.cooldown).toBeCloseTo(basePulse / 1.4);
+  });
+
+  it('bursts the shockwave more often without touching the others', () => {
+    const world = new World(31);
+    grantWeapon(world, 'nova');
+    grantWeapon(world, 'orbit');
+
+    weaponSystem(world, DT);
+    const baseNova = weaponState(world, 'nova').cooldown;
+    const baseOrbit = weaponState(world, 'orbit').cooldown;
+
+    world.pendingLevels = 1;
+    applyUpgrade(world, 'nova-cadence');
+
+    weaponState(world, 'nova').cooldown = 0;
+    weaponState(world, 'orbit').cooldown = 0;
+    weaponSystem(world, DT);
+
+    expect(weaponState(world, 'nova').cooldown).toBeCloseTo(baseNova / 1.4);
+    expect(weaponState(world, 'orbit').cooldown).toBeCloseTo(baseOrbit);
+  });
+
+  it('keeps the global attack speed multiplying on top of the weapon one', () => {
+    const world = new World(32);
+    grantWeapon(world, 'nova');
+
+    weaponSystem(world, DT);
+    const base = weaponState(world, 'nova').cooldown;
+
+    world.pendingLevels = 2;
+    applyUpgrade(world, 'nova-cadence');
+    applyUpgrade(world, 'haste');
+
+    weaponState(world, 'nova').cooldown = 0;
+    weaponSystem(world, DT);
+
+    expect(weaponState(world, 'nova').cooldown).toBeCloseTo(base / (1.4 * 1.2));
+  });
+});

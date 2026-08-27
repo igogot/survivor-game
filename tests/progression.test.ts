@@ -113,6 +113,12 @@ describe('rollUpgrades', () => {
     }
   });
 
+  it('fills all four cards while the pool can', () => {
+    const world = new World(30);
+
+    expect(rollUpgrades(world)).toHaveLength(4);
+  });
+
   it('offers distinct upgrades', () => {
     const world = new World(7);
     for (let i = 0; i < 40; i++) {
