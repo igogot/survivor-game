@@ -1,0 +1,56 @@
+import { contactSystem } from '../systems/contact';
+import { effectSystem } from '../systems/effects';
+import { movementSystem, separationSystem } from '../systems/movement';
+import { pickupSystem } from '../systems/pickup';
+import { progressionSystem } from '../systems/progression';
+import { projectileSystem } from '../systems/projectiles';
+import { reapSystem } from '../systems/reap';
+import { spawnSystem } from '../systems/spawn';
+import { weaponSystem } from '../systems/weapons';
+import type { World } from './world';
+
+/**
+ * One simulation tick.
+ *
+ * The order matters more than it looks. The broad-phase grid stores *indices*
+ * into `world.enemies`, so anything that removes an enemy invalidates it:
+ *
+ *   1. reap    — remove last tick's dead first, while no index is live
+ *   2. spawn   — add new enemies before the grid is built
+ *   3. move    — player and enemies advance
+ *   4. rebuild — grid now matches the post-movement array exactly
+ *   5. combat  — every consumer of the grid runs here, removing nothing
+ *   6. progression — may flip the phase to 'levelup' and pause the run
+ *
+ * Cosmetic effects are advanced with the rest of the bookkeeping, after combat
+ * has had its chance to spawn them.
+ *
+ * Separation nudges enemies by a few pixels after the rebuild; the combat
+ * systems widen their queries by BROADPHASE_PAD to absorb that drift.
+ */
+export function stepWorld(world: World, dt: number): void {
+  if (world.phase !== 'playing') return;
+
+  world.time += dt;
+
+  reapSystem(world);
+  spawnSystem(world, dt);
+  movementSystem(world, dt);
+  rebuildGrid(world);
+  separationSystem(world, dt);
+  weaponSystem(world, dt);
+  projectileSystem(world, dt);
+  contactSystem(world);
+  pickupSystem(world, dt);
+  effectSystem(world, dt);
+  progressionSystem(world);
+}
+
+/** Exported so a test can put enemies in the world and query them directly. */
+export function rebuildGrid(world: World): void {
+  const { grid, enemies } = world;
+  grid.clear();
+  for (let i = 0; i < enemies.length; i++) {
+    grid.insert(i, enemies[i].x, enemies[i].y);
+  }
+}

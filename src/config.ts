@@ -1,0 +1,65 @@
+/**
+ * Every tunable number lives here. Balancing a survivor-like is mostly editing
+ * this file and replaying, so nothing gameplay-related should be hard-coded in
+ * the systems themselves.
+ */
+export const CONFIG = {
+  /** Simulation ticks per second. Rendering interpolates between ticks. */
+  tickRate: 60,
+  /** Longest frame the loop will integrate; guards against the spiral of death. */
+  maxFrameTime: 0.25,
+  /** Run length in seconds. The boss spawns when it elapses. */
+  runDuration: 600,
+
+  player: {
+    radius: 12,
+    maxHp: 100,
+    moveSpeed: 175,
+    /** Invulnerability window after taking a hit. */
+    invulnTime: 0.5,
+    /** Gems inside this radius fly toward the player. */
+    pickupRadius: 75,
+    /** Gems inside this radius are collected. */
+    collectRadius: 20,
+    magnetSpeed: 280,
+  },
+
+  spawn: {
+    /** Enemies appear on a ring this far out, always off-screen. */
+    ringRadius: 780,
+    /** Enemies that wander further than this are recycled. */
+    despawnRadius: 1500,
+    /** Hard ceiling that protects the frame rate. */
+    maxEnemies: 600,
+    baseInterval: 0.8,
+    /** Spawn frequency grows linearly with this. Quadratic growth pins the cap. */
+    pressurePerMinute: 0.45,
+    /** Enemies added per spawn tick, growing with this. */
+    batchPerMinute: 0.3,
+    hpScalePerMinute: 0.5,
+
+    /** Fraction of spawns placed in the player's path instead of anywhere. */
+    aheadBias: 0.65,
+    /** Half-width of the arc those spawns use, in radians. */
+    aheadSpread: 1.0,
+
+    /** Seconds in one surge-and-lull cycle. */
+    wavePeriod: 42,
+    /** Seconds of that cycle spent surging. */
+    waveSurge: 14,
+    /** Spawn rate multiplier at the peak of a surge. */
+    wavePeak: 2.4,
+
+    /** Quiet seconds before the boss arrives. */
+    bossLull: 12,
+  },
+
+  grid: {
+    /** Roughly 3x the common enemy radius: few cells per query, few candidates per cell. */
+    cellSize: 64,
+  },
+
+  camera: {
+    zoom: 1,
+  },
+} as const;

@@ -1,0 +1,157 @@
+import type { WeaponState } from '../world/types';
+
+/**
+ * Weapons are data.
+ *
+ * `kind` selects which routine in src/systems/weapons.ts drives the weapon;
+ * everything else on a definition is a number that can be retuned without
+ * touching a system. The union is exhaustively switched over, so adding a
+ * fourth kind makes the compiler point at every place that has to handle it.
+ */
+interface WeaponBase {
+  readonly id: string;
+  readonly name: string;
+  /** Seconds between activations at 1.0x attack speed. */
+  readonly cooldown: number;
+  /** Damage at level 1, before the player's damage multiplier. */
+  readonly damage: number;
+  readonly damagePerLevel: number;
+  readonly color: number;
+}
+
+/** Auto-aimed shots at the nearest enemy. The weapon every run starts with. */
+export interface BoltWeaponDef extends WeaponBase {
+  readonly kind: 'bolt';
+  readonly projectileSpeed: number;
+  readonly projectileRadius: number;
+  /** Auto-aim only considers enemies within this distance. */
+  readonly range: number;
+  /** Projectile lifetime in seconds. */
+  readonly life: number;
+  /** Angle between adjacent projectiles when the player has more than one. */
+  readonly spread: number;
+}
+
+/**
+ * Blades circling the player.
+ *
+ * They never spawn or despawn — the ring is a function of one angle, so the
+ * weapon costs zero entities. Damage lands in pulses rather than continuously,
+ * which is what stops an enemy standing inside a blade from taking 60 hits a
+ * second.
+ */
+export interface OrbitWeaponDef extends WeaponBase {
+  readonly kind: 'orbit';
+  readonly orbs: number;
+  readonly orbsPerLevel: number;
+  /** Distance from the player to the centre of each orb. */
+  readonly distance: number;
+  readonly distancePerLevel: number;
+  readonly orbRadius: number;
+  /** Radians per second. */
+  readonly spin: number;
+}
+
+/**
+ * A periodic burst of damage centred on the player.
+ *
+ * Pure crowd control, and the answer to the late-run problem the bolt cannot
+ * solve: single-target damage does not scale with the size of the horde.
+ */
+export interface NovaWeaponDef extends WeaponBase {
+  readonly kind: 'nova';
+  readonly radius: number;
+  readonly radiusPerLevel: number;
+  /** Seconds the shockwave ring stays on screen. */
+  readonly effectLife: number;
+}
+
+export type WeaponDef = BoltWeaponDef | OrbitWeaponDef | NovaWeaponDef;
+
+export const BOLT: BoltWeaponDef = {
+  kind: 'bolt',
+  id: 'bolt',
+  name: 'Auto Bolt',
+  cooldown: 0.55,
+  damage: 8,
+  damagePerLevel: 0,
+  color: 0x7fe7ff,
+  projectileSpeed: 430,
+  projectileRadius: 5,
+  range: 430,
+  life: 1.4,
+  spread: 0.16,
+};
+
+export const ORBIT: OrbitWeaponDef = {
+  kind: 'orbit',
+  id: 'orbit',
+  name: 'Orbit Blades',
+  cooldown: 0.4,
+  damage: 6,
+  damagePerLevel: 3,
+  color: 0xffd166,
+  orbs: 2,
+  orbsPerLevel: 1,
+  distance: 66,
+  distancePerLevel: 7,
+  orbRadius: 11,
+  spin: 2.4,
+};
+
+export const NOVA: NovaWeaponDef = {
+  kind: 'nova',
+  id: 'nova',
+  name: 'Shockwave',
+  cooldown: 2.2,
+  damage: 14,
+  damagePerLevel: 7,
+  color: 0x9a7cff,
+  radius: 112,
+  radiusPerLevel: 22,
+  effectLife: 0.32,
+};
+
+export const WEAPONS: readonly WeaponDef[] = [BOLT, ORBIT, NOVA];
+
+const BY_ID = new Map<string, WeaponDef>(WEAPONS.map((def) => [def.id, def]));
+
+/** Returns `undefined` for an unknown id rather than throwing — callers skip it. */
+export function weaponById(id: string): WeaponDef | undefined {
+  return BY_ID.get(id);
+}
+
+export const STARTER_WEAPON_ID = BOLT.id;
+
+/*
+ * Level scaling lives here rather than in the systems because the renderer
+ * needs the same numbers: the orbs it draws must sit exactly where the damage
+ * pulse looked for enemies.
+ */
+
+export function weaponDamage(def: WeaponDef, level: number): number {
+  return def.damage + def.damagePerLevel * (level - 1);
+}
+
+export function orbitCount(def: OrbitWeaponDef, level: number): number {
+  return def.orbs + def.orbsPerLevel * (level - 1);
+}
+
+export function orbitDistance(def: OrbitWeaponDef, level: number): number {
+  return def.distance + def.distancePerLevel * (level - 1);
+}
+
+export function novaRadius(def: NovaWeaponDef, level: number): number {
+  return def.radius + def.radiusPerLevel * (level - 1);
+}
+
+/**
+ * A weapon's runtime state. Lives here beside the definition so that both the
+ * world (which grants the starter weapon) and the weapon system (which grants
+ * the rest) build it the same way, with no import cycle between them.
+ */
+export function createWeaponState(defId: string): WeaponState {
+  // Zero cooldown: a newly granted weapon fires on the tick it is picked, which
+  // is the immediate feedback the level-up screen implicitly promises.
+  return { defId, level: 1, cooldown: 0, angle: 0, pangle: 0 };
+}

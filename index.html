@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Survivor</title>
+    <style>
+      :root {
+        --bg: #0b0d13;
+        --panel: rgba(14, 17, 26, 0.92);
+        --border: #262c3b;
+        --text: #e6e9f0;
+        --muted: #8b93a7;
+        --accent: #6ee7a0;
+        --hp: #e05a5a;
+        --xp: #66d9ff;
+        --boss: #ff2e63;
+        --font: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      canvas {
+        display: block;
+      }
+
+      #hud {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        padding: 14px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .bar {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+      }
+
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 0%;
+        transition: width 90ms linear;
+      }
+
+      #xp-fill {
+        background: var(--xp);
+      }
+
+      #hp-fill {
+        background: var(--hp);
+        transition: width 140ms ease-out;
+      }
+
+      #top-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 13px;
+      }
+
+      #hp-wrap {
+        width: 200px;
+      }
+
+      #timer {
+        margin-left: auto;
+        font-size: 22px;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em;
+      }
+
+      #stats {
+        display: flex;
+        gap: 14px;
+        color: var(--muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #boss {
+        margin-top: auto;
+        align-self: center;
+        width: min(620px, 70vw);
+        text-align: center;
+      }
+
+      #boss[hidden] {
+        display: none;
+      }
+
+      #boss-name {
+        font-size: 12px;
+        letter-spacing: 0.22em;
+        color: var(--boss);
+        margin-bottom: 6px;
+      }
+
+      #boss-fill {
+        background: var(--boss);
+      }
+
+      #warning {
+        position: fixed;
+        pointer-events: none;
+        top: 20%;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 30px;
+        letter-spacing: 0.3em;
+        color: var(--boss);
+        text-shadow: 0 0 18px rgba(255, 46, 99, 0.55);
+        animation: warning-pulse 900ms ease-in-out infinite;
+      }
+
+      #warning[hidden] {
+        display: none;
+      }
+
+      @keyframes warning-pulse {
+        0%,
+        100% {
+          opacity: 0.3;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
+      .badge {
+        padding: 3px 9px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        white-space: nowrap;
+      }
+
+      .overlay {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(6, 8, 13, 0.78);
+        backdrop-filter: blur(3px);
+        z-index: 10;
+      }
+
+      .overlay[hidden] {
+        display: none;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 28px 32px;
+        text-align: center;
+        max-width: min(760px, 92vw);
+      }
+
+      .panel h2 {
+        margin: 0 0 4px;
+        font-size: 20px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .panel .sub {
+        margin: 0 0 22px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      #upgrade-cards {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .card {
+        pointer-events: auto;
+        width: 200px;
+        padding: 18px 16px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text);
+        font-family: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 120ms, background 120ms, transform 120ms;
+      }
+
+      .card:hover,
+      .card:focus-visible {
+        border-color: var(--accent);
+        background: rgba(110, 231, 160, 0.08);
+        transform: translateY(-2px);
+        outline: none;
+      }
+
+      .card .key {
+        display: inline-block;
+        margin-bottom: 10px;
+        padding: 1px 7px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .card .name {
+        font-size: 14px;
+        margin-bottom: 6px;
+      }
+
+      .card .desc {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .card .stacks {
+        margin-top: 10px;
+        font-size: 11px;
+        color: var(--accent);
+      }
+
+      #result-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(90px, 1fr));
+        gap: 16px;
+        margin: 8px 0 24px;
+      }
+
+      #result-stats div span {
+        display: block;
+      }
+
+      #result-stats .value {
+        font-size: 24px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #result-stats .label {
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      kbd {
+        padding: 1px 6px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.05);
+        font-family: inherit;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="hud">
+      <div id="top-row">
+        <span class="badge" id="level">LV 1</span>
+        <div id="hp-wrap">
+          <div class="bar"><i id="hp-fill"></i></div>
+        </div>
+        <span class="badge" id="hp-text">100 / 100</span>
+        <span id="timer">00:00</span>
+      </div>
+      <div class="bar"><i id="xp-fill"></i></div>
+      <div id="stats">
+        <span id="stat-weapons">bolt</span>
+        <span id="stat-kills">kills 0</span>
+        <span id="stat-entities">enemies 0</span>
+        <span id="stat-pool">pool 0</span>
+        <span id="stat-fps">-- fps</span>
+      </div>
+
+      <div id="boss" hidden>
+        <div id="boss-name">THE HORDE'S END</div>
+        <div class="bar"><i id="boss-fill"></i></div>
+      </div>
+    </div>
+
+    <div id="warning" hidden>BOSS INCOMING</div>
+
+    <div class="overlay" id="levelup" hidden>
+      <div class="panel">
+        <h2>Level Up</h2>
+        <p class="sub">Pick one — press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> or click</p>
+        <div id="upgrade-cards"></div>
+      </div>
+    </div>
+
+    <div class="overlay" id="result" hidden>
+      <div class="panel">
+        <h2 id="result-title">Run Over</h2>
+        <p class="sub" id="result-sub"></p>
+        <div id="result-stats">
+          <div><span class="value" id="result-time">00:00</span><span class="label">survived</span></div>
+          <div><span class="value" id="result-kills">0</span><span class="label">kills</span></div>
+          <div><span class="value" id="result-level">1</span><span class="label">level</span></div>
+        </div>
+        <p class="hint">Press <kbd>R</kbd> to run again</p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
