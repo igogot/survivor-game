@@ -1,3 +1,4 @@
+import { weaponById } from '../data/weapons';
 import type { UpgradeDef } from '../data/upgrades';
 
 /**
@@ -40,17 +41,32 @@ export function describeOffer(offer: UpgradeDef, taken: number): OfferLabel {
     // Colour groups the two weapon kinds; the badge separates them. Three
     // shades would be asking the player to learn a palette mid-fight.
     kind: scopedToWeapon ? 'weapon' : 'stat',
-    badge: BADGES[offer.kind],
+    badge: badgeFor(offer),
     isNew,
     isMax,
     progress: isMax ? `${progress} · MAX` : progress,
   };
 }
 
-const BADGES: Record<UpgradeDef['kind'], string> = {
-  weapon: 'WEAPON',
-  // Sharpens one weapon the player already owns, rather than handing over a
-  // new one or nudging every weapon at once.
-  weaponMod: 'MOD',
-  stat: 'UPGRADE',
-};
+/**
+ * `MOD` said the card was scoped to one weapon but not to which, and with two
+ * upgrades per weapon in the pool a level-up can show two of them at once. The
+ * weapon's own name costs the same space and answers the question the player is
+ * actually asking.
+ */
+function badgeFor(offer: UpgradeDef): string {
+  switch (offer.kind) {
+    case 'weapon':
+      return 'WEAPON';
+    case 'weaponMod':
+      // An id with no weapon behind it can only mean the pool and the weapon
+      // list drifted apart; the old word still describes the card correctly.
+      return weaponById(offer.weaponId)?.name.toUpperCase() ?? 'MOD';
+    case 'stat':
+      return 'UPGRADE';
+    default: {
+      const unhandled: never = offer;
+      throw new Error(`Unhandled upgrade kind: ${String(unhandled)}`);
+    }
+  }
+}

@@ -154,6 +154,11 @@ export function orbitDistance(def: OrbitWeaponDef, state: WeaponState): number {
   return (def.distance + def.distancePerLevel * (state.level - 1)) * state.areaMul;
 }
 
+/** Radians per second. Turning faster is half of what Whirling Edge buys. */
+export function orbitSpin(def: OrbitWeaponDef, state: WeaponState): number {
+  return def.spin * state.spinMul;
+}
+
 /** Blades grow with reach, so a wider ring does not thin out into a sieve. */
 export function orbitRadius(def: OrbitWeaponDef, state: WeaponState): number {
   return def.orbRadius * state.areaMul;
@@ -182,5 +187,6 @@ export function createWeaponState(defId: string): WeaponState {
     areaMul: 1,
     projectiles: 1,
     pierce: 0,
+    spinMul: 1,
   };
 }

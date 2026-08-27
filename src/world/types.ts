@@ -113,6 +113,12 @@ export interface WeaponState {
    */
   projectiles: number;
   pierce: number;
+  /**
+   * Orbit-only: how fast the ring turns. Separate from `attackSpeedMul`, which
+   * is how often it bites, because an upgrade moves both and the renderer reads
+   * only this one.
+   */
+  spinMul: number;
 }
 
 /**

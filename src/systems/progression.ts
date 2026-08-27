@@ -55,8 +55,20 @@ export function isOfferable(world: World, upgrade: UpgradeDef): boolean {
   return world.weapons.some((weapon) => weapon.defId === upgrade.weaponId);
 }
 
+/**
+ * Cards shown per level-up.
+ *
+ * Three, until each weapon got its own upgrades and the pool went from nine
+ * entries to thirteen. A bigger pool makes every individual card rarer,
+ * including the ones a run is actually built on — levelling a weapon — and the
+ * balance stand caught it: the bot stopped finishing runs entirely. A fourth
+ * card restores roughly the odds three gave out of nine, and it is worth a win
+ * in eight on the table in the README.
+ */
+const OFFERS_PER_LEVEL = 4;
+
 /** Picks up to `count` distinct upgrades that can actually affect this run. */
-export function rollUpgrades(world: World, count = 3): UpgradeDef[] {
+export function rollUpgrades(world: World, count = OFFERS_PER_LEVEL): UpgradeDef[] {
   const available = UPGRADES.filter((upgrade) => isOfferable(world, upgrade));
   return world.rng.shuffled(available).slice(0, count);
 }

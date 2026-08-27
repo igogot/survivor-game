@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { UPGRADES } from '../src/data/upgrades';
+import { weaponById } from '../src/data/weapons';
 import { describeOffer } from '../src/ui/offers';
 import type { UpgradeDef } from '../src/data/upgrades';
 
@@ -13,16 +14,23 @@ const weapon = upgrade('orbit');
 const stat = upgrade('damage');
 
 describe('describeOffer', () => {
-  it('badges a weapon modifier apart from both', () => {
-    const mod = UPGRADES.find((candidate) => candidate.kind === 'weaponMod');
-    if (mod === undefined) throw new Error('no weaponMod in UPGRADES');
+  it('badges a weapon modifier with the weapon it feeds', () => {
+    const label = describeOffer(upgrade('nova-cadence'), 0);
 
-    const label = describeOffer(mod, 0);
-
-    expect(label.badge).toBe('MOD');
+    expect(label.badge).toBe('SHOCKWAVE');
     // Grouped with weapons by colour, separated from them by the word.
     expect(label.kind).toBe('weapon');
     expect(describeOffer(weapon, 0).badge).toBe('WEAPON');
+  });
+
+  it('names the right weapon on every modifier in the pool', () => {
+    for (const offer of UPGRADES) {
+      if (offer.kind !== 'weaponMod') continue;
+
+      const name = weaponById(offer.weaponId)?.name.toUpperCase();
+      expect(name).toBeDefined();
+      expect(describeOffer(offer, 0).badge).toBe(name);
+    }
   });
 
   it('badges a weapon apart from a stat upgrade', () => {

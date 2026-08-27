@@ -159,4 +159,41 @@ export const UPGRADES: readonly UpgradeDef[] = [
       stats.maxHp += 25;
     },
   },
+
+  /*
+   * The second line for each of the two weapons that had only reach to buy.
+   * Reach is a defensive shape: it covers more ground without killing anything
+   * faster, so a weapon built on it alone stops scaling exactly when the horde
+   * stops thinning. These two buy rate instead.
+   *
+   * They sit at the end because `rollUpgrades` shuffles this array — inserting
+   * in the middle changes the offers every seed produces and makes the balance
+   * table incomparable with the one before it.
+   */
+  {
+    kind: 'weaponMod',
+    id: 'orbit-spin',
+    weaponId: 'orbit',
+    name: 'Whirling Edge',
+    description: 'Orbit Blades turn faster and cut more often',
+    maxStacks: 3,
+    apply: (weapon) => {
+      // Spin and pulse rate move together on purpose. A ring that bites more
+      // often without turning faster hits the same arc twice; one that turns
+      // faster without biting more often sweeps past enemies between pulses.
+      weapon.spinMul += 0.5;
+      weapon.attackSpeedMul += 0.4;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'nova-cadence',
+    weaponId: 'nova',
+    name: 'Rolling Thunder',
+    description: 'Shockwave bursts more often',
+    maxStacks: 3,
+    apply: (weapon) => {
+      weapon.attackSpeedMul += 0.4;
+    },
+  },
 ];
