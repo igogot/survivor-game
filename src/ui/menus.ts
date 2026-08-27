@@ -48,6 +48,24 @@ export class UpgradeMenu {
   }
 }
 
+/**
+ * The freeze screen.
+ *
+ * Keyboard only, on purpose: the run must not resume from a stray click on a
+ * button the player did not mean to hit.
+ */
+export class PauseScreen {
+  private readonly root = requireElement('pause');
+
+  show(): void {
+    this.root.hidden = false;
+  }
+
+  hide(): void {
+    this.root.hidden = true;
+  }
+}
+
 /** End-of-run screen, shown on death and on beating the boss. */
 export class ResultScreen {
   private readonly root = requireElement('result');
