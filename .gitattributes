@@ -2,3 +2,11 @@
 # copies, so line endings stay identical on Windows, macOS and CI (ubuntu).
 # Binary files are detected automatically by text=auto and left untouched.
 * text=auto eol=lf
+
+# Windows batch files are the exception: cmd.exe needs CRLF to parse labels and
+# `goto` reliably, so play.cmd must stay CRLF in a working copy.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# ...and shell scripts must stay LF even if someone clones with autocrlf on.
+*.sh text eol=lf

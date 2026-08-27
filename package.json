@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Survivor-like roguelite built on a hand-written fixed-timestep loop, object pools and a spatial-hash broad-phase.",
   "scripts": {
+    "start": "vite --open",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
