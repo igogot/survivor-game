@@ -1,0 +1,4 @@
+# Normalise every text file to LF, both in the repository and in working
+# copies, so line endings stay identical on Windows, macOS and CI (ubuntu).
+# Binary files are detected automatically by text=auto and left untouched.
+* text=auto eol=lf
