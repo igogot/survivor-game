@@ -37,6 +37,18 @@ export class GameLoop {
     cancelAnimationFrame(this.frameHandle);
   }
 
+  /**
+   * Forgets the time that has passed since the last frame.
+   *
+   * `maxFrameTime` already stops one long stall from queueing catch-up ticks,
+   * but coming back from a pause should not spend even a fraction of a tick on
+   * time the player was not playing.
+   */
+  resync(): void {
+    this.lastTime = performance.now();
+    this.accumulator = 0;
+  }
+
   private onFrame = (now: number): void => {
     if (!this.running) return;
     this.frameHandle = requestAnimationFrame(this.onFrame);

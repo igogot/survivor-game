@@ -7,7 +7,13 @@ import { xpForLevel } from '../systems/progression';
 import type { UpgradeDef } from '../data/upgrades';
 import type { Effect, Enemy, Gem, Player, Projectile, WeaponState } from './types';
 
-export type Phase = 'playing' | 'levelup' | 'dead' | 'won';
+export type Phase = 'playing' | 'levelup' | 'paused' | 'dead' | 'won';
+
+/**
+ * The phases a run can be paused from, and therefore returned to. A finished
+ * run is already stopped, so pausing one would mean nothing.
+ */
+export type ResumablePhase = 'playing' | 'levelup';
 
 /**
  * The entire game state. Deliberately free of any Pixi, DOM or timing import —
@@ -34,6 +40,11 @@ export class World {
   readonly weapons: WeaponState[] = [];
 
   phase: Phase = 'playing';
+  /**
+   * Where to go when the pause lifts. Only meaningful while paused — pausing on
+   * the level-up screen has to give the choice back rather than drop it.
+   */
+  resumeTo: ResumablePhase = 'playing';
   /** Elapsed run time in seconds. */
   time = 0;
   kills = 0;

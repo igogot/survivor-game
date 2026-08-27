@@ -4,7 +4,8 @@ import { Input } from './core/input';
 import { GameRenderer } from './render/renderer';
 import { applyUpgrade } from './systems/progression';
 import { Hud } from './ui/hud';
-import { ResultScreen, UpgradeMenu } from './ui/menus';
+import { PauseScreen, ResultScreen, UpgradeMenu } from './ui/menus';
+import { canPause, pauseRun, resumeRun } from './world/pause';
 import { stepWorld } from './world/step';
 import { World } from './world/world';
 
@@ -20,6 +21,7 @@ async function main(): Promise<void> {
 
   const hud = new Hud();
   const resultScreen = new ResultScreen();
+  const pauseScreen = new PauseScreen();
   const upgradeMenu = new UpgradeMenu(pickUpgrade);
 
   // Reassigned on restart, so every closure below reads the binding rather than
@@ -28,6 +30,14 @@ async function main(): Promise<void> {
 
   const loop = new GameLoop(CONFIG.tickRate, CONFIG.maxFrameTime, tick, draw);
   loop.start();
+
+  // Losing the window pauses the run. Deliberately one-way: regaining focus
+  // does not resume, or the player is dropped straight back into damage they
+  // had no chance to react to.
+  window.addEventListener('blur', autoPause);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) autoPause();
+  });
 
   // Console handle for poking at a live run: `game.getWorld()` to inspect state,
   // `game.renderer.draw(...)` to force a frame. Dropped from production builds.
@@ -44,6 +54,16 @@ async function main(): Promise<void> {
     // compiler narrow it for the rest of the block, and the systems below
     // change it from underneath that narrowing.
     const phase = world.phase;
+
+    if (phase === 'paused') {
+      if (pausePressed()) resumeGame();
+      return;
+    }
+
+    if ((phase === 'playing' || phase === 'levelup') && pausePressed()) {
+      pauseGame();
+      return;
+    }
 
     if (phase === 'playing') {
       input.poll();
@@ -64,7 +84,32 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (input.consumePressed('KeyR')) restart();
+    if (phase === 'dead' || phase === 'won') {
+      if (input.consumePressed('KeyR')) restart();
+    }
+  }
+
+  function pausePressed(): boolean {
+    return input.consumePressed('Escape') || input.consumePressed('KeyP');
+  }
+
+  function pauseGame(): void {
+    pauseRun(world);
+    // Otherwise the key that paused is still queued and unpauses immediately.
+    input.clearPressed();
+    syncOverlays();
+  }
+
+  function resumeGame(): void {
+    resumeRun(world);
+    input.clearPressed();
+    loop.resync();
+    syncOverlays();
+  }
+
+  function autoPause(): void {
+    if (!canPause(world)) return;
+    pauseGame();
   }
 
   function draw(alpha: number): void {
@@ -81,6 +126,12 @@ async function main(): Promise<void> {
 
   /** Single source of truth for which overlay is visible. */
   function syncOverlays(): void {
+    if (world.phase === 'paused') {
+      pauseScreen.show();
+    } else {
+      pauseScreen.hide();
+    }
+
     if (world.phase === 'levelup') {
       upgradeMenu.show(world.offered, world.stacks);
     } else {
