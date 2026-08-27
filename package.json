@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "balance": "vitest run --config vitest.balance.config.ts"
+    "balance": "vitest run --config vitest.balance.config.ts",
+    "perf": "vitest run --config vitest.perf.config.ts"
   },
   "dependencies": {
     "pixi.js": "^8.0.0"

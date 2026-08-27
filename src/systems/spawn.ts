@@ -61,8 +61,13 @@ export function waveIntensity(time: number): number {
   return 1 + (CONFIG.spawn.wavePeak - 1) * Math.sin((Math.PI * phase) / CONFIG.spawn.waveSurge);
 }
 
-/** Weighted pick among the types unlocked at the current run time. */
-function rollEnemyDef(world: World): EnemyDef {
+/**
+ * Weighted pick among the types unlocked at the current run time.
+ *
+ * Exported alongside `spawnEnemy` so a harness can populate a world the way the
+ * game does — see tests/perf.bench.ts, which holds a fixed enemy count.
+ */
+export function rollEnemyDef(world: World): EnemyDef {
   let totalWeight = 0;
   for (let i = 0; i < ENEMIES.length; i++) {
     if (ENEMIES[i].unlockAt <= world.time) totalWeight += ENEMIES[i].weight;
@@ -99,7 +104,7 @@ function spawnAngle(world: World): number {
   return forward + world.rng.range(-CONFIG.spawn.aheadSpread, CONFIG.spawn.aheadSpread);
 }
 
-function spawnEnemy(world: World, def: EnemyDef, hpScale: number): void {
+export function spawnEnemy(world: World, def: EnemyDef, hpScale: number): void {
   // Spawning on a ring guarantees enemies appear off-screen regardless of
   // viewport size, so the player never sees one pop into existence.
   const angle = spawnAngle(world);
