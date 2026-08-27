@@ -3,7 +3,7 @@
 Roguelite в жанре survivor-like (Vampire Survivors, Brotato, Halls of Torment) на TypeScript и PixiJS.
 Оружие стреляет само — игрок решает только, где стоять.
 
-**▶ Играть: _(ссылка появится после деплоя)_**
+**▶ [Играть](https://igogot.github.io/survivor-game/)**
 
 ![Геймплей](docs/gameplay.gif)
 
