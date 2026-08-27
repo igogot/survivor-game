@@ -13,6 +13,7 @@
         --muted: #8b93a7;
         --accent: #6ee7a0;
         --hp: #e05a5a;
+        --hp-low: #ff3b3b;
         --xp: #66d9ff;
         --boss: #ff2e63;
         --font: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
@@ -65,11 +66,6 @@
         background: var(--xp);
       }
 
-      #hp-fill {
-        background: var(--hp);
-        transition: width 140ms ease-out;
-      }
-
       #top-row {
         display: flex;
         align-items: center;
@@ -78,7 +74,85 @@
       }
 
       #hp-wrap {
-        width: 200px;
+        width: 320px;
+      }
+
+      #hp-bar {
+        position: relative;
+        height: 22px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.05);
+        overflow: hidden;
+      }
+
+      #hp-bar > i {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 0%;
+        display: block;
+      }
+
+      /* The trailing chunk. Sits behind the fill and catches up on a delay, so
+         a hit is a pale sliver that visibly drains rather than a number that
+         was already different the last time you glanced at the corner. */
+      #hp-ghost {
+        /* Opaque rather than a translucent red: alpha over a near-black track
+           turns muddy brown, which reads as nothing in particular. Three solid
+           steps — track, lost, current — are legible at a glance. */
+        background: #7d343c;
+      }
+
+      #hp-fill {
+        background: linear-gradient(180deg, #f07272, var(--hp));
+        transition: width 80ms linear;
+      }
+
+      /* One divider per fixed chunk of HP, so the bar can be read by counting
+         segments instead of parsing the number. Selected by two ids because
+         `#hp-bar > i` above is more specific than a bare id and would otherwise
+         hold this layer at width 0. */
+      #hp-bar > #hp-ticks {
+        inset: 0;
+        width: 100%;
+        background-image: linear-gradient(
+          90deg,
+          transparent calc(100% - 2px),
+          rgba(8, 10, 16, 0.7) calc(100% - 2px)
+        );
+        background-repeat: repeat-x;
+        background-size: 25% 100%;
+      }
+
+      #hp-text {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.05em;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+      }
+
+      #hp-wrap.low #hp-fill {
+        background: linear-gradient(180deg, #ff6b6b, var(--hp-low));
+        animation: hp-pulse 620ms ease-in-out infinite;
+      }
+
+      #hp-wrap.low #hp-bar {
+        border-color: var(--hp-low);
+        box-shadow: 0 0 12px rgba(255, 59, 59, 0.35);
+      }
+
+      @keyframes hp-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
       }
 
       #timer {
@@ -339,9 +413,13 @@
       <div id="top-row">
         <span class="badge" id="level">LV 1</span>
         <div id="hp-wrap">
-          <div class="bar"><i id="hp-fill"></i></div>
+          <div id="hp-bar">
+            <i id="hp-ghost"></i>
+            <i id="hp-fill"></i>
+            <i id="hp-ticks"></i>
+            <span id="hp-text">100 / 100</span>
+          </div>
         </div>
-        <span class="badge" id="hp-text">100 / 100</span>
         <span id="timer">00:00</span>
       </div>
       <div class="bar"><i id="xp-fill"></i></div>

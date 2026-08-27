@@ -5,13 +5,15 @@
   "type": "module",
   "description": "Survivor-like roguelite built on a hand-written fixed-timestep loop, object pools and a spatial-hash broad-phase.",
   "scripts": {
+    "start": "vite --open",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "balance": "vitest run --config vitest.balance.config.ts"
+    "balance": "vitest run --config vitest.balance.config.ts",
+    "perf": "vitest run --config vitest.perf.config.ts"
   },
   "dependencies": {
     "pixi.js": "^8.0.0"

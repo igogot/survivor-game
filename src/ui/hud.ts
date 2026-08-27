@@ -1,6 +1,6 @@
 import { CONFIG } from '../config';
 import { weaponById } from '../data/weapons';
-import type { Enemy } from '../world/types';
+import type { Enemy, Player } from '../world/types';
 import type { World } from '../world/world';
 
 /**
@@ -11,9 +11,19 @@ import type { World } from '../world/world';
  * sharper and less code. It sits in an overlay with `pointer-events: none` so
  * it never steals input from the canvas.
  */
+/** HP per divider on the bar. Vitality adds segments instead of stretching them. */
+const HP_PER_SEGMENT = 25;
+/** Below this fraction the bar goes bright and starts pulsing. */
+const LOW_HP = 0.3;
+/** Time constant of the trailing chunk, in seconds. */
+const GHOST_TAU = 0.35;
+
 export class Hud {
   private readonly level = requireElement('level');
+  private readonly hpWrap = requireElement('hp-wrap');
   private readonly hpFill = requireElement('hp-fill');
+  private readonly hpGhost = requireElement('hp-ghost');
+  private readonly hpTicks = requireElement('hp-ticks');
   private readonly hpText = requireElement('hp-text');
   private readonly xpFill = requireElement('xp-fill');
   private readonly timer = requireElement('timer');
@@ -30,19 +40,21 @@ export class Hud {
   private smoothedFps = 60;
   private lastFrameTime = 0;
 
+  /** Where the trailing chunk of the HP bar currently sits, as a percentage. */
+  private ghost = 100;
+  private lastMaxHp = 0;
+
   update(world: World): void {
     const now = performance.now();
-    if (this.lastFrameTime > 0) {
-      const delta = now - this.lastFrameTime;
-      if (delta > 0) this.smoothedFps += (1000 / delta - this.smoothedFps) * 0.05;
-    }
+    const elapsed = this.lastFrameTime > 0 ? (now - this.lastFrameTime) / 1000 : 0;
     this.lastFrameTime = now;
+    if (elapsed > 0) this.smoothedFps += (1 / elapsed - this.smoothedFps) * 0.05;
 
     const player = world.player;
 
     this.level.textContent = `LV ${player.level}`;
-    this.hpFill.style.width = `${percent(player.hp, player.stats.maxHp)}%`;
-    this.hpText.textContent = `${Math.ceil(player.hp)} / ${Math.round(player.stats.maxHp)}`;
+    // Clamped: a tab returning from the background must not teleport the drain.
+    this.updateHealth(player, Math.min(elapsed, 0.1));
     this.xpFill.style.width = `${percent(player.xp, player.xpToNext)}%`;
 
     this.timer.textContent = formatTime(Math.min(world.time, CONFIG.runDuration));
@@ -56,6 +68,34 @@ export class Hud {
     this.fps.textContent = `${Math.round(this.smoothedFps)} fps`;
 
     this.updateBoss(world);
+  }
+
+  private updateHealth(player: Player, dt: number): void {
+    const maxHp = player.stats.maxHp;
+    const ratio = maxHp > 0 ? player.hp / maxHp : 0;
+    const fill = percent(player.hp, maxHp);
+
+    // Healing snaps forward, damage drains. The gap between the two bars is
+    // exactly the damage taken in the last third of a second, which is what
+    // makes a hit readable without looking away from the character.
+    if (fill >= this.ghost) {
+      this.ghost = fill;
+    } else {
+      this.ghost += (fill - this.ghost) * (1 - Math.exp(-dt / GHOST_TAU));
+      if (this.ghost - fill < 0.25) this.ghost = fill;
+    }
+
+    this.hpFill.style.width = `${fill}%`;
+    this.hpGhost.style.width = `${this.ghost}%`;
+    this.hpText.textContent = `${Math.ceil(player.hp)} / ${Math.round(maxHp)}`;
+    this.hpWrap.classList.toggle('low', ratio < LOW_HP);
+
+    // Only when the maximum actually changes: writing a style every frame
+    // forces a needless recalculation of the whole overlay.
+    if (maxHp !== this.lastMaxHp) {
+      this.lastMaxHp = maxHp;
+      this.hpTicks.style.backgroundSize = `${(HP_PER_SEGMENT / maxHp) * 100}% 100%`;
+    }
   }
 
   private updateBoss(world: World): void {

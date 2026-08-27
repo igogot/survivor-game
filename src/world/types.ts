@@ -1,3 +1,5 @@
+import type { SpriteName } from '../data/sprites';
+
 /**
  * Every entity carries `px`/`py`: its position at the end of the previous tick.
  * The renderer interpolates between that and the current position so motion
@@ -40,6 +42,7 @@ export interface Enemy {
   radius: number;
   xpValue: number;
   color: number;
+  sprite: SpriteName;
   /** Seconds of hit-flash left. Purely cosmetic, but it lives on the entity so
    *  the renderer stays a pure function of world state. */
   flash: number;
