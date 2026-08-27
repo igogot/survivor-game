@@ -1,3 +1,5 @@
+import type { SpriteName } from './sprites';
+
 export interface EnemyDef {
   readonly id: string;
   readonly hp: number;
@@ -6,6 +8,8 @@ export interface EnemyDef {
   readonly radius: number;
   readonly xp: number;
   readonly color: number;
+  /** Which silhouette the renderer draws for this type. */
+  readonly sprite: SpriteName;
   /** Seconds into the run before this type starts appearing. */
   readonly unlockAt: number;
   /** Relative spawn weight among the types unlocked so far. */
@@ -15,6 +19,7 @@ export interface EnemyDef {
 export const ENEMIES: readonly EnemyDef[] = [
   {
     id: 'grunt',
+    sprite: 'grunt',
     hp: 10,
     speed: 52,
     damage: 6,
@@ -26,6 +31,7 @@ export const ENEMIES: readonly EnemyDef[] = [
   },
   {
     id: 'runner',
+    sprite: 'runner',
     hp: 6,
     speed: 96,
     damage: 4,
@@ -37,6 +43,7 @@ export const ENEMIES: readonly EnemyDef[] = [
   },
   {
     id: 'brute',
+    sprite: 'brute',
     hp: 55,
     speed: 34,
     damage: 14,
@@ -50,6 +57,7 @@ export const ENEMIES: readonly EnemyDef[] = [
 
 export const BOSS: EnemyDef = {
   id: 'boss',
+  sprite: 'boss',
   hp: 4000,
   speed: 46,
   damage: 30,

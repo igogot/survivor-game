@@ -123,6 +123,7 @@ export function spawnEnemy(world: World, def: EnemyDef, hpScale: number): void {
   enemy.radius = def.radius;
   enemy.xpValue = def.xp;
   enemy.color = def.color;
+  enemy.sprite = def.sprite;
   enemy.flash = 0;
   enemy.hitTag = 0;
   enemy.boss = def.id === BOSS.id;
