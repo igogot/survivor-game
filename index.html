@@ -199,6 +199,7 @@
 
       .card {
         pointer-events: auto;
+        position: relative;
         width: 200px;
         padding: 18px 16px;
         border: 1px solid var(--border);
@@ -221,7 +222,6 @@
 
       .card .key {
         display: inline-block;
-        margin-bottom: 10px;
         padding: 1px 7px;
         border: 1px solid var(--border);
         border-radius: 4px;
@@ -243,6 +243,53 @@
       .card .stacks {
         margin-top: 10px;
         font-size: 11px;
+        color: var(--muted);
+      }
+
+      /* A first acquisition is the pick worth noticing, whatever its kind. */
+      .card .stacks--new {
+        color: var(--accent);
+        letter-spacing: 0.08em;
+      }
+
+      .card .card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+
+      .card .badge {
+        padding: 1px 6px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+      }
+
+      /* Weapons change how a run plays; stat bumps move a number. Three
+         separate channels carry that difference — the badge word, the bar on
+         the left edge and the tint — so it survives for a player who cannot
+         tell the two colours apart. */
+      .card--weapon {
+        border-color: rgba(110, 231, 160, 0.45);
+        background: rgba(110, 231, 160, 0.06);
+      }
+
+      .card--weapon::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 12px;
+        bottom: 12px;
+        width: 3px;
+        border-radius: 0 3px 3px 0;
+        background: var(--accent);
+      }
+
+      .card--weapon .badge {
+        border-color: rgba(110, 231, 160, 0.45);
         color: var(--accent);
       }
 
