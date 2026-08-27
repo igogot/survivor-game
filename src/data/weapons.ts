@@ -129,20 +129,38 @@ export const STARTER_WEAPON_ID = BOLT.id;
  * pulse looked for enemies.
  */
 
-export function weaponDamage(def: WeaponDef, level: number): number {
-  return def.damage + def.damagePerLevel * (level - 1);
+/*
+ * Each of these takes the weapon's state rather than its level, so a per-weapon
+ * modifier cannot be applied in one caller and forgotten in another. That
+ * mattered immediately: the renderer places the orbs and the weapon system
+ * looks for enemies under them, and the two reading different numbers is the
+ * exact failure this file already warns about.
+ */
+
+export function weaponDamage(def: WeaponDef, state: WeaponState): number {
+  return (def.damage + def.damagePerLevel * (state.level - 1)) * state.damageMul;
 }
 
-export function orbitCount(def: OrbitWeaponDef, level: number): number {
-  return def.orbs + def.orbsPerLevel * (level - 1);
+/** Seconds until the next activation, given the player's global attack speed. */
+export function weaponCooldown(def: WeaponDef, state: WeaponState, attackSpeedMul: number): number {
+  return def.cooldown / (attackSpeedMul * state.attackSpeedMul);
 }
 
-export function orbitDistance(def: OrbitWeaponDef, level: number): number {
-  return def.distance + def.distancePerLevel * (level - 1);
+export function orbitCount(def: OrbitWeaponDef, state: WeaponState): number {
+  return def.orbs + def.orbsPerLevel * (state.level - 1);
 }
 
-export function novaRadius(def: NovaWeaponDef, level: number): number {
-  return def.radius + def.radiusPerLevel * (level - 1);
+export function orbitDistance(def: OrbitWeaponDef, state: WeaponState): number {
+  return (def.distance + def.distancePerLevel * (state.level - 1)) * state.areaMul;
+}
+
+/** Blades grow with reach, so a wider ring does not thin out into a sieve. */
+export function orbitRadius(def: OrbitWeaponDef, state: WeaponState): number {
+  return def.orbRadius * state.areaMul;
+}
+
+export function novaRadius(def: NovaWeaponDef, state: WeaponState): number {
+  return (def.radius + def.radiusPerLevel * (state.level - 1)) * state.areaMul;
 }
 
 /**
@@ -153,5 +171,16 @@ export function novaRadius(def: NovaWeaponDef, level: number): number {
 export function createWeaponState(defId: string): WeaponState {
   // Zero cooldown: a newly granted weapon fires on the tick it is picked, which
   // is the immediate feedback the level-up screen implicitly promises.
-  return { defId, level: 1, cooldown: 0, angle: 0, pangle: 0 };
+  return {
+    defId,
+    level: 1,
+    cooldown: 0,
+    angle: 0,
+    pangle: 0,
+    damageMul: 1,
+    attackSpeedMul: 1,
+    areaMul: 1,
+    projectiles: 1,
+    pierce: 0,
+  };
 }

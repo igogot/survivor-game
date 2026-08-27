@@ -40,6 +40,11 @@ const PREFERENCE = [
   'pierce',
   'magnet',
   'boots',
+  // Per-weapon modifiers go last, so the order above is byte-for-byte the one
+  // the previous numbers were measured with. Reordering the instrument at the
+  // same time as the thing it measures would make the two indistinguishable.
+  'nova-blast',
+  'orbit-reach',
 ];
 
 /**

@@ -13,6 +13,18 @@ const weapon = upgrade('orbit');
 const stat = upgrade('damage');
 
 describe('describeOffer', () => {
+  it('badges a weapon modifier apart from both', () => {
+    const mod = UPGRADES.find((candidate) => candidate.kind === 'weaponMod');
+    if (mod === undefined) throw new Error('no weaponMod in UPGRADES');
+
+    const label = describeOffer(mod, 0);
+
+    expect(label.badge).toBe('MOD');
+    // Grouped with weapons by colour, separated from them by the word.
+    expect(label.kind).toBe('weapon');
+    expect(describeOffer(weapon, 0).badge).toBe('WEAPON');
+  });
+
   it('badges a weapon apart from a stat upgrade', () => {
     expect(describeOffer(weapon, 0).kind).toBe('weapon');
     expect(describeOffer(weapon, 0).badge).toBe('WEAPON');

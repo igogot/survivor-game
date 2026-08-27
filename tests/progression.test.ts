@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { UPGRADES } from '../src/data/upgrades';
-import { applyUpgrade, progressionSystem, rollUpgrades, xpForLevel } from '../src/systems/progression';
+import {
+  applyUpgrade,
+  isOfferable,
+  progressionSystem,
+  rollUpgrades,
+  xpForLevel,
+} from '../src/systems/progression';
+import { grantWeapon } from '../src/systems/weapons';
 import { World } from '../src/world/world';
 
 describe('xpForLevel', () => {
@@ -112,5 +119,79 @@ describe('rollUpgrades', () => {
       const ids = rollUpgrades(world, 3).map((offer) => offer.id);
       expect(new Set(ids).size).toBe(ids.length);
     }
+  });
+});
+
+describe('offer filtering by ownership', () => {
+  const ORBIT_MODS = UPGRADES.filter(
+    (upgrade) => upgrade.kind === 'weaponMod' && upgrade.weaponId === 'orbit',
+  );
+
+  it('has weapon modifiers to filter in the first place', () => {
+    expect(ORBIT_MODS.length).toBeGreaterThan(0);
+  });
+
+  it('does not offer a modifier for a weapon the player lacks', () => {
+    const world = new World(11);
+
+    expect(world.weapons.some((weapon) => weapon.defId === 'orbit')).toBe(false);
+    for (const mod of ORBIT_MODS) expect(isOfferable(world, mod)).toBe(false);
+  });
+
+  it('offers it once the weapon is owned', () => {
+    const world = new World(11);
+    grantWeapon(world, 'orbit');
+
+    for (const mod of ORBIT_MODS) expect(isOfferable(world, mod)).toBe(true);
+  });
+
+  it('always offers modifiers for the starter weapon, which is never absent', () => {
+    const world = new World(12);
+    const boltMods = UPGRADES.filter(
+      (upgrade) => upgrade.kind === 'weaponMod' && upgrade.weaponId === 'bolt',
+    );
+
+    expect(boltMods.length).toBeGreaterThan(0);
+    for (const mod of boltMods) expect(isOfferable(world, mod)).toBe(true);
+  });
+
+  it('keeps unowned modifiers out of a roll entirely', () => {
+    const world = new World(13);
+    const unowned = new Set(ORBIT_MODS.map((mod) => mod.id));
+
+    // Many rolls, because a single one only samples three of the pool.
+    for (let i = 0; i < 200; i++) {
+      for (const offer of rollUpgrades(world)) {
+        expect(unowned.has(offer.id)).toBe(false);
+      }
+    }
+  });
+
+  it('refuses to apply a modifier for a weapon the player lacks', () => {
+    const world = new World(14);
+    const mod = ORBIT_MODS[0];
+    world.pendingLevels = 1;
+
+    applyUpgrade(world, mod.id);
+
+    expect(world.stacks.get(mod.id) ?? 0).toBe(0);
+  });
+
+  it('applies a modifier to the named weapon and leaves the others alone', () => {
+    const world = new World(15);
+    grantWeapon(world, 'orbit');
+    world.pendingLevels = 1;
+
+    const mod = ORBIT_MODS[0];
+    const orbit = world.weapons.find((weapon) => weapon.defId === 'orbit');
+    const bolt = world.weapons.find((weapon) => weapon.defId === 'bolt');
+    if (orbit === undefined || bolt === undefined) throw new Error('missing weapon');
+
+    const boltBefore = { ...bolt };
+    applyUpgrade(world, mod.id);
+
+    expect(world.stacks.get(mod.id)).toBe(1);
+    expect(orbit.areaMul * orbit.attackSpeedMul).toBeGreaterThan(1);
+    expect(bolt).toEqual(boltBefore);
   });
 });

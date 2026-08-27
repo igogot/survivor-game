@@ -6,7 +6,7 @@ import { applyUpgrade } from '../src/systems/progression';
 import { grantWeapon, weaponSystem } from '../src/systems/weapons';
 import { rebuildGrid } from '../src/world/step';
 import { World } from '../src/world/world';
-import type { Enemy } from '../src/world/types';
+import type { Enemy, WeaponState } from '../src/world/types';
 
 const DT = 1 / 60;
 const DUMMY_HP = 100;
@@ -16,6 +16,17 @@ const DUMMY_HP = 100;
  * places enemies on an off-screen ring, which is useless for asserting that a
  * weapon reaches precisely as far as it claims to.
  */
+/**
+ * The world's own state for a weapon. Scaling helpers read modifiers off it, so
+ * asserting against a hand-built state would stop matching the moment a
+ * per-weapon upgrade is involved.
+ */
+function weaponState(world: World, defId: string): WeaponState {
+  const found = world.weapons.find((weapon) => weapon.defId === defId);
+  if (found === undefined) throw new Error(`world has no weapon '${defId}'`);
+  return found;
+}
+
 function placeEnemy(world: World, x: number, y: number): Enemy {
   const enemy = world.enemyPool.obtain();
 
@@ -77,7 +88,7 @@ describe('orbit blades', () => {
     const world = new World(3);
     grantWeapon(world, 'orbit');
 
-    const onRing = placeEnemy(world, orbitDistance(ORBIT, 1), 0);
+    const onRing = placeEnemy(world, orbitDistance(ORBIT, weaponState(world, 'orbit')), 0);
     const outside = placeEnemy(world, 400, 0);
     rebuildGrid(world);
 
@@ -95,7 +106,7 @@ describe('orbit blades', () => {
     const world = new World(3);
     grantWeapon(world, 'orbit');
 
-    const enemy = placeEnemy(world, orbitDistance(ORBIT, 1), 0);
+    const enemy = placeEnemy(world, orbitDistance(ORBIT, weaponState(world, 'orbit')), 0);
     rebuildGrid(world);
 
     weaponSystem(world, DT);
@@ -114,7 +125,7 @@ describe('orbit blades', () => {
     const world = new World(4);
     for (let i = 0; i < level; i++) grantWeapon(world, 'orbit');
 
-    const enemy = placeEnemy(world, orbitDistance(ORBIT, level), 0);
+    const enemy = placeEnemy(world, orbitDistance(ORBIT, weaponState(world, 'orbit')), 0);
     rebuildGrid(world);
 
     weaponSystem(world, DT);
@@ -148,7 +159,7 @@ describe('shockwave', () => {
 
     weaponSystem(world, DT);
 
-    expect(DUMMY_HP - enemy.hp).toBeCloseTo(weaponDamage(NOVA, 1) * 2);
+    expect(DUMMY_HP - enemy.hp).toBeCloseTo(weaponDamage(NOVA, weaponState(world, 'nova')) * 2);
   });
 });
 

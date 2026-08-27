@@ -4,7 +4,9 @@ import {
   novaRadius,
   orbitCount,
   orbitDistance,
+  orbitRadius,
   weaponById,
+  weaponCooldown,
   weaponDamage,
 } from '../data/weapons';
 import { damageArea } from './damage';
@@ -77,16 +79,16 @@ function stepBolt(world: World, def: BoltWeaponDef, state: WeaponState, dt: numb
   if (target === null) return;
 
   const player = world.player;
-  state.cooldown = def.cooldown / player.stats.attackSpeedMul;
+  state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
 
   const baseAngle = Math.atan2(target.y - player.y, target.x - player.x);
-  const count = player.stats.projectiles;
-  const damage = weaponDamage(def, state.level) * player.stats.damageMul;
+  const count = state.projectiles;
+  const damage = weaponDamage(def, state) * player.stats.damageMul;
 
   for (let i = 0; i < count; i++) {
     // Fan the shots symmetrically around the aim direction.
     const offset = (i - (count - 1) / 2) * def.spread;
-    fire(world, def, baseAngle + offset, damage);
+    fire(world, def, state, baseAngle + offset, damage);
   }
 }
 
@@ -102,11 +104,12 @@ function stepOrbit(world: World, def: OrbitWeaponDef, state: WeaponState, dt: nu
 
   state.cooldown -= dt;
   if (state.cooldown > 0) return;
-  state.cooldown = def.cooldown / player.stats.attackSpeedMul;
+  state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
 
-  const count = orbitCount(def, state.level);
-  const distance = orbitDistance(def, state.level);
-  const damage = weaponDamage(def, state.level) * player.stats.damageMul;
+  const count = orbitCount(def, state);
+  const distance = orbitDistance(def, state);
+  const radius = orbitRadius(def, state);
+  const damage = weaponDamage(def, state) * player.stats.damageMul;
 
   // One event for the whole ring: an enemy caught between two blades takes one
   // hit, not two.
@@ -118,7 +121,7 @@ function stepOrbit(world: World, def: OrbitWeaponDef, state: WeaponState, dt: nu
       world,
       player.x + Math.cos(angle) * distance,
       player.y + Math.sin(angle) * distance,
-      def.orbRadius,
+      radius,
       damage,
       event,
     );
@@ -130,16 +133,22 @@ function stepNova(world: World, def: NovaWeaponDef, state: WeaponState, dt: numb
   if (state.cooldown > 0) return;
 
   const player = world.player;
-  state.cooldown = def.cooldown / player.stats.attackSpeedMul;
+  state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
 
-  const radius = novaRadius(def, state.level);
-  const damage = weaponDamage(def, state.level) * player.stats.damageMul;
+  const radius = novaRadius(def, state);
+  const damage = weaponDamage(def, state) * player.stats.damageMul;
 
   damageArea(world, player.x, player.y, radius, damage, world.nextDamageEvent());
   spawnEffect(world, player.x, player.y, radius, def.effectLife, def.color);
 }
 
-function fire(world: World, def: BoltWeaponDef, angle: number, damage: number): void {
+function fire(
+  world: World,
+  def: BoltWeaponDef,
+  state: WeaponState,
+  angle: number,
+  damage: number,
+): void {
   const player = world.player;
   const projectile = world.projectilePool.obtain();
 
@@ -150,9 +159,9 @@ function fire(world: World, def: BoltWeaponDef, angle: number, damage: number): 
   projectile.vx = Math.cos(angle) * def.projectileSpeed;
   projectile.vy = Math.sin(angle) * def.projectileSpeed;
   projectile.damage = damage;
-  projectile.radius = def.projectileRadius;
+  projectile.radius = def.projectileRadius * state.areaMul;
   projectile.life = def.life;
-  projectile.pierce = player.stats.pierce;
+  projectile.pierce = state.pierce;
   projectile.lastHitId = 0;
   projectile.color = def.color;
 

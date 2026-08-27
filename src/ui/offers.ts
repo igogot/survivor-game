@@ -7,7 +7,11 @@ import type { UpgradeDef } from '../data/upgrades';
  * same split the simulation already relies on.
  */
 export interface OfferLabel {
-  /** Weapons change how a run plays, so their cards get a louder treatment. */
+  /**
+   * Card family, and so the accent treatment: anything scoped to a weapon is
+   * louder than a global stat bump. Narrower than `UpgradeDef['kind']` on
+   * purpose — the badge word carries the finer distinction.
+   */
   readonly kind: 'weapon' | 'stat';
   /** Word shown in the card's corner badge. */
   readonly badge: string;
@@ -30,12 +34,23 @@ export function describeOffer(offer: UpgradeDef, taken: number): OfferLabel {
   const isNew = taken === 0;
   const isMax = taken + 1 >= offer.maxStacks;
   const progress = isNew ? 'NEW' : `Lv ${taken} → ${taken + 1}`;
+  const scopedToWeapon = offer.kind === 'weapon' || offer.kind === 'weaponMod';
 
   return {
-    kind: offer.kind,
-    badge: offer.kind === 'weapon' ? 'WEAPON' : 'UPGRADE',
+    // Colour groups the two weapon kinds; the badge separates them. Three
+    // shades would be asking the player to learn a palette mid-fight.
+    kind: scopedToWeapon ? 'weapon' : 'stat',
+    badge: BADGES[offer.kind],
     isNew,
     isMax,
     progress: isMax ? `${progress} · MAX` : progress,
   };
 }
+
+const BADGES: Record<UpgradeDef['kind'], string> = {
+  weapon: 'WEAPON',
+  // Sharpens one weapon the player already owns, rather than handing over a
+  // new one or nudging every weapon at once.
+  weaponMod: 'MOD',
+  stat: 'UPGRADE',
+};

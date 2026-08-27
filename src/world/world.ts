@@ -101,8 +101,6 @@ export class World {
         moveSpeed: CONFIG.player.moveSpeed,
         damageMul: 1,
         attackSpeedMul: 1,
-        projectiles: 1,
-        pierce: 0,
         pickupRadius: CONFIG.player.pickupRadius,
       },
     };
