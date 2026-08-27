@@ -1,5 +1,6 @@
 import { CONFIG } from './config';
 import { GameLoop } from './core/loop';
+import { autoPauseDisabled } from './dev/flags';
 import { Input } from './core/input';
 import { GameRenderer } from './render/renderer';
 import { applyUpgrade } from './systems/progression';
@@ -34,10 +35,17 @@ async function main(): Promise<void> {
   // Losing the window pauses the run. Deliberately one-way: regaining focus
   // does not resume, or the player is dropped straight back into damage they
   // had no chance to react to.
-  window.addEventListener('blur', autoPause);
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) autoPause();
-  });
+  //
+  // A harness driving the page is the one caller that has to opt out: its tab
+  // is never focused or visible, so these two would fire continuously and the
+  // run could never advance. `?nopause` is dev-only, so nothing a player runs
+  // can take this branch.
+  if (!autoPauseDisabled(window.location.search, import.meta.env.DEV)) {
+    window.addEventListener('blur', autoPause);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) autoPause();
+    });
+  }
 
   // Console handle for poking at a live run: `game.getWorld()` to inspect state,
   // `game.renderer.draw(...)` to force a frame. Dropped from production builds.
@@ -46,6 +54,13 @@ async function main(): Promise<void> {
       getWorld: () => world,
       renderer,
       loop,
+      // Chrome suspends requestAnimationFrame outright in a hidden tab, so a
+      // harness cannot wait for the loop to tick. This advances the same fixed
+      // steps the loop would have run and draws once, with no rAF involved.
+      step: (ticks = 1) => {
+        for (let i = 0; i < ticks; i++) tick(1 / CONFIG.tickRate);
+        draw(0);
+      },
     };
   }
 
