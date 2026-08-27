@@ -3,13 +3,7 @@ import type { Texture } from 'pixi.js';
 import { CONFIG } from '../config';
 import { TAU, lerp } from '../core/math';
 import { orbitCount, orbitDistance, orbitRadius, weaponById } from '../data/weapons';
-import {
-  CIRCLE_TEXTURE_SIZE,
-  GEM_TEXTURE_SIZE,
-  GRID_TEXTURE_SIZE,
-  RING_TEXTURE_SIZE,
-  createTextures,
-} from './textures';
+import { GRID_TEXTURE_SIZE, createTextures } from './textures';
 import type { TextureSet } from './textures';
 import type { World } from '../world/world';
 
@@ -59,7 +53,7 @@ export class GameRenderer {
     this.app.ticker.stop();
     host.appendChild(this.app.canvas);
 
-    this.textures = createTextures();
+    this.textures = await createTextures();
 
     this.background = new TilingSprite({
       texture: this.textures.grid,
@@ -67,10 +61,10 @@ export class GameRenderer {
       height: this.app.screen.height,
     });
 
-    this.playerSprite = new Sprite(this.textures.circle);
+    this.playerSprite = new Sprite(this.textures.sprites.player);
     this.playerSprite.anchor.set(0.5);
     this.playerSprite.tint = 0x6ee7a0;
-    this.playerSprite.scale.set((CONFIG.player.radius * 2) / CIRCLE_TEXTURE_SIZE);
+    fit(this.playerSprite, CONFIG.player.radius * 2);
 
     // Gems at the bottom, then the horde. Shockwaves draw over the horde or the
     // crowd would swallow them; the player and their blades stay on top of both.
@@ -118,13 +112,16 @@ export class GameRenderer {
 
   private drawEnemies(world: World, alpha: number): void {
     const enemies = world.enemies;
-    this.resize(this.enemySprites, this.enemyLayer, enemies.length, this.textures.circle);
+    this.resize(this.enemySprites, this.enemyLayer, enemies.length, this.textures.sprites.grunt);
 
     for (let i = 0; i < enemies.length; i++) {
       const enemy = enemies[i];
       const sprite = this.enemySprites[i];
+      // Every frame comes from the same source texture, so swapping the frame
+      // per enemy costs nothing: the layer still batches into one draw call.
+      sprite.texture = this.textures.sprites[enemy.sprite];
       sprite.position.set(lerp(enemy.px, enemy.x, alpha), lerp(enemy.py, enemy.y, alpha));
-      sprite.scale.set((enemy.radius * 2) / CIRCLE_TEXTURE_SIZE);
+      fit(sprite, enemy.radius * 2);
       sprite.tint = enemy.flash > 0 ? 0xffffff : enemy.color;
     }
   }
@@ -135,7 +132,7 @@ export class GameRenderer {
       this.projectileSprites,
       this.projectileLayer,
       projectiles.length,
-      this.textures.circle,
+      this.textures.sprites.bolt,
     );
 
     for (let i = 0; i < projectiles.length; i++) {
@@ -145,27 +142,27 @@ export class GameRenderer {
         lerp(projectile.px, projectile.x, alpha),
         lerp(projectile.py, projectile.y, alpha),
       );
-      sprite.scale.set((projectile.radius * 2) / CIRCLE_TEXTURE_SIZE);
+      fit(sprite, projectile.radius * 2);
       sprite.tint = projectile.color;
     }
   }
 
   private drawGems(world: World, alpha: number): void {
     const gems = world.gems;
-    this.resize(this.gemSprites, this.gemLayer, gems.length, this.textures.gem);
+    this.resize(this.gemSprites, this.gemLayer, gems.length, this.textures.sprites.gem);
 
     for (let i = 0; i < gems.length; i++) {
       const gem = gems[i];
       const sprite = this.gemSprites[i];
       sprite.position.set(lerp(gem.px, gem.x, alpha), lerp(gem.py, gem.y, alpha));
-      sprite.scale.set(GEM_SIZE / GEM_TEXTURE_SIZE);
+      fit(sprite, GEM_SIZE);
       sprite.tint = gem.value > 1 ? 0xffd166 : 0x66d9ff;
     }
   }
 
   private drawEffects(world: World, alpha: number): void {
     const effects = world.effects;
-    this.resize(this.effectSprites, this.effectLayer, effects.length, this.textures.ring);
+    this.resize(this.effectSprites, this.effectLayer, effects.length, this.textures.sprites.ring);
 
     for (let i = 0; i < effects.length; i++) {
       const effect = effects[i];
@@ -173,7 +170,7 @@ export class GameRenderer {
       const radius = lerp(effect.pradius, effect.radius, alpha);
 
       sprite.position.set(effect.x, effect.y);
-      sprite.scale.set((radius * 2) / RING_TEXTURE_SIZE);
+      fit(sprite, radius * 2);
       sprite.tint = effect.color;
       // Fades as it expands, so the burst reads as one motion.
       sprite.alpha = Math.max(0, effect.life / effect.maxLife);
@@ -195,7 +192,7 @@ export class GameRenderer {
       needed += orbitCount(def, weapons[i]);
     }
 
-    this.resize(this.orbSprites, this.orbLayer, needed, this.textures.circle);
+    this.resize(this.orbSprites, this.orbLayer, needed, this.textures.sprites.orb);
 
     let next = 0;
     for (let i = 0; i < weapons.length; i++) {
@@ -215,7 +212,7 @@ export class GameRenderer {
           playerX + Math.cos(a) * distance,
           playerY + Math.sin(a) * distance,
         );
-        sprite.scale.set((radius * 2) / CIRCLE_TEXTURE_SIZE);
+        fit(sprite, radius * 2);
         sprite.tint = def.color;
       }
     }
@@ -237,4 +234,14 @@ export class GameRenderer {
       pool[i].visible = i < needed;
     }
   }
+}
+
+/**
+ * Scales a sprite so its frame covers `diameter` world units.
+ *
+ * Reading the size off the texture rather than from a constant means artwork
+ * can change frame sizes without every call site having to agree on a number.
+ */
+function fit(sprite: Sprite, diameter: number): void {
+  sprite.scale.set(diameter / sprite.texture.width);
 }

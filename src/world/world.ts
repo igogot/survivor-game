@@ -127,6 +127,7 @@ function createEnemy(): Enemy {
     radius: 1,
     xpValue: 0,
     color: 0xffffff,
+    sprite: 'grunt',
     flash: 0,
     hitTag: 0,
     boss: false,
