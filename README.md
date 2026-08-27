@@ -5,9 +5,10 @@ Roguelite в жанре survivor-like (Vampire Survivors, Brotato, Halls of Torm
 
 **▶ [Играть](https://igogot.github.io/survivor-game/)**
 
-![Геймплей](docs/gameplay.gif)
+![Геймплей: четвёртая минута забега](docs/gameplay.jpg)
 
-> TODO: записать 8-секундную гифку и положить в `docs/gameplay.gif`.
+_Четвёртая минута: болт бьёт очередями по трое, орбита режет вплотную, кристаллы
+стягиваются к игроку. Отладочная строка сверху — счётчик пула и текущий fps._
 
 ---
 
