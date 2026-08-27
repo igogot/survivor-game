@@ -1,4 +1,5 @@
 import { formatTime, requireElement } from './hud';
+import { describeOffer } from './offers';
 import type { UpgradeDef } from '../data/upgrades';
 import type { World } from '../world/world';
 
@@ -14,14 +15,24 @@ export class UpgradeMenu {
 
     offers.forEach((offer, index) => {
       const taken = stacks.get(offer.id) ?? 0;
+      const label = describeOffer(offer, taken);
 
       const card = document.createElement('button');
-      card.className = 'card';
+      card.className = `card card--${label.kind}`;
       card.type = 'button';
+
+      const top = document.createElement('span');
+      top.className = 'card-top';
 
       const key = document.createElement('span');
       key.className = 'key';
       key.textContent = String(index + 1);
+
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = label.badge;
+
+      top.append(key, badge);
 
       const name = document.createElement('div');
       name.className = 'name';
@@ -32,10 +43,10 @@ export class UpgradeMenu {
       description.textContent = offer.description;
 
       const stackLine = document.createElement('div');
-      stackLine.className = 'stacks';
-      stackLine.textContent = `${taken + 1} / ${offer.maxStacks}`;
+      stackLine.className = label.isNew ? 'stacks stacks--new' : 'stacks';
+      stackLine.textContent = label.progress;
 
-      card.append(key, name, description, stackLine);
+      card.append(top, name, description, stackLine);
       card.addEventListener('click', () => this.onPick(offer.id));
       this.cards.append(card);
     });
