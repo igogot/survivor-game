@@ -15,6 +15,7 @@ export class GameLoop {
   private lastTime = 0;
   private frameHandle = 0;
   private running = false;
+  private resyncRequested = false;
 
   constructor(
     tickRate: number,
@@ -38,15 +39,20 @@ export class GameLoop {
   }
 
   /**
-   * Forgets the time that has passed since the last frame.
+   * Drops time the loop has taken in but not yet simulated.
    *
    * `maxFrameTime` already stops one long stall from queueing catch-up ticks,
    * but coming back from a pause should not spend even a fraction of a tick on
    * time the player was not playing.
+   *
+   * Deferred rather than applied here, because the only caller is `update`,
+   * which runs *inside* the catch-up loop below. Zeroing the accumulator on the
+   * spot would leave that loop to subtract a step from it immediately, and the
+   * renderer would be handed a negative `alpha` — drawing every entity a whole
+   * tick behind where it actually was, for one visible frame.
    */
   resync(): void {
-    this.lastTime = performance.now();
-    this.accumulator = 0;
+    this.resyncRequested = true;
   }
 
   private onFrame = (now: number): void => {
@@ -63,6 +69,14 @@ export class GameLoop {
     this.accumulator += elapsed;
     while (this.accumulator >= this.step) {
       this.update(this.step);
+
+      if (this.resyncRequested) {
+        this.resyncRequested = false;
+        this.accumulator = 0;
+        this.lastTime = performance.now();
+        break;
+      }
+
       this.accumulator -= this.step;
     }
 
