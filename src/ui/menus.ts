@@ -70,17 +70,56 @@ export class UpgradeMenu {
 export class PauseScreen {
   private readonly root = requireElement('pause');
   private readonly resumeButton = requireElement('pause-resume');
+  private readonly restartButton = requireElement('pause-restart');
 
-  constructor(onResume: () => void) {
+  /** True once restart has been asked for and is waiting to be confirmed. */
+  private armed = false;
+
+  constructor(
+    onResume: () => void,
+    private readonly onRestart: () => void,
+  ) {
     this.resumeButton.addEventListener('click', onResume);
+    this.restartButton.addEventListener('click', () => this.requestRestart());
+  }
+
+  /**
+   * Restart takes two presses: the first arms the button, the second throws the
+   * run away.
+   *
+   * A ten-minute run is a lot to lose to a stray click on a menu the player
+   * opened to do something else, and there is no undo. The button says what the
+   * second press will do rather than opening a dialog, so the pause screen stays
+   * one panel.
+   */
+  requestRestart(): void {
+    if (!this.armed) {
+      this.armed = true;
+      this.restartButton.textContent = 'Sure? The run is lost';
+      this.restartButton.classList.add('action--armed');
+      return;
+    }
+
+    this.disarm();
+    this.onRestart();
   }
 
   show(): void {
+    // Only on the way in, so a repeated sync cannot silently disarm the button
+    // between the player arming it and pressing again.
+    if (this.root.hidden) this.disarm();
     this.root.hidden = false;
   }
 
   hide(): void {
+    this.disarm();
     this.root.hidden = true;
+  }
+
+  private disarm(): void {
+    this.armed = false;
+    this.restartButton.textContent = 'Restart run';
+    this.restartButton.classList.remove('action--armed');
   }
 }
 

@@ -407,6 +407,43 @@
         letter-spacing: 0.08em;
       }
 
+      .actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 22px;
+      }
+
+      .action {
+        pointer-events: auto;
+        padding: 10px 20px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        transition: border-color 120ms, background 120ms;
+      }
+
+      .action:hover {
+        border-color: var(--accent);
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      /* Armed: the next press is the one that throws the run away. */
+      .action--armed {
+        border-color: var(--hp-low);
+        background: rgba(255, 59, 59, 0.14);
+        color: #ffd9d9;
+      }
+
+      .action--armed:hover {
+        border-color: var(--hp-low);
+        background: rgba(255, 59, 59, 0.2);
+      }
+
       .hint {
         color: var(--muted);
         font-size: 12px;
@@ -441,8 +478,9 @@
         border: 1px solid rgba(110, 231, 160, 0.55);
       }
 
-      /* Controls that only exist because a phone has no Esc and no R. Hidden
-         wherever a keyboard is, so the desktop screens stay as they were. */
+      /* The one control that exists solely because a phone has no Esc: a way to
+         open the pause menu at all. Hidden wherever a keyboard is, so the
+         desktop screens stay exactly as they were. */
       .touch-only {
         display: none;
       }
@@ -453,37 +491,25 @@
         }
       }
 
-      button.touch-only {
+      #pause-button {
         align-items: center;
         justify-content: center;
-        min-height: 44px;
-        padding: 10px 20px;
         border: 1px solid var(--border);
-        border-radius: 10px;
-        background: rgba(110, 231, 160, 0.1);
         color: var(--text);
         font: inherit;
         font-size: 13px;
-        letter-spacing: 0.06em;
         cursor: pointer;
-      }
-
-      #pause-button {
         position: fixed;
         right: calc(14px + env(safe-area-inset-right));
         bottom: calc(14px + env(safe-area-inset-bottom));
         z-index: 6;
         width: 52px;
-        min-height: 52px;
+        height: 52px;
         padding: 0;
         border-radius: 50%;
         background: rgba(14, 17, 26, 0.75);
         /* The HUD around it is `pointer-events: none`; this one has to catch. */
         pointer-events: auto;
-      }
-
-      .panel .touch-only {
-        margin-top: 18px;
       }
 
       /* Phone-sized screens. The debug counters are the first thing to go: they
@@ -601,8 +627,13 @@
     <div class="overlay" id="pause" hidden>
       <div class="panel">
         <h2>Paused</h2>
-        <p class="sub">Press <kbd>Esc</kbd> or <kbd>P</kbd> to resume</p>
-        <button id="pause-resume" class="touch-only" type="button">Resume</button>
+        <p class="sub">
+          <kbd>Esc</kbd> or <kbd>P</kbd> to resume &middot; <kbd>R</kbd> to restart
+        </p>
+        <div class="actions">
+          <button class="action" id="pause-resume" type="button">Resume</button>
+          <button class="action" id="pause-restart" type="button">Restart run</button>
+        </div>
       </div>
     </div>
 
@@ -616,7 +647,9 @@
           <div><span class="value" id="result-level">1</span><span class="label">level</span></div>
         </div>
         <p class="hint">Press <kbd>R</kbd> to run again</p>
-        <button id="result-again" class="touch-only" type="button">Run again</button>
+        <div class="actions">
+          <button class="action" id="result-again" type="button">Run again</button>
+        </div>
       </div>
     </div>
 

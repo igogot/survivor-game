@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   const hud = new Hud();
   const stick = new StickView();
   const resultScreen = new ResultScreen(restart);
-  const pauseScreen = new PauseScreen(resumeGame);
+  const pauseScreen = new PauseScreen(resumeGame, restart);
   const upgradeMenu = new UpgradeMenu(pickUpgrade);
 
   const pauseButton = document.getElementById('pause-button');
@@ -83,7 +83,13 @@ async function main(): Promise<void> {
     const phase = world.phase;
 
     if (phase === 'paused') {
-      if (pausePressed()) resumeGame();
+      if (pausePressed()) {
+        resumeGame();
+        return;
+      }
+      // Same two-step confirmation as the button; the screen shows which press
+      // this is.
+      if (input.consumePressed('KeyR')) pauseScreen.requestRestart();
       return;
     }
 
@@ -205,6 +211,8 @@ async function main(): Promise<void> {
     world = newWorld();
     input.clearPressed();
     touch.reset();
+    // A fresh run should not inherit whatever the accumulator was holding.
+    loop.resync();
     syncOverlays();
   }
 }
