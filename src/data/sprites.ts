@@ -16,4 +16,6 @@ export type SpriteName =
   | 'bolt'
   | 'orb'
   | 'gem'
+  /** A pickup worth more than one XP, told apart by frame rather than by tint. */
+  | 'gemRich'
   | 'ring';

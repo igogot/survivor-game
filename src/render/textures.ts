@@ -1,7 +1,8 @@
 import { Spritesheet, Texture } from 'pixi.js';
 import type { SpritesheetData, SpritesheetFrameData } from 'pixi.js';
 import { SPRITE_DRAWERS, SPRITE_SPECS, packFrames } from './atlas';
-import type { AtlasLayout } from './atlas';
+import { SPRITE_TILES, TILE_SIZE, loadSpriteSheet, stripTileBacking, tileOrigin } from './artwork';
+import type { AtlasLayout, Frame } from './atlas';
 import type { SpriteName } from '../data/sprites';
 
 export const GRID_TEXTURE_SIZE = 64;
@@ -16,6 +17,14 @@ export interface TextureSet {
   readonly sprites: Readonly<Record<SpriteName, Texture>>;
   /** False when the atlas failed to build and the per-shape fallback is in use. */
   readonly packed: boolean;
+  /**
+   * True when the frames came from the artwork rather than from drawn shapes.
+   *
+   * The renderer needs to know: the shapes are white masks that tint into the
+   * colour they should be, and tinting artwork the same way would only make it
+   * darker. See how the damage flash is drawn.
+   */
+  readonly artwork: boolean;
 }
 
 /**
@@ -27,27 +36,49 @@ export interface TextureSet {
  */
 export async function createTextures(): Promise<TextureSet> {
   const grid = Texture.from(drawToCanvas(GRID_TEXTURE_SIZE, drawGrid));
+  const sheet = await loadArtwork();
 
   try {
-    return { grid, sprites: await packedSprites(), packed: true };
+    return { grid, sprites: await packedSprites(sheet), packed: true, artwork: sheet !== null };
   } catch (error) {
     // A game that renders nothing is worse than a game that renders slower, so
     // a broken atlas degrades to individual textures rather than a blank screen.
     console.warn('Sprite atlas unavailable; falling back to separate textures.', error);
-    return { grid, sprites: separateSprites(), packed: false };
+    return { grid, sprites: separateSprites(), packed: false, artwork: false };
   }
 }
 
-async function packedSprites(): Promise<Record<SpriteName, Texture>> {
+/**
+ * The artwork is preferred, never required.
+ *
+ * A missing or undecodable sheet is a bad afternoon, not a broken build: the
+ * shapes this project shipped with are still there and still correct, so the
+ * game keeps running with placeholder geometry instead of refusing to start.
+ */
+async function loadArtwork(): Promise<CanvasImageSource | null> {
+  try {
+    return stripTileBacking(await loadSpriteSheet());
+  } catch (error) {
+    console.warn('Sprite artwork unavailable; falling back to drawn shapes.', error);
+    return null;
+  }
+}
+
+async function packedSprites(artwork: CanvasImageSource | null): Promise<Record<SpriteName, Texture>> {
   const layout = packFrames(SPRITE_SPECS);
 
   const canvas = document.createElement('canvas');
   canvas.width = layout.width;
   canvas.height = layout.height;
   const ctx = context(canvas);
+  // Every frame size is a whole multiple of the 16px source tile, so turning
+  // smoothing off scales the pixel art by whole pixels instead of blurring it.
+  ctx.imageSmoothingEnabled = false;
 
   for (const spec of SPRITE_SPECS) {
     const frame = layout.frames[spec.name];
+    if (blitTile(ctx, artwork, spec.name, frame)) continue;
+
     // Each shape draws in its own coordinate space starting at 0,0 and knows
     // nothing about where it landed in the sheet.
     ctx.save();
@@ -60,6 +91,39 @@ async function packedSprites(): Promise<Record<SpriteName, Texture>> {
   await sheet.parse();
 
   return collect((name) => sheet.textures[name]);
+}
+
+/**
+ * Copies one tile of artwork into its frame, or reports that there is none.
+ *
+ * Returning false rather than throwing is what lets a single sprite fall back
+ * on its own: the shockwave ring has no tile in a dungeon tileset, so it keeps
+ * its drawn outline while everything around it comes from the sheet.
+ */
+function blitTile(
+  ctx: CanvasRenderingContext2D,
+  artwork: CanvasImageSource | null,
+  name: SpriteName,
+  frame: Frame,
+): boolean {
+  if (artwork === null) return false;
+
+  const tile = SPRITE_TILES[name];
+  if (tile === undefined) return false;
+
+  const origin = tileOrigin(tile);
+  ctx.drawImage(
+    artwork,
+    origin.x,
+    origin.y,
+    TILE_SIZE,
+    TILE_SIZE,
+    frame.x,
+    frame.y,
+    frame.w,
+    frame.h,
+  );
+  return true;
 }
 
 /** The layout in the shape Pixi's spritesheet parser expects. */
