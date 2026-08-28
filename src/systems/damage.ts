@@ -11,11 +11,19 @@ import type { World } from '../world/world';
  * the top of the next tick, because every caller is mid-iteration over grid
  * indices that a removal would invalidate.
  */
+/**
+ * How long an enemy stays lit after being hit, in seconds.
+ *
+ * Exported because the renderer fades the flash over exactly this window; two
+ * copies of the number would drift and the fade would end early or late.
+ */
+export const FLASH_TIME = 0.08;
+
 export function applyDamage(world: World, enemy: Enemy, amount: number): void {
   if (enemy.hp <= 0) return;
 
   enemy.hp -= amount;
-  enemy.flash = 0.08;
+  enemy.flash = FLASH_TIME;
   if (enemy.hp <= 0) world.kills++;
 }
 

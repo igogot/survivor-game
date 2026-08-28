@@ -3,6 +3,7 @@ import type { Texture } from 'pixi.js';
 import { CONFIG } from '../config';
 import { TAU, lerp } from '../core/math';
 import { orbitCount, orbitDistance, orbitRadius, weaponById } from '../data/weapons';
+import { FLASH_TIME } from '../systems/damage';
 import { GRID_TEXTURE_SIZE, createTextures } from './textures';
 import type { TextureSet } from './textures';
 import type { World } from '../world/world';
@@ -28,12 +29,14 @@ export class GameRenderer {
   private readonly camera = new Container();
   private readonly gemLayer = new Container();
   private readonly enemyLayer = new Container();
+  private readonly flashLayer = new Container();
   private readonly effectLayer = new Container();
   private readonly orbLayer = new Container();
   private readonly projectileLayer = new Container();
 
   private playerSprite!: Sprite;
   private readonly enemySprites: Sprite[] = [];
+  private readonly flashSprites: Sprite[] = [];
   private readonly projectileSprites: Sprite[] = [];
   private readonly gemSprites: Sprite[] = [];
   private readonly effectSprites: Sprite[] = [];
@@ -63,7 +66,8 @@ export class GameRenderer {
 
     this.playerSprite = new Sprite(this.textures.sprites.player);
     this.playerSprite.anchor.set(0.5);
-    this.playerSprite.tint = 0x6ee7a0;
+    // Artwork carries its own colour; only the white shapes need tinting into it.
+    this.playerSprite.tint = this.variantTint(0x6ee7a0);
     fit(this.playerSprite, CONFIG.player.radius * 2);
 
     // Gems at the bottom, then the horde. Shockwaves draw over the horde or the
@@ -71,6 +75,7 @@ export class GameRenderer {
     this.camera.addChild(
       this.gemLayer,
       this.enemyLayer,
+      this.flashLayer,
       this.effectLayer,
       this.playerSprite,
       this.orbLayer,
@@ -122,8 +127,59 @@ export class GameRenderer {
       sprite.texture = this.textures.sprites[enemy.sprite];
       sprite.position.set(lerp(enemy.px, enemy.x, alpha), lerp(enemy.py, enemy.y, alpha));
       fit(sprite, enemy.radius * 2);
-      sprite.tint = enemy.flash > 0 ? 0xffffff : enemy.color;
+      sprite.tint = this.variantTint(enemy.color);
     }
+
+    this.drawFlashes(world, alpha);
+  }
+
+  /**
+   * The hit flash, as a second pass over the enemies that are flashing.
+   *
+   * It used to be a white tint, which worked only because every sprite was a
+   * white mask: tint multiplies, so on artwork the same white tint changes
+   * nothing at all and the flash silently disappears. Adding a copy of the
+   * frame on top brightens whatever is underneath instead of recolouring it,
+   * which works for a mask and for a painted crab alike.
+   *
+   * The copies come from the same atlas texture, so this costs one draw call
+   * regardless of how many enemies are being hit, and only the ones actually
+   * flashing get a sprite.
+   */
+  private drawFlashes(world: World, alpha: number): void {
+    const enemies = world.enemies;
+
+    let needed = 0;
+    for (let i = 0; i < enemies.length; i++) {
+      if (enemies[i].flash > 0) needed++;
+    }
+
+    this.resize(this.flashSprites, this.flashLayer, needed, this.textures.sprites.grunt);
+
+    let next = 0;
+    for (let i = 0; i < enemies.length; i++) {
+      const enemy = enemies[i];
+      if (enemy.flash <= 0) continue;
+
+      const sprite = this.flashSprites[next++];
+      sprite.blendMode = 'add';
+      sprite.texture = this.textures.sprites[enemy.sprite];
+      sprite.position.set(lerp(enemy.px, enemy.x, alpha), lerp(enemy.py, enemy.y, alpha));
+      fit(sprite, enemy.radius * 2);
+      // Fades over the flash's own lifetime so a hit reads as a pulse.
+      sprite.alpha = Math.min(1, enemy.flash / FLASH_TIME);
+    }
+  }
+
+  /**
+   * The tint a sprite should carry.
+   *
+   * Drawn shapes are white masks and become their colour by being tinted.
+   * Artwork already is its colour, and tinting it would only darken it, so it
+   * is left alone.
+   */
+  private variantTint(color: number): number {
+    return this.textures.artwork ? 0xffffff : color;
   }
 
   private drawProjectiles(world: World, alpha: number): void {
@@ -143,7 +199,9 @@ export class GameRenderer {
         lerp(projectile.py, projectile.y, alpha),
       );
       fit(sprite, projectile.radius * 2);
-      sprite.tint = projectile.color;
+      // The blade points up in the sheet; turn it to face where it is going.
+      sprite.rotation = Math.atan2(projectile.vy, projectile.vx) + Math.PI / 2;
+      sprite.tint = this.variantTint(projectile.color);
     }
   }
 
@@ -154,9 +212,15 @@ export class GameRenderer {
     for (let i = 0; i < gems.length; i++) {
       const gem = gems[i];
       const sprite = this.gemSprites[i];
+      const rich = gem.value > 1;
+
+      // Worth telling apart by shape rather than by tint: a colour difference
+      // is the first thing lost in a crowd, and it is lost entirely once the
+      // sprites carry their own colour.
+      sprite.texture = rich ? this.textures.sprites.gemRich : this.textures.sprites.gem;
       sprite.position.set(lerp(gem.px, gem.x, alpha), lerp(gem.py, gem.y, alpha));
       fit(sprite, GEM_SIZE);
-      sprite.tint = gem.value > 1 ? 0xffd166 : 0x66d9ff;
+      sprite.tint = this.variantTint(rich ? 0xffd166 : 0x66d9ff);
     }
   }
 
@@ -213,7 +277,9 @@ export class GameRenderer {
           playerY + Math.sin(a) * distance,
         );
         fit(sprite, radius * 2);
-        sprite.tint = def.color;
+        // Spinning with the ring, which is the whole read on the weapon.
+        sprite.rotation = a;
+        sprite.tint = this.variantTint(def.color);
       }
     }
   }

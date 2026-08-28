@@ -151,6 +151,13 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     polygon(ctx, size, 4, 2);
   },
 
+  // The richer pickup differs in outline, not in tint, so it stays legible
+  // whichever art is in use.
+  gemRich: (ctx, size) => {
+    ctx.fillStyle = WHITE;
+    polygon(ctx, size, 6, 2);
+  },
+
   // Stroked just inside the frame, so scaling the sprite to `radius * 2` puts
   // the outer edge of the stroke exactly on the shockwave's radius.
   ring: (ctx, size) => {
@@ -171,6 +178,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'bolt', size: 32 },
   { name: 'orb', size: 32 },
   { name: 'gem', size: 32 },
+  { name: 'gemRich', size: 32 },
   { name: 'ring', size: 96 },
 ];
 
