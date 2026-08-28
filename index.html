@@ -391,6 +391,43 @@
         letter-spacing: 0.08em;
       }
 
+      .actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 22px;
+      }
+
+      .action {
+        pointer-events: auto;
+        padding: 10px 20px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        transition: border-color 120ms, background 120ms;
+      }
+
+      .action:hover {
+        border-color: var(--accent);
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      /* Armed: the next press is the one that throws the run away. */
+      .action--armed {
+        border-color: var(--hp-low);
+        background: rgba(255, 59, 59, 0.14);
+        color: #ffd9d9;
+      }
+
+      .action--armed:hover {
+        border-color: var(--hp-low);
+        background: rgba(255, 59, 59, 0.2);
+      }
+
       .hint {
         color: var(--muted);
         font-size: 12px;
@@ -450,7 +487,13 @@
     <div class="overlay" id="pause" hidden>
       <div class="panel">
         <h2>Paused</h2>
-        <p class="sub">Press <kbd>Esc</kbd> or <kbd>P</kbd> to resume</p>
+        <p class="sub">
+          <kbd>Esc</kbd> or <kbd>P</kbd> to resume &middot; <kbd>R</kbd> to restart
+        </p>
+        <div class="actions">
+          <button class="action" id="pause-resume" type="button">Resume</button>
+          <button class="action" id="pause-restart" type="button">Restart run</button>
+        </div>
       </div>
     </div>
 

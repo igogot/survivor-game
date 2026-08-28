@@ -22,7 +22,7 @@ async function main(): Promise<void> {
 
   const hud = new Hud();
   const resultScreen = new ResultScreen();
-  const pauseScreen = new PauseScreen();
+  const pauseScreen = new PauseScreen(resumeGame, restart);
   const upgradeMenu = new UpgradeMenu(pickUpgrade);
 
   // Reassigned on restart, so every closure below reads the binding rather than
@@ -71,7 +71,13 @@ async function main(): Promise<void> {
     const phase = world.phase;
 
     if (phase === 'paused') {
-      if (pausePressed()) resumeGame();
+      if (pausePressed()) {
+        resumeGame();
+        return;
+      }
+      // Same two-step confirmation as the button; the screen shows which press
+      // this is.
+      if (input.consumePressed('KeyR')) pauseScreen.requestRestart();
       return;
     }
 
@@ -163,6 +169,8 @@ async function main(): Promise<void> {
   function restart(): void {
     world = newWorld();
     input.clearPressed();
+    // A fresh run should not inherit whatever the accumulator was holding.
+    loop.resync();
     syncOverlays();
   }
 }
