@@ -62,11 +62,18 @@ export class UpgradeMenu {
 /**
  * The freeze screen.
  *
- * Keyboard only, on purpose: the run must not resume from a stray click on a
- * button the player did not mean to hit.
+ * Resuming is deliberately not "click anywhere": the run must not restart from
+ * a stray tap on a screen the player put down. A phone has no Esc key, so it
+ * gets one button that says what it does, and nothing else on the overlay
+ * responds.
  */
 export class PauseScreen {
   private readonly root = requireElement('pause');
+  private readonly resumeButton = requireElement('pause-resume');
+
+  constructor(onResume: () => void) {
+    this.resumeButton.addEventListener('click', onResume);
+  }
 
   show(): void {
     this.root.hidden = false;
@@ -80,11 +87,16 @@ export class PauseScreen {
 /** End-of-run screen, shown on death and on beating the boss. */
 export class ResultScreen {
   private readonly root = requireElement('result');
+  private readonly againButton = requireElement('result-again');
   private readonly title = requireElement('result-title');
   private readonly subtitle = requireElement('result-sub');
   private readonly time = requireElement('result-time');
   private readonly kills = requireElement('result-kills');
   private readonly level = requireElement('result-level');
+
+  constructor(onRestart: () => void) {
+    this.againButton.addEventListener('click', onRestart);
+  }
 
   show(world: World): void {
     const won = world.phase === 'won';

@@ -2,10 +2,12 @@ import { CONFIG } from './config';
 import { GameLoop } from './core/loop';
 import { autoPauseDisabled } from './dev/flags';
 import { Input } from './core/input';
+import { TouchInput } from './core/touch-input';
 import { GameRenderer } from './render/renderer';
 import { applyUpgrade } from './systems/progression';
 import { Hud } from './ui/hud';
 import { PauseScreen, ResultScreen, UpgradeMenu } from './ui/menus';
+import { StickView } from './ui/stick';
 import { canPause, pauseRun, resumeRun } from './world/pause';
 import { stepWorld } from './world/step';
 import { World } from './world/world';
@@ -20,10 +22,20 @@ async function main(): Promise<void> {
   const input = new Input();
   input.attach();
 
+  // The canvas, not the window: the HUD is `pointer-events: none` and passes
+  // touches through, but the buttons and cards layered over it are not, so a
+  // tap meant for a card never also starts the stick under it.
+  const touch = new TouchInput();
+  touch.attach(host);
+
   const hud = new Hud();
-  const resultScreen = new ResultScreen();
-  const pauseScreen = new PauseScreen();
+  const stick = new StickView();
+  const resultScreen = new ResultScreen(restart);
+  const pauseScreen = new PauseScreen(resumeGame);
   const upgradeMenu = new UpgradeMenu(pickUpgrade);
+
+  const pauseButton = document.getElementById('pause-button');
+  pauseButton?.addEventListener('click', togglePause);
 
   // Reassigned on restart, so every closure below reads the binding rather than
   // capturing one instance.
@@ -82,8 +94,9 @@ async function main(): Promise<void> {
 
     if (phase === 'playing') {
       input.poll();
-      world.intentX = input.x;
-      world.intentY = input.y;
+      const intent = combinedIntent();
+      world.intentX = intent.x;
+      world.intentY = intent.y;
       stepWorld(world, dt);
       syncOverlays();
       return;
@@ -108,10 +121,37 @@ async function main(): Promise<void> {
     return input.consumePressed('Escape') || input.consumePressed('KeyP');
   }
 
+  /**
+   * Keys and thumb, summed and clamped.
+   *
+   * Summing rather than picking a winner means neither input has to know the
+   * other exists, and a phone with a keyboard attached behaves the way both
+   * halves promise. The clamp is what stops holding both from moving faster
+   * than either — the simulation multiplies this straight into `moveSpeed`.
+   */
+  function combinedIntent(): { x: number; y: number } {
+    const x = input.x + touch.x;
+    const y = input.y + touch.y;
+    const length = Math.hypot(x, y);
+    if (length <= 1) return { x, y };
+    return { x: x / length, y: y / length };
+  }
+
+  function togglePause(): void {
+    if (world.phase === 'paused') {
+      resumeGame();
+      return;
+    }
+    if (canPause(world)) pauseGame();
+  }
+
   function pauseGame(): void {
     pauseRun(world);
     // Otherwise the key that paused is still queued and unpauses immediately.
     input.clearPressed();
+    // A finger that was steering when the phone rang is not steering any more,
+    // and the world must not resume still holding its last direction.
+    touch.reset();
     syncOverlays();
   }
 
@@ -130,6 +170,7 @@ async function main(): Promise<void> {
   function draw(alpha: number): void {
     renderer.draw(world, alpha);
     hud.update(world);
+    stick.update(touch);
   }
 
   function pickUpgrade(id: string): void {
@@ -163,6 +204,7 @@ async function main(): Promise<void> {
   function restart(): void {
     world = newWorld();
     input.clearPressed();
+    touch.reset();
     syncOverlays();
   }
 }

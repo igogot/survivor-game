@@ -10,6 +10,17 @@ import type { World } from '../world/world';
 const GEM_SIZE = 11;
 
 /**
+ * Ceiling on the backing-store scale.
+ *
+ * A phone reporting `devicePixelRatio` 3 asks for nine times the fragments of a
+ * 1x screen for the same picture, and this scene is fill-bound: a full horde is
+ * hundreds of overlapping translucent sprites. Two is where the extra pixels
+ * stop being visible on a screen held at arm's length and start being the
+ * difference between 60 fps and 30.
+ */
+const MAX_RESOLUTION = 2;
+
+/**
  * Draws a `World`. Reads it, never mutates it.
  *
  * That one-way dependency is what keeps the simulation testable in Node — this
@@ -45,7 +56,7 @@ export class GameRenderer {
       resizeTo: window,
       antialias: true,
       autoDensity: true,
-      resolution: window.devicePixelRatio || 1,
+      resolution: Math.min(window.devicePixelRatio || 1, MAX_RESOLUTION),
     });
 
     // The fixed-step loop decides when to render; Pixi's own ticker would
