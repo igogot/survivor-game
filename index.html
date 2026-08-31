@@ -171,11 +171,28 @@
         }
       }
 
-      #timer {
+      /* Holds the corner: the timer keeps its place and the byline tucks under
+         it, so neither pushes the health bar around as the clock widens. */
+      #timer-wrap {
         margin-left: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        line-height: 1.15;
+      }
+
+      #timer {
         font-size: 22px;
         font-variant-numeric: tabular-nums;
         letter-spacing: 0.04em;
+      }
+
+      /* Quiet on purpose — a signature, not a HUD reading. */
+      #byline {
+        margin-top: 2px;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.1em;
       }
 
       #stats {
@@ -694,7 +711,10 @@
             <span id="hp-text">100 / 100</span>
           </div>
         </div>
-        <span id="timer">00:00</span>
+        <div id="timer-wrap">
+          <span id="timer">00:00</span>
+          <span id="byline">by igogot</span>
+        </div>
       </div>
       <div class="bar"><i id="xp-fill"></i></div>
       <div id="stats">
