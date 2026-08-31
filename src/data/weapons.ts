@@ -39,6 +39,26 @@ export interface BoltWeaponDef extends WeaponBase {
  * weapon costs zero entities. Damage lands in pulses rather than continuously,
  * which is what stops an enemy standing inside a blade from taking 60 hits a
  * second.
+ *
+ * A bodyguard, not a crowd-clearer. The ring covers the contact band and
+ * nothing past it, so it is paid for in seconds survived rather than in kills;
+ * the shockwave stays the weapon that thins a horde. Two invariants are what
+ * make it worth a card at all, and the numbers below are chosen to hold them:
+ *
+ *   1. The band reaches the player's skin. An enemy touching the player stands
+ *      at `player.radius + enemy.radius`, so `distance - orbRadius - enemy
+ *      radius` has to stay under that. Otherwise the ring is a hoop around a
+ *      hole, swinging at empty floor while something chews on the player
+ *      inside it. Every upgrade used to widen that hole instead of closing it:
+ *      levelling pushed the ring out and reach scaled the whole radius, so a
+ *      fully bought ring dealt nothing at all within 95px of the player it was
+ *      supposed to be guarding.
+ *   2. The ring cannot skip. Damage is an instantaneous stamp at the pulse and
+ *      not a swept arc, so the angle travelled between pulses (`spin *
+ *      cooldown`) must stay under a blade's angular width (`2 * (orbRadius +
+ *      enemy radius) / distance`). It did not: the ring turned 0.96 rad between
+ *      bites while a blade covered 0.64, and two thirds of the horde walked
+ *      through the gap between two samples untouched.
  */
 export interface OrbitWeaponDef extends WeaponBase {
   readonly kind: 'orbit';
@@ -87,16 +107,16 @@ export const ORBIT: OrbitWeaponDef = {
   kind: 'orbit',
   id: 'orbit',
   name: 'Orbit Blades',
-  cooldown: 0.4,
-  damage: 6,
+  cooldown: 0.22,
+  damage: 10,
   damagePerLevel: 3,
   color: 0xffd166,
-  orbs: 2,
+  orbs: 3,
   orbsPerLevel: 1,
-  distance: 66,
-  distancePerLevel: 7,
-  orbRadius: 11,
-  spin: 2.4,
+  distance: 46,
+  distancePerLevel: 0,
+  orbRadius: 18,
+  spin: 2.2,
 };
 
 export const NOVA: NovaWeaponDef = {
@@ -146,12 +166,23 @@ export function weaponCooldown(def: WeaponDef, state: WeaponState, attackSpeedMu
   return def.cooldown / (attackSpeedMul * state.attackSpeedMul);
 }
 
+/**
+ * How much of Long Reach's bonus pushes the ring outward; the rest thickens the
+ * blades.
+ *
+ * Reach used to scale ring and blade alike, which carried the guard away from
+ * whatever had just closed to arm's length — the upgrade made the weapon worse
+ * at its only job. Spending it mostly on the blade widens the band inward and
+ * outward at once instead.
+ */
+const REACH_PUSH = 0.3;
+
 export function orbitCount(def: OrbitWeaponDef, state: WeaponState): number {
   return def.orbs + def.orbsPerLevel * (state.level - 1);
 }
 
 export function orbitDistance(def: OrbitWeaponDef, state: WeaponState): number {
-  return (def.distance + def.distancePerLevel * (state.level - 1)) * state.areaMul;
+  return (def.distance + def.distancePerLevel * (state.level - 1)) * (1 + (state.areaMul - 1) * REACH_PUSH);
 }
 
 /** Radians per second. Turning faster is half of what Whirling Edge buys. */

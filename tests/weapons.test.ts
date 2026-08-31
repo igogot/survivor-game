@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { NOVA, ORBIT, orbitDistance, weaponDamage } from '../src/data/weapons';
+import { CONFIG } from '../src/config';
+import { ENEMIES } from '../src/data/enemies';
+import { UPGRADES } from '../src/data/upgrades';
+import {
+  NOVA,
+  ORBIT,
+  orbitDistance,
+  orbitRadius,
+  orbitSpin,
+  weaponCooldown,
+  weaponDamage,
+} from '../src/data/weapons';
 import { damageArea } from '../src/systems/damage';
 import { effectSystem, spawnEffect } from '../src/systems/effects';
 import { applyUpgrade } from '../src/systems/progression';
@@ -10,6 +21,8 @@ import type { Enemy, WeaponState } from '../src/world/types';
 
 const DT = 1 / 60;
 const DUMMY_HP = 100;
+/** Radius of the stand-in enemy, matching the common grunt. */
+const ENEMY_RADIUS = 10;
 
 /**
  * Drops a stationary, harmless enemy at an exact spot. The spawner only ever
@@ -39,7 +52,7 @@ function placeEnemy(world: World, x: number, y: number): Enemy {
   enemy.maxHp = DUMMY_HP;
   enemy.speed = 0;
   enemy.damage = 0;
-  enemy.radius = 10;
+  enemy.radius = ENEMY_RADIUS;
   enemy.xpValue = 1;
   enemy.color = 0xffffff;
   enemy.flash = 0;
@@ -120,6 +133,73 @@ describe('orbit blades', () => {
   it('hits harder at a higher level', () => {
     expect(pulseDamage(3)).toBeGreaterThan(pulseDamage(1));
   });
+
+  /**
+   * The ring's whole job, and the one thing it used to fail at.
+   *
+   * An enemy touching the player stands at `player.radius + enemy.radius`. A
+   * ring that only bites further out is a hoop around a hole: it swings at
+   * empty floor while something stands on the player. Every upgrade widened
+   * that hole rather than closing it — levelling pushed the ring outward and
+   * reach scaled it — so a fully bought ring dealt nothing within 95px of the
+   * player it was supposed to be guarding.
+   */
+  it('cuts an enemy that has reached the player, at every level', () => {
+    for (let level = 1; level <= stacksOf('orbit'); level++) {
+      const world = new World(3);
+      for (let i = 0; i < level; i++) grantWeapon(world, 'orbit');
+
+      const touching = placeEnemy(world, CONFIG.player.radius + ENEMY_RADIUS, 0);
+      rebuildGrid(world);
+
+      // A full second of ticks, so the answer cannot rest on where the blades
+      // happen to start.
+      for (let tick = 0; tick < 60; tick++) weaponSystem(world, DT);
+
+      expect(touching.hp).toBeLessThan(DUMMY_HP);
+    }
+  });
+
+  /**
+   * Damage is an instantaneous stamp at the pulse rather than a swept arc, so
+   * the ring has to bite more often than it turns its own blade width.
+   *
+   * When it does not, enemies cross the arc between two samples untouched, and
+   * that is exactly what happened: the ring travelled 0.96 rad between bites
+   * while a blade covered 0.64. Whirling Edge widened the gap rather than
+   * closing it, buying +50% spin against +40% rate.
+   *
+   * Checked at 1.0x global attack speed because that is the worst case — Quick
+   * Hands shortens the cooldown without touching the spin, which can only help.
+   */
+  it('never turns further than a blade is wide between pulses', () => {
+    // The smallest enemy is the hardest to catch, so it sets the bar.
+    const smallest = ENEMIES.reduce((min, def) => Math.min(min, def.radius), Infinity);
+
+    for (let level = 1; level <= stacksOf('orbit'); level++) {
+      for (let spins = 0; spins <= stacksOf('orbit-spin'); spins++) {
+        const world = new World(5);
+        for (let i = 0; i < level; i++) grantWeapon(world, 'orbit');
+
+        for (let i = 0; i < spins; i++) {
+          world.pendingLevels = 1;
+          applyUpgrade(world, 'orbit-spin');
+        }
+
+        const state = weaponState(world, 'orbit');
+        const travelled = orbitSpin(ORBIT, state) * weaponCooldown(ORBIT, state, 1);
+        const blade = (2 * (orbitRadius(ORBIT, state) + smallest)) / orbitDistance(ORBIT, state);
+
+        expect(travelled).toBeLessThan(blade);
+      }
+    }
+  });
+
+  function stacksOf(id: string): number {
+    const upgrade = UPGRADES.find((entry) => entry.id === id);
+    if (upgrade === undefined) throw new Error(`no upgrade '${id}'`);
+    return upgrade.maxStacks;
+  }
 
   function pulseDamage(level: number): number {
     const world = new World(4);
