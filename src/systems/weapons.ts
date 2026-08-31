@@ -293,7 +293,7 @@ function fire(
   // Written rather than assumed: the pool hands back whatever the last shot
   // left, and the last shot may well have belonged to the horde.
   projectile.hostile = false;
-  projectile.sprite = 'bolt';
+  projectile.sprite = def.sprite;
 }
 
 /**

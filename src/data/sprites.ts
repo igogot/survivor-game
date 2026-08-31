@@ -34,6 +34,9 @@ export type SpriteName =
   | 'hex'
   | 'boss'
   | 'bolt'
+  /** The spike the harpoon throws: heavier and slower than a bolt, and it reads
+   * that way standing still, which is the whole reason it is not a big bolt. */
+  | 'harpoon'
   | 'orb'
   /** The lance, drawn stretched to the reach of the thrust that landed. */
   | 'spear'

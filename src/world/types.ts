@@ -116,7 +116,14 @@ export interface Projectile {
    * two would drift apart.
    */
   hostile: boolean;
-  /** Which frame the renderer draws. A hex must not look like the player's bolt. */
+  /**
+   * Which frame the renderer draws, the same way `Enemy.sprite` works.
+   *
+   * A hex must not look like the player's bolt, and colour cannot carry that
+   * distinction: `variantTint` returns white once the artwork loads, because
+   * artwork brings its own. Shape is what survives the swap, so whoever fires
+   * says what the shot looks like.
+   */
   sprite: SpriteName;
 }
 

@@ -291,6 +291,33 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     star(ctx, size / 2, outer, outer * 0.34, 4);
   },
 
+  /**
+   * A spike on a hafted shaft with a guard, pointing up the same axis the
+   * sheet's tile does, so the renderer's one rotation serves both.
+   *
+   * Solid on purpose. Swept barbs were the obvious drawing and they came apart
+   * into loose pixels at a 32px frame — the diagonal that makes a barb a barb
+   * is a sliver by the time it reaches the point. The crossbar carries the same
+   * reading and survives the resolution.
+   */
+  harpoon: (ctx, size) => {
+    const mid = size / 2;
+    const head = size * 0.4;
+    const headHalf = size * 0.25;
+    const haftHalf = size * 0.06;
+    const barHalf = size * 0.22;
+
+    ctx.fillStyle = WHITE;
+    ctx.beginPath();
+    ctx.moveTo(mid, 1);
+    ctx.lineTo(mid + headHalf, head);
+    ctx.lineTo(mid - headHalf, head);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillRect(mid - haftHalf, head - 1, haftHalf * 2, size - head);
+    ctx.fillRect(mid - barHalf, size * 0.5, barHalf * 2, size * 0.09);
+  },
+
   orb: (ctx, size) => {
     ctx.fillStyle = WHITE;
     polygon(ctx, size, 4, 2);
@@ -360,6 +387,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'hex', size: 32 },
   { name: 'boss', size: 96 },
   { name: 'bolt', size: 32 },
+  { name: 'harpoon', size: 32 },
   { name: 'orb', size: 32 },
   { name: 'spear', size: 64 },
   { name: 'gem', size: 32 },
@@ -371,7 +399,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
  * Shelf packing: frames are laid left to right in rows, tallest first, and a
  * new row starts when the next frame would overrun the width.
  *
- * Deliberately simple. The atlas holds nine frames and is built once at
+ * Deliberately simple. The atlas holds twenty frames and is built once at
  * startup, so a smarter packer would buy nothing and cost a bug surface. It is
  * a pure function of its input, which is what makes the overlap test possible.
  */
