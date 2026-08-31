@@ -64,10 +64,21 @@ export interface HelpSection {
  * which is the part that would otherwise rot in silence.
  */
 const WEAPON_ROLES: Readonly<Record<string, string>> = {
-  bolt: 'Fires at the nearest enemy in range. The only weapon that reaches across the screen, and the only one you start with.',
+  bolt: 'Fires at the nearest enemy in range. The only weapon that reaches across the screen, which makes it the forgiving one to open with.',
   orbit: 'Blades circle you and cut what they touch. They guard the ground you are standing on, not the ground ahead.',
   nova: 'A burst of damage around you every few seconds. It does not care how many enemies are caught in it.',
 };
+
+/**
+ * What a weapon is for, in one line.
+ *
+ * The same sentence the panel prints, read by the weapon picker as well: a
+ * choice described one way on the screen where it is made and another way in
+ * the rules is how a player learns to distrust both.
+ */
+export function weaponRole(id: string): string {
+  return WEAPON_ROLES[id] ?? '';
+}
 
 export function helpSections(): readonly HelpSection[] {
   return [theDeal(), controls(), theLoop(), weaponRows(), dangers()];
@@ -181,6 +192,12 @@ function theLoop(): HelpSection {
         term: 'Gems are the only XP',
         detail:
           'An enemy you hurt but did not kill is worth nothing, and one that wanders off the map takes its gem with it.',
+      },
+      {
+        kind: 'note',
+        term: 'You choose what you open with',
+        detail:
+          'Every run starts with one weapon and you pick which. It decides the first minutes, who you are on screen, and what the level-up cards have to build on — nothing else is decided for you.',
       },
       {
         kind: 'note',

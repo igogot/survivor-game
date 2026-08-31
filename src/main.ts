@@ -5,10 +5,12 @@ import { autoPauseDisabled } from './dev/flags';
 import { Input } from './core/input';
 import { TouchInput } from './core/touch-input';
 import { GameRenderer } from './render/renderer';
+import { STARTER_WEAPON_ID } from './data/weapons';
 import { applyUpgrade } from './systems/progression';
 import { Hud } from './ui/hud';
 import { PauseScreen, ResultScreen, StartScreen, UpgradeMenu, mountHelp } from './ui/menus';
 import { StickView } from './ui/stick';
+import { starterChoices } from './ui/starters';
 import { canPause, pauseRun, resumeRun } from './world/pause';
 import { stepWorld } from './world/step';
 import { World } from './world/world';
@@ -39,7 +41,10 @@ async function main(): Promise<void> {
   const resultScreen = new ResultScreen(restart);
   const pauseScreen = new PauseScreen(resumeGame, restart);
   const upgradeMenu = new UpgradeMenu(pickUpgrade);
-  const startScreen = new StartScreen(beginRun);
+  const startScreen = new StartScreen(startRun, renderer.paintSprite);
+
+  /** The weapons on offer, in the order their cards and their keys appear. */
+  const starters = starterChoices();
 
   // One source of rules, printed into the briefing, the pause screen and the
   // result screen. Rendered once at boot: the text never changes within a
@@ -63,16 +68,18 @@ async function main(): Promise<void> {
   let world = newWorld();
 
   /**
-   * Whether the briefing is still up.
+   * Whether the opening screen is up and a weapon has yet to be chosen.
    *
    * The run is genuinely paused behind it, which means `syncOverlays` would
    * otherwise show the pause screen — the two states are the same to the
-   * simulation and different to the player. This flag is what tells them apart,
-   * and it is cleared for good on the first start: someone who has already read
-   * the rules and pressed Restart wants the next run, not the briefing again.
+   * simulation and different to the player. This flag is what tells them
+   * apart. Unlike the briefing it grew out of, it comes back on every restart:
+   * the weapon is the decision a run is built around, and somebody who has
+   * just watched one fail is exactly the person who wants to make it
+   * differently.
    */
-  let briefing = !unattended;
-  if (briefing) pauseRun(world);
+  let choosing = !unattended;
+  if (choosing) pauseRun(world);
   syncOverlays();
 
   const loop = new GameLoop(CONFIG.tickRate, CONFIG.maxFrameTime, tick, draw);
@@ -117,16 +124,25 @@ async function main(): Promise<void> {
     const phase = world.phase;
 
     if (phase === 'paused') {
-      if (briefing) {
-        // Any of the three keys a player reaches for on a title screen. Move
-        // keys are deliberately not among them: the first thing a hand does
-        // here is settle onto WASD.
+      if (choosing) {
+        // The same digits the level-up screen uses, because it is the same
+        // gesture: read three cards, pick one, live with it.
+        for (let i = 0; i < starters.length; i++) {
+          if (input.consumePressed(`Digit${i + 1}`)) {
+            startRun(starters[i].id);
+            return;
+          }
+        }
+
+        // The three keys a player reaches for on a title screen, for somebody
+        // who would rather not choose at all. Move keys are deliberately not
+        // among them: the first thing a hand does here is settle onto WASD.
         if (
           input.consumePressed('Space') ||
           input.consumePressed('Enter') ||
           input.consumePressed('NumpadEnter')
         ) {
-          beginRun();
+          startRun(starters[0].id);
         }
         return;
       }
@@ -199,10 +215,10 @@ async function main(): Promise<void> {
   }
 
   function togglePause(): void {
-    // The briefing is paused too, and this button would lift that pause while
-    // leaving the panel up — a run advancing behind a screen that says it has
-    // not started. Its own button is the only way out of it.
-    if (briefing) return;
+    // The opening screen is paused too, and this button would lift that pause
+    // while leaving the panel up — a run advancing behind a screen that says
+    // it has not started. Choosing a weapon is the only way out of it.
+    if (choosing) return;
 
     if (world.phase === 'paused') {
       resumeGame();
@@ -223,17 +239,24 @@ async function main(): Promise<void> {
   }
 
   /**
-   * Leaves the briefing for the first time.
+   * Opens a run with `weaponId`.
    *
-   * Goes through `resumeGame` rather than setting the phase itself, so the
-   * accumulator resync and the pressed-key clear that every other unpause
-   * performs happen here too — the key that dismissed this screen must not also
-   * be read by the run it starts.
+   * Builds a new world rather than arming the paused one behind the screen:
+   * the starting weapon decides both what the player is granted and which
+   * figure they are, and the constructor is where those are settled. The seed
+   * is re-read with it, so choosing a weapon on a `?seed` link replays that
+   * seed with this weapon rather than silently ignoring one of the two.
    */
-  function beginRun(): void {
-    if (!briefing) return;
-    briefing = false;
-    resumeGame();
+  function startRun(weaponId: string): void {
+    choosing = false;
+    world = newWorld(weaponId);
+    // Everything an unpause clears, for the same reason: the key or the click
+    // that chose the weapon must not also be read by the run it starts.
+    input.clearPressed();
+    touch.reset();
+    clicks.reset();
+    loop.resync();
+    syncOverlays();
   }
 
   function resumeGame(): void {
@@ -268,13 +291,13 @@ async function main(): Promise<void> {
 
   /** Single source of truth for which overlay is visible. */
   function syncOverlays(): void {
-    if (world.phase === 'paused' && briefing) {
+    if (world.phase === 'paused' && choosing) {
       startScreen.show();
     } else {
       startScreen.hide();
     }
 
-    if (world.phase === 'paused' && !briefing) {
+    if (world.phase === 'paused' && !choosing) {
       pauseScreen.show();
     } else {
       pauseScreen.hide();
@@ -293,8 +316,22 @@ async function main(): Promise<void> {
     }
   }
 
+  /**
+   * Throws the run away and asks for a weapon again.
+   *
+   * Back to the choice rather than straight into another run with the same
+   * one. A harness has nobody to ask, so it restarts into the default and
+   * keeps going.
+   */
   function restart(): void {
+    if (unattended) {
+      startRun(STARTER_WEAPON_ID);
+      return;
+    }
+
+    choosing = true;
     world = newWorld();
+    pauseRun(world);
     input.clearPressed();
     touch.reset();
     clicks.reset();
@@ -308,10 +345,10 @@ async function main(): Promise<void> {
  * `?seed=123` replays an exact run — the whole simulation is deterministic for
  * a given seed, which makes a bug report reproducible instead of anecdotal.
  */
-function newWorld(): World {
+function newWorld(starterId?: string): World {
   const requested = new URLSearchParams(window.location.search).get('seed');
   const parsed = requested === null ? Number.NaN : Number.parseInt(requested, 10);
-  return new World(Number.isFinite(parsed) ? parsed : Date.now() >>> 0);
+  return new World(Number.isFinite(parsed) ? parsed : Date.now() >>> 0, starterId);
 }
 
 void main();

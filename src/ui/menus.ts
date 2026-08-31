@@ -1,26 +1,45 @@
 import { formatTime, requireElement } from './hud';
 import { describeOffer } from './offers';
 import { renderHelp } from './help';
+import { cssColor, starterChoices } from './starters';
+import type { SpritePainter, StarterChoice } from './starters';
 import type { UpgradeDef } from '../data/upgrades';
 import type { World } from '../world/world';
 
+/** Side of the figure painted onto a card, matching its atlas frame. */
+const STARTER_ART_SIZE = 64;
+
 /**
- * The briefing, shown before the first run and never again on its own.
+ * The opening screen: choose a weapon, and read the rules while you do.
  *
- * It exists because the game teaches nothing while it is running: weapons fire
- * themselves, the level-up menu appears without warning and the boss arrives
- * ten minutes in. A player who never reads this can still finish a run, but
- * only by rediscovering rules the game had no way to state.
+ * It carries the briefing because the game teaches nothing while it is
+ * running — weapons fire themselves, the level-up menu appears without warning
+ * and the boss arrives ten minutes in. Hanging the rules off the one screen a
+ * player has a reason to look at means they are read by people who would never
+ * open a manual.
+ *
+ * The choice is the screen's real job. It is the only decision in the game
+ * made before the horde arrives, it sets which figure the player is for the
+ * whole run, and it is what the level-up cards then build on.
  *
  * The run is paused behind it rather than merely covered — a briefing that
  * costs health is one nobody reads twice.
  */
 export class StartScreen {
   private readonly root = requireElement('start');
-  private readonly playButton = requireElement('start-play');
+  private readonly cards = requireElement('start-weapons');
 
-  constructor(onStart: () => void) {
-    this.playButton.addEventListener('click', onStart);
+  /**
+   * Built once, not on every show.
+   *
+   * The weapons cannot change within a session, and rebuilding would throw
+   * away the canvases their figures were painted into — which is real work,
+   * since each one may have come out of the artwork sheet.
+   */
+  constructor(onStart: (weaponId: string) => void, paint: SpritePainter) {
+    for (const choice of starterChoices()) {
+      this.cards.append(starterCard(choice, onStart, paint));
+    }
   }
 
   show(): void {
@@ -30,6 +49,55 @@ export class StartScreen {
   hide(): void {
     this.root.hidden = true;
   }
+}
+
+/**
+ * One weapon's card: who you become, what it is called, what it does.
+ *
+ * The figure is painted rather than described because it is the part of the
+ * choice that cannot be put into a sentence — the player will be looking at
+ * that silhouette for the rest of the run.
+ */
+function starterCard(
+  choice: StarterChoice,
+  onStart: (weaponId: string) => void,
+  paint: SpritePainter,
+): HTMLElement {
+  const card = document.createElement('button');
+  card.className = 'starter';
+  card.type = 'button';
+  // The weapon's own colour, so the card, the projectiles and the level-up
+  // cards for it all agree without any of them holding a second palette.
+  card.style.setProperty('--weapon', cssColor(choice.color));
+
+  const top = document.createElement('span');
+  top.className = 'starter-top';
+
+  const key = document.createElement('span');
+  key.className = 'key';
+  key.textContent = choice.key;
+
+  const name = document.createElement('span');
+  name.className = 'name';
+  name.textContent = choice.name;
+
+  top.append(key, name);
+
+  const art = document.createElement('canvas');
+  art.className = 'starter-art';
+  // Painted at the frame's own size and scaled down by CSS: the artwork is
+  // 16px pixel art, and asking a canvas to do the scaling would blur it.
+  art.width = STARTER_ART_SIZE;
+  art.height = STARTER_ART_SIZE;
+  paint(choice.sprite, art);
+
+  const detail = document.createElement('span');
+  detail.className = 'desc';
+  detail.textContent = choice.detail;
+
+  card.append(top, art, detail);
+  card.addEventListener('click', () => onStart(choice.id));
+  return card;
 }
 
 /**

@@ -400,6 +400,81 @@
         color: var(--accent);
       }
 
+      .starters {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-bottom: 16px;
+      }
+
+      /* Deliberately the level-up card's language: choosing a weapon here and
+         taking one mid-run are the same gesture, and they should not look like
+         two different games. What is different is the figure — the choice
+         changes who is on screen, so the card shows that rather than saying
+         it. */
+      .starter {
+        pointer-events: auto;
+        position: relative;
+        width: 190px;
+        padding: 16px 14px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text);
+        font-family: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 120ms, background 120ms, transform 120ms;
+      }
+
+      .starter:hover,
+      .starter:focus-visible {
+        border-color: var(--weapon);
+        background: rgba(255, 255, 255, 0.06);
+        transform: translateY(-2px);
+        outline: none;
+      }
+
+      .starter-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .starter .key {
+        display: inline-block;
+        padding: 1px 7px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .starter .name {
+        color: var(--weapon);
+        font-size: 14px;
+      }
+
+      /* Pixel art scaled by whole pixels; smoothing would turn a 16px tile
+         into a smear. */
+      .starter-art {
+        display: block;
+        width: 56px;
+        height: 56px;
+        margin: 2px auto 12px;
+        image-rendering: pixelated;
+      }
+
+      .starter .desc {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
       #result-stats {
         display: grid;
         grid-template-columns: repeat(4, minmax(74px, 1fr));
@@ -751,11 +826,12 @@
     <div class="overlay" id="start" hidden>
       <div class="panel panel--help">
         <h2>Survivor</h2>
-        <p class="sub">One life, no finish line. Read this once.</p>
-        <div class="actions actions--first">
-          <button class="action action--go" id="start-play" type="button">Start the run</button>
-        </div>
-        <p class="hint keys-only">or press <kbd>Space</kbd></p>
+        <p class="sub">One life, no finish line. Choose what you open with.</p>
+        <div class="starters" id="start-weapons"></div>
+        <p class="hint keys-only">
+          press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> &middot; <kbd>Space</kbd> takes the first
+        </p>
+        <p class="hint touch-only">tap a weapon to begin</p>
         <div class="help" id="help-start"></div>
       </div>
     </div>

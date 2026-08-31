@@ -25,6 +25,16 @@ export interface TextureSet {
    * darker. See how the damage flash is drawn.
    */
   readonly artwork: boolean;
+  /**
+   * Draws one sprite onto a canvas of the caller's size.
+   *
+   * The weapon picker has to show the figure each choice turns the player
+   * into, and it is DOM rather than scene graph — so it needs the pixels
+   * without a `Sprite` to put them in. Going through here rather than calling
+   * the drawers directly is what keeps the picker honest: it shows the
+   * artwork when the artwork loaded, and the drawn shape when it did not.
+   */
+  readonly paint: (name: SpriteName, canvas: HTMLCanvasElement) => void;
 }
 
 /**
@@ -39,12 +49,24 @@ export async function createTextures(): Promise<TextureSet> {
   const sheet = await loadArtwork();
 
   try {
-    return { grid, sprites: await packedSprites(sheet), packed: true, artwork: sheet !== null };
+    return {
+      grid,
+      sprites: await packedSprites(sheet),
+      packed: true,
+      artwork: sheet !== null,
+      paint: painter(sheet),
+    };
   } catch (error) {
     // A game that renders nothing is worse than a game that renders slower, so
     // a broken atlas degrades to individual textures rather than a blank screen.
     console.warn('Sprite atlas unavailable; falling back to separate textures.', error);
-    return { grid, sprites: separateSprites(), packed: false, artwork: false };
+    return {
+      grid,
+      sprites: separateSprites(),
+      packed: false,
+      artwork: false,
+      paint: painter(null),
+    };
   }
 }
 
@@ -91,6 +113,28 @@ async function packedSprites(artwork: CanvasImageSource | null): Promise<Record<
   await sheet.parse();
 
   return collect((name) => sheet.textures[name]);
+}
+
+/**
+ * A painter bound to whichever source the atlas was built from.
+ *
+ * The same two-step the atlas itself takes — tile first, drawn shape if there
+ * is no tile — so a sprite can never look like one thing in the picker and
+ * another in the run.
+ */
+function painter(artwork: CanvasImageSource | null) {
+  return (name: SpriteName, canvas: HTMLCanvasElement): void => {
+    const ctx = context(canvas);
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const frame = { x: 0, y: 0, w: canvas.width, h: canvas.height };
+    if (blitTile(ctx, artwork, name, frame)) return;
+
+    // The drawn shapes are square by construction, so they are given the
+    // smaller side rather than being stretched to fill an oblong canvas.
+    SPRITE_DRAWERS[name](ctx, Math.min(canvas.width, canvas.height));
+  };
 }
 
 /**

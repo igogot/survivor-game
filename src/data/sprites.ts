@@ -8,7 +8,17 @@
  * refuses an enemy that names a frame nobody draws.
  */
 export type SpriteName =
-  | 'player'
+  /**
+   * The player, one silhouette per weapon a run can open with.
+   *
+   * A run is played as the weapon that started it, so the figure on screen
+   * says which one that was — the choice is visible for the whole run instead
+   * of only on the screen where it was made. All three share a body and differ
+   * by the emblem cut out of it, so the player still reads as the player.
+   */
+  | 'playerBolt'
+  | 'playerOrbit'
+  | 'playerNova'
   | 'grunt'
   | 'runner'
   | 'brute'

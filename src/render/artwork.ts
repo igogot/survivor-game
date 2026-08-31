@@ -33,7 +33,9 @@ export const SHEET_TILES = 132;
  * artwork loads. Anything missing here falls through to `SPRITE_DRAWERS`.
  */
 export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
-  player: 96, // knight in a full helm
+  playerBolt: 98, // bare-headed soldier: the one who shoots first
+  playerOrbit: 96, // knight in a full helm, which is what a bodyguard looks like
+  playerNova: 84, // wizard, and the only figure on the sheet dressed in nova's purple
   grunt: 108, // green slime
   runner: 120, // bat
   brute: 110, // crab
