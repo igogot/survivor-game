@@ -20,6 +20,7 @@ export type SpriteName =
   | 'playerOrbit'
   | 'playerNova'
   | 'playerSpear'
+  | 'playerHarpoon'
   | 'grunt'
   | 'runner'
   | 'brute'

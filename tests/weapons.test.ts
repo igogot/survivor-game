@@ -3,6 +3,7 @@ import { CONFIG } from '../src/config';
 import { ENEMIES } from '../src/data/enemies';
 import { UPGRADES } from '../src/data/upgrades';
 import {
+  HARPOON,
   NOVA,
   ORBIT,
   SPEAR,
@@ -389,6 +390,139 @@ describe('lunge spear', () => {
       weaponSystem(world, DT);
     }
     expect(state.swing).toBe(0);
+  });
+});
+
+/**
+ * The world hands out an Auto Bolt on construction, so a harpoon test that
+ * looked at `world.projectiles[0]` would be reading the bolt's shot. Colour is
+ * how a projectile says which weapon fired it.
+ */
+function harpoonShots(world: World) {
+  return world.projectiles.filter((projectile) => projectile.color === HARPOON.color);
+}
+
+/** Direction a shot was fired in, which is the only thing targeting decides. */
+function shotAngle(world: World): number {
+  const shots = harpoonShots(world);
+  expect(shots).toHaveLength(1);
+  return Math.atan2(shots[0].vy, shots[0].vx);
+}
+
+describe('siege harpoon', () => {
+  /**
+   * The rule the weapon exists for. Everything else in the game picks by
+   * distance, so a harpoon that quietly fell back to nearest would still fire,
+   * still hit, and simply stop being the answer to the thing it was added for.
+   */
+  it('spikes the heaviest enemy in range and not the nearest', () => {
+    const world = new World(12);
+    grantWeapon(world, 'harpoon');
+
+    placeEnemy(world, 40, 0);
+    const heavy = placeEnemy(world, 0, 200);
+    heavy.hp = 900;
+    heavy.maxHp = 900;
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(shotAngle(world)).toBeCloseTo(Math.PI / 2);
+  });
+
+  /**
+   * Weight is `maxHp`, not what the target has left. A boss worked down below a
+   * fresh grunt is still the body worth spending the slowest reload in the game
+   * on, and reading current hp would walk the shot off it mid-duel.
+   */
+  it('keeps spiking a boss it has already worn down', () => {
+    const world = new World(13);
+    grantWeapon(world, 'harpoon');
+
+    placeEnemy(world, 40, 0);
+    const worn = placeEnemy(world, 0, 200);
+    worn.maxHp = 900;
+    worn.hp = 3;
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(shotAngle(world)).toBeCloseTo(Math.PI / 2);
+  });
+
+  /** Weight does not carry across the range check, or reach would be free. */
+  it('ignores a heavier enemy beyond its range', () => {
+    const world = new World(14);
+    grantWeapon(world, 'harpoon');
+
+    placeEnemy(world, 60, 0);
+    const far = placeEnemy(world, 0, HARPOON.range + 40);
+    far.hp = 5000;
+    far.maxHp = 5000;
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(shotAngle(world)).toBeCloseTo(0);
+  });
+
+  /**
+   * A dozen grunts from one spawn share their stats exactly, so without a
+   * tie-break the pick would be whichever order the grid happened to return.
+   */
+  it('breaks a tie in weight toward the nearer body', () => {
+    const world = new World(15);
+    grantWeapon(world, 'harpoon');
+
+    placeEnemy(world, 0, 300);
+    placeEnemy(world, 90, 0);
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(shotAngle(world)).toBeCloseTo(0);
+  });
+
+  /**
+   * Pierce is what makes the weapon pay for itself before the boss arrives, and
+   * the stand priced it: without it the harpoon fells six bosses in twenty and
+   * reaches only eight, with it ten and eleven. It also has to stay the
+   * harpoon's and not leak into the bolt, which shares `fire`.
+   */
+  it('sends the spike through bodies, and leaves the bolt alone', () => {
+    const world = new World(17);
+    grantWeapon(world, 'harpoon');
+    placeEnemy(world, 100, 0);
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(harpoonShots(world)[0].pierce).toBe(HARPOON.pierce);
+    const bolts = world.projectiles.filter((shot) => shot.color !== HARPOON.color);
+    expect(bolts).toHaveLength(1);
+    expect(bolts[0].pierce).toBe(0);
+  });
+
+  /**
+   * The longest reload in the game must not be halfway through itself when the
+   * wave lands, so an empty field costs nothing.
+   */
+  it('holds the shot while the field is empty', () => {
+    const world = new World(16);
+    grantWeapon(world, 'harpoon');
+
+    const state = weaponState(world, 'harpoon');
+    rebuildGrid(world);
+
+    for (let tick = 0; tick < 30; tick++) weaponSystem(world, DT);
+    expect(harpoonShots(world)).toHaveLength(0);
+    expect(state.cooldown).toBeLessThanOrEqual(0);
+
+    placeEnemy(world, 100, 0);
+    rebuildGrid(world);
+    weaponSystem(world, DT);
+
+    expect(harpoonShots(world)).toHaveLength(1);
   });
 });
 

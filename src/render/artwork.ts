@@ -39,6 +39,7 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
   playerOrbit: 96, // knight in a full helm, which is what a bodyguard looks like
   playerNova: 84, // wizard, and the only figure on the sheet dressed in nova's purple
   playerSpear: 86, // bearded fighter in leather: the one head not confusable with the other three
+  playerHarpoon: 100, // grey-haired hunter, told apart at a glance by the light head
   grunt: 108, // green slime
   runner: 120, // bat
   brute: 110, // crab

@@ -39,6 +39,7 @@ const PREFERENCE = [
   'nova',
   'orbit',
   'spear',
+  'harpoon',
   'damage',
   'haste',
   // Rate before reach, and both before the remaining stats: a weapon-specific
@@ -52,6 +53,7 @@ const PREFERENCE = [
   'nova-cadence',
   'orbit-spin',
   'spear-cadence',
+  'harpoon-winch',
   'multishot',
   'nova-blast',
   'orbit-reach',
