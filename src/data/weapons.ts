@@ -31,6 +31,8 @@ interface WeaponBase {
 /** Auto-aimed shots at the nearest enemy. The weapon a run opens with by default. */
 export interface BoltWeaponDef extends WeaponBase {
   readonly kind: 'bolt';
+  /** Frame the shot is drawn with; see `Projectile.sprite`. */
+  readonly sprite: SpriteName;
   readonly projectileSpeed: number;
   readonly projectileRadius: number;
   /** Auto-aim only considers enemies within this distance. */
@@ -140,6 +142,8 @@ export interface SpearWeaponDef extends WeaponBase {
  */
 export interface HarpoonWeaponDef extends WeaponBase {
   readonly kind: 'harpoon';
+  /** Frame the shot is drawn with; see `Projectile.sprite`. */
+  readonly sprite: SpriteName;
   readonly projectileSpeed: number;
   readonly projectileRadius: number;
   /** How far it looks for something worth spending a shot on. */
@@ -163,6 +167,7 @@ export const BOLT: BoltWeaponDef = {
   id: 'bolt',
   name: 'Auto Bolt',
   playerSprite: 'playerBolt',
+  sprite: 'bolt',
   cooldown: 0.55,
   damage: 8,
   damagePerLevel: 0,
@@ -228,6 +233,7 @@ export const HARPOON: HarpoonWeaponDef = {
   // The longest reload in the game, and the longest reach. Both are the shape
   // of the weapon: it is not meant to be firing when there is nothing worth
   // firing at, and the caster stands off at 240 where nothing else reaches.
+  sprite: 'harpoon',
   cooldown: 2.4,
   damage: 70,
   damagePerLevel: 26,

@@ -3,6 +3,7 @@ import { CONFIG } from '../src/config';
 import { ENEMIES } from '../src/data/enemies';
 import { UPGRADES } from '../src/data/upgrades';
 import {
+  BOLT,
   HARPOON,
   NOVA,
   ORBIT,
@@ -501,6 +502,27 @@ describe('siege harpoon', () => {
     const bolts = world.projectiles.filter((shot) => shot.color !== HARPOON.color);
     expect(bolts).toHaveLength(1);
     expect(bolts[0].pierce).toBe(0);
+  });
+
+  /**
+   * Two shots that differ only in colour are two shots that look identical once
+   * the artwork loads: `variantTint` returns white then, because a tile carries
+   * its own colour. Shape is the part that survives the swap, so the frame has
+   * to follow the weapon and not the pool the projectile came out of.
+   */
+  it('draws its shot with its own frame and leaves the bolt with the bolt', () => {
+    const world = new World(18);
+    grantWeapon(world, 'harpoon');
+    placeEnemy(world, 100, 0);
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(harpoonShots(world)[0].sprite).toBe(HARPOON.sprite);
+    expect(HARPOON.sprite).not.toBe(BOLT.sprite);
+    const bolts = world.projectiles.filter((shot) => shot.color !== HARPOON.color);
+    expect(bolts).toHaveLength(1);
+    expect(bolts[0].sprite).toBe(BOLT.sprite);
   });
 
   /**

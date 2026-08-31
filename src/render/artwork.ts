@@ -50,6 +50,7 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
   hex: 114, // green flask, which reads as something thrown
   boss: 122, // spider
   bolt: 103, // dagger, rotated to face its travel
+  harpoon: 131, // spike on a haft: the same rotation, twice the weight
   orb: 118, // axe head, which reads as a blade when it circles
   gem: 116, // blue flask
   gemRich: 115, // red flask, for pickups worth more
