@@ -19,5 +19,5 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts", "vitest.balance.config.ts", "vitest.perf.config.ts"]
+  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts", "vitest.balance.config.ts", "vitest.endless.config.ts", "vitest.perf.config.ts"]
 }

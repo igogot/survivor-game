@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "balance": "vitest run --config vitest.balance.config.ts",
+    "endless": "vitest run --config vitest.endless.config.ts",
     "perf": "vitest run --config vitest.perf.config.ts"
   },
   "dependencies": {
