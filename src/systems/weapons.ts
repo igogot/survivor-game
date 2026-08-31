@@ -17,6 +17,7 @@ import { spawnEffect } from './effects';
 import { spawnProjectile } from './projectiles';
 import type {
   BoltWeaponDef,
+  HarpoonWeaponDef,
   NovaWeaponDef,
   OrbitWeaponDef,
   SpearWeaponDef,
@@ -54,6 +55,9 @@ export function weaponSystem(world: World, dt: number): void {
         break;
       case 'spear':
         stepSpear(world, def, state, dt);
+        break;
+      case 'harpoon':
+        stepHarpoon(world, def, state, dt);
         break;
       default: {
         // Exhaustiveness check: adding a weapon kind without a routine here
@@ -100,7 +104,7 @@ function stepBolt(world: World, def: BoltWeaponDef, state: WeaponState, dt: numb
   for (let i = 0; i < count; i++) {
     // Fan the shots symmetrically around the aim direction.
     const offset = (i - (count - 1) / 2) * def.spread;
-    fire(world, def, state, baseAngle + offset, damage);
+    fire(world, def, state, baseAngle + offset, damage, state.pierce);
   }
 }
 
@@ -191,12 +195,85 @@ function stepSpear(world: World, def: SpearWeaponDef, state: WeaponState, dt: nu
   );
 }
 
+function stepHarpoon(
+  world: World,
+  def: HarpoonWeaponDef,
+  state: WeaponState,
+  dt: number,
+): void {
+  state.cooldown -= dt;
+  if (state.cooldown > 0) return;
+
+  // Nothing in range means the shot is not spent. The slowest reload in the
+  // game would otherwise be halfway through it when the wave arrives.
+  const target = findHeaviestEnemy(world, def.range);
+  if (target === null) return;
+
+  const player = world.player;
+  state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
+
+  const angle = Math.atan2(target.y - player.y, target.x - player.x);
+  // The spike is a line as much as a hit: the fattest body is usually deep in
+  // the wall, so what it passes through on the way is most of what it kills.
+  fire(
+    world,
+    def,
+    state,
+    angle,
+    weaponDamage(def, state) * player.stats.damageMul,
+    state.pierce + def.pierce,
+  );
+}
+
+/**
+ * The one selector here that is not "nearest".
+ *
+ * Weight is `maxHp` and not what the enemy has left: a boss worked down to a
+ * brute's remaining hp is still the body worth spiking, and a selector that
+ * changed its mind mid-duel would spend the slowest weapon in the game on the
+ * escort. Ties break to the nearest, which is what keeps the pick deterministic
+ * when a dozen grunts share a spawn's stats.
+ */
+function findHeaviestEnemy(world: World, range: number): Enemy | null {
+  const { player, grid, enemies, scratch } = world;
+  grid.query(player.x, player.y, range, scratch);
+
+  const limit = range * range;
+  let best: Enemy | null = null;
+  let bestWeight = 0;
+  let bestDistance = 0;
+
+  for (let i = 0; i < scratch.length; i++) {
+    const enemy = enemies[scratch[i]];
+    if (enemy === undefined || enemy.hp <= 0) continue;
+
+    const distance = dist2(player.x, player.y, enemy.x, enemy.y);
+    if (distance > limit) continue;
+    if (enemy.maxHp < bestWeight) continue;
+    if (enemy.maxHp === bestWeight && distance >= bestDistance) continue;
+
+    best = enemy;
+    bestWeight = enemy.maxHp;
+    bestDistance = distance;
+  }
+
+  return best;
+}
+
+/**
+ * The two weapons that put a projectile in the world share this; everything
+ * `fire` reads is common to both, and a second copy is exactly where the bolt
+ * and the harpoon would drift apart.
+ */
+type ProjectileWeaponDef = BoltWeaponDef | HarpoonWeaponDef;
+
 function fire(
   world: World,
-  def: BoltWeaponDef,
+  def: ProjectileWeaponDef,
   state: WeaponState,
   angle: number,
   damage: number,
+  pierce: number,
 ): void {
   const player = world.player;
   const projectile = spawnProjectile(world);
@@ -210,7 +287,7 @@ function fire(
   projectile.damage = damage;
   projectile.radius = def.projectileRadius * state.areaMul;
   projectile.life = def.life;
-  projectile.pierce = state.pierce;
+  projectile.pierce = pierce;
   projectile.lastHitId = 0;
   projectile.color = def.color;
   // Written rather than assumed: the pool hands back whatever the last shot

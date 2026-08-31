@@ -125,7 +125,38 @@ export interface SpearWeaponDef extends WeaponBase {
   readonly swingTime: number;
 }
 
-export type WeaponDef = BoltWeaponDef | OrbitWeaponDef | NovaWeaponDef | SpearWeaponDef;
+/**
+ * One heavy spike, aimed by weight instead of by distance.
+ *
+ * Every other weapon answers the horde; this one answers the single body the
+ * horde cannot replace. Its target is the largest `maxHp` in range rather than
+ * the nearest — the only selector in the game that is not "nearest" — and it
+ * reloads slower than anything else in the roster.
+ *
+ * Deliberately bad in a crowd. One shot every couple of seconds kills one grunt
+ * and overkills it; that is what the damage costs, not an oversight. The gap it
+ * fills is measured rather than felt: on twenty seeds the stand's best run of
+ * `main` fells eight bosses, and nothing in the roster was built for one.
+ */
+export interface HarpoonWeaponDef extends WeaponBase {
+  readonly kind: 'harpoon';
+  readonly projectileSpeed: number;
+  readonly projectileRadius: number;
+  /** How far it looks for something worth spending a shot on. */
+  readonly range: number;
+  /** Projectile lifetime in seconds. */
+  readonly life: number;
+  /**
+   * Bodies the spike passes through before it stops.
+   *
+   * Not flavour, and measured: without it the weapon fells a larger share of
+   * the bosses it meets and reaches fewer of them, because the horde between
+   * the player and minute ten does not care how hard one shot hits.
+   */
+  readonly pierce: number;
+}
+
+export type WeaponDef = BoltWeaponDef | OrbitWeaponDef | NovaWeaponDef | SpearWeaponDef | HarpoonWeaponDef;
 
 export const BOLT: BoltWeaponDef = {
   kind: 'bolt',
@@ -189,7 +220,28 @@ export const SPEAR: SpearWeaponDef = {
   swingTime: 0.13,
 };
 
-export const WEAPONS: readonly WeaponDef[] = [BOLT, ORBIT, NOVA, SPEAR];
+export const HARPOON: HarpoonWeaponDef = {
+  kind: 'harpoon',
+  id: 'harpoon',
+  name: 'Siege Harpoon',
+  playerSprite: 'playerHarpoon',
+  // The longest reload in the game, and the longest reach. Both are the shape
+  // of the weapon: it is not meant to be firing when there is nothing worth
+  // firing at, and the caster stands off at 240 where nothing else reaches.
+  cooldown: 2.4,
+  damage: 70,
+  damagePerLevel: 26,
+  color: 0x6ef2a4,
+  projectileSpeed: 620,
+  projectileRadius: 9,
+  range: 520,
+  // Enough flight to cover the range with room for a target that moved, on the
+  // same ratio the bolt uses.
+  life: 1.2,
+  pierce: 5,
+};
+
+export const WEAPONS: readonly WeaponDef[] = [BOLT, ORBIT, NOVA, SPEAR, HARPOON];
 
 const BY_ID = new Map<string, WeaponDef>(WEAPONS.map((def) => [def.id, def]));
 

@@ -180,6 +180,30 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     });
   },
 
+  // The spike, laid the same way the lance is, and told apart from it by the
+  // guard — which is the same thing that tells the two weapons apart on screen.
+  playerHarpoon: (ctx, size) => {
+    playerBody(ctx, size);
+    carve(ctx, () => {
+      const mid = size / 2;
+      const half = size * 0.27;
+      const headHalf = size * 0.1;
+      const shaft = size * 0.042;
+      const barHalf = size * 0.105;
+      const barWidth = size * 0.045;
+      const bar = mid - half * 0.25;
+
+      ctx.beginPath();
+      ctx.moveTo(mid + half, mid);
+      ctx.lineTo(mid + half * 0.3, mid - headHalf);
+      ctx.lineTo(mid + half * 0.3, mid + headHalf);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(mid - half, mid - shaft, half * 1.35, shaft * 2);
+      ctx.fillRect(bar - barWidth / 2, mid - barHalf, barWidth, barHalf * 2);
+    });
+  },
+
   grunt: (ctx, size) => {
     ctx.fillStyle = WHITE;
     ctx.beginPath();
@@ -326,6 +350,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'playerOrbit', size: 64 },
   { name: 'playerNova', size: 64 },
   { name: 'playerSpear', size: 64 },
+  { name: 'playerHarpoon', size: 64 },
   { name: 'grunt', size: 64 },
   { name: 'runner', size: 64 },
   { name: 'brute', size: 64 },

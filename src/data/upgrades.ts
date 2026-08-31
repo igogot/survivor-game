@@ -248,6 +248,25 @@ export const UPGRADES: readonly UpgradeDef[] = [
       weapon.attackSpeedMul += 0.4;
     },
   },
+  {
+    kind: 'weapon',
+    id: 'harpoon',
+    weaponId: 'harpoon',
+    name: 'Siege Harpoon',
+    description: 'One heavy spike into the biggest thing in range. +damage per level',
+    maxStacks: 4,
+  },
+  {
+    kind: 'weaponMod',
+    id: 'harpoon-winch',
+    weaponId: 'harpoon',
+    name: 'Winch',
+    description: 'Siege Harpoon reloads faster',
+    maxStacks: 3,
+    apply: (weapon) => {
+      weapon.attackSpeedMul += 0.35;
+    },
+  },
 
   /*
    * The tail: what a level is worth once everything above it is bought.
@@ -258,8 +277,8 @@ export const UPGRADES: readonly UpgradeDef[] = [
    * being nothing, and it stays flat enough that a long run scales by degrees
    * instead of running away.
    *
-   * Six entries for four slots, so the menu still differs between level-ups
-   * instead of showing the same card set forever. Three of them are scoped to a
+   * Eight entries for four slots, so the menu still differs between level-ups
+   * instead of showing the same card set forever. Five of them are scoped to a
    * weapon and therefore filtered by ownership, which is what makes the mix
    * depend on the build rather than on nothing.
    *
@@ -342,6 +361,18 @@ export const UPGRADES: readonly UpgradeDef[] = [
     weaponId: 'spear',
     name: 'Honed Point',
     description: '+15% Lunge Spear damage',
+    maxStacks: Infinity,
+    fallback: true,
+    apply: (weapon) => {
+      weapon.damageMul += 0.15;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'harpoon-weight',
+    weaponId: 'harpoon',
+    name: 'Heavier Head',
+    description: '+15% Siege Harpoon damage',
     maxStacks: Infinity,
     fallback: true,
     apply: (weapon) => {

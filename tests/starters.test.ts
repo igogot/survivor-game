@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { STARTER_WEAPON_ID, WEAPONS, starterWeapon } from '../src/data/weapons';
 import { SPRITE_SPECS } from '../src/render/atlas';
-import { OFFERS_PER_LEVEL } from '../src/systems/progression';
 import { cssColor, starterChoices } from '../src/ui/starters';
 import { helpSections } from '../src/ui/help';
 import { World } from '../src/world/world';
@@ -54,12 +53,21 @@ describe('starterChoices', () => {
     }
   });
 
-  /** Same gesture as the level-up screen, so the keys have to agree with it. */
-  it('numbers the cards from one, within the digits the level-up screen uses', () => {
+  /**
+   * Same gesture as the level-up screen, so the numbering has to agree with it.
+   *
+   * The ceiling used to be `OFFERS_PER_LEVEL`, which held only while the roster
+   * happened to be no larger than one level-up menu. The fifth weapon ended
+   * that: how many cards a level-up shows and how many weapons exist are
+   * independent numbers, and `starterChoices` is defined as *all* of them, on
+   * purpose — see its own comment. What still has to hold is that every card
+   * has a digit behind it, since `main.ts` binds `Digit${i + 1}` per card.
+   */
+  it('numbers the cards from one, within the digits a keyboard has', () => {
     expect(CHOICES.map((choice) => choice.key)).toEqual(
       CHOICES.map((_, index) => String(index + 1)),
     );
-    expect(CHOICES.length).toBeLessThanOrEqual(OFFERS_PER_LEVEL);
+    expect(CHOICES.length).toBeLessThanOrEqual(9);
   });
 });
 
