@@ -1,9 +1,40 @@
+import { approach } from '../core/steering';
 import { MAX_ENEMY_RADIUS } from '../data/enemies';
 import { BROADPHASE_PAD } from './shared';
 import type { World } from '../world/world';
 
 /** Time constant of the heading average, in seconds. */
 const HEADING_TAU = 0.6;
+
+/**
+ * Turns a standing move order into this tick's intent.
+ *
+ * Runs before the move, so what it writes is what gets spent. It writes nothing
+ * unless the player is otherwise still: a hand back on the keys or the stick
+ * takes control immediately and throws the order away, rather than fighting a
+ * click the player has already forgotten about.
+ *
+ * The order lives in the world and is resolved here rather than in the input
+ * layer for the same reason the rest of the simulation does: walking to a point
+ * takes hundreds of ticks, and every one of them has to be reproducible from a
+ * `World` alone, with no browser in the room.
+ */
+export function steeringSystem(world: World, dt: number): void {
+  const target = world.moveTarget;
+  if (target === null) return;
+
+  if (world.intentX !== 0 || world.intentY !== 0) {
+    world.moveTarget = null;
+    return;
+  }
+
+  const player = world.player;
+  const walk = approach(player.x, player.y, target.x, target.y, player.stats.moveSpeed * dt);
+
+  world.intentX = walk.x;
+  world.intentY = walk.y;
+  if (walk.arrived) world.moveTarget = null;
+}
 
 /** Moves the player by this tick's intent and steers every enemy toward them. */
 export function movementSystem(world: World, dt: number): void {
@@ -35,8 +66,8 @@ export function movementSystem(world: World, dt: number): void {
       // A ranged enemy closes to its standoff and stops. Walking the last four
       // hundred pixels would make it an ordinary enemy that also throws, and
       // the point of it is to be the one thing kiting does not solve.
-      const approach = distance > enemy.standoff ? 1 : 0;
-      const step = (approach * enemy.speed * dt) / distance;
+      const closing = distance > enemy.standoff ? 1 : 0;
+      const step = (closing * enemy.speed * dt) / distance;
       enemy.x += dx * step;
       enemy.y += dy * step;
     }

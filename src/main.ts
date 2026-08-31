@@ -1,4 +1,5 @@
 import { CONFIG } from './config';
+import { ClickInput } from './core/click-input';
 import { GameLoop } from './core/loop';
 import { autoPauseDisabled } from './dev/flags';
 import { Input } from './core/input';
@@ -27,6 +28,11 @@ async function main(): Promise<void> {
   // tap meant for a card never also starts the stick under it.
   const touch = new TouchInput();
   touch.attach(host);
+
+  // Same surface, same reason: a right-click meant for a card or the pause
+  // button must not also order a walk to the ground behind it.
+  const clicks = new ClickInput();
+  clicks.attach(host);
 
   const hud = new Hud();
   const stick = new StickView();
@@ -142,6 +148,13 @@ async function main(): Promise<void> {
 
     if (phase === 'playing') {
       input.poll();
+
+      // Read before the intent, so a click and a key pressed in the same tick
+      // resolve the way they should: the key wins and the order is dropped
+      // inside `steeringSystem` rather than half-obeyed here.
+      const order = clicks.consume();
+      if (order !== null) world.moveTarget = renderer.screenToWorld(order.x, order.y);
+
       const intent = combinedIntent();
       world.intentX = intent.x;
       world.intentY = intent.y;
@@ -205,6 +218,7 @@ async function main(): Promise<void> {
     // A finger that was steering when the phone rang is not steering any more,
     // and the world must not resume still holding its last direction.
     touch.reset();
+    clicks.reset();
     syncOverlays();
   }
 
@@ -225,6 +239,8 @@ async function main(): Promise<void> {
   function resumeGame(): void {
     resumeRun(world);
     input.clearPressed();
+    // A click aimed at a screen that was covering the game is not a move order.
+    clicks.reset();
     loop.resync();
     syncOverlays();
   }
@@ -244,6 +260,9 @@ async function main(): Promise<void> {
     applyUpgrade(world, id);
     // Otherwise a still-held number key would immediately eat the next offer.
     input.clearPressed();
+    // Only the click: a right button still down goes on steering, which is the
+    // whole point of holding it.
+    clicks.clearPending();
     syncOverlays();
   }
 
@@ -278,6 +297,7 @@ async function main(): Promise<void> {
     world = newWorld();
     input.clearPressed();
     touch.reset();
+    clicks.reset();
     // A fresh run should not inherit whatever the accumulator was holding.
     loop.resync();
     syncOverlays();

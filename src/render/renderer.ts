@@ -2,13 +2,18 @@ import { Application, Container, Sprite, TilingSprite } from 'pixi.js';
 import type { Texture } from 'pixi.js';
 import { CONFIG } from '../config';
 import { TAU, lerp } from '../core/math';
+import { viewToWorld } from '../core/steering';
 import { orbitCount, orbitDistance, orbitRadius, weaponById } from '../data/weapons';
 import { FLASH_TIME } from '../systems/damage';
 import { GRID_TEXTURE_SIZE, createTextures } from './textures';
 import type { TextureSet } from './textures';
+import type { MoveTarget } from '../world/types';
 import type { World } from '../world/world';
 
 const GEM_SIZE = 11;
+
+/** Diameter of the mark left where a click sent the player, in world units. */
+const MARKER_SIZE = 26;
 
 /**
  * Ceiling on the backing-store scale.
@@ -46,6 +51,7 @@ export class GameRenderer {
   private readonly projectileLayer = new Container();
 
   private playerSprite!: Sprite;
+  private markerSprite!: Sprite;
   private readonly enemySprites: Sprite[] = [];
   private readonly flashSprites: Sprite[] = [];
   private readonly projectileSprites: Sprite[] = [];
@@ -81,9 +87,22 @@ export class GameRenderer {
     this.playerSprite.tint = this.variantTint(0x6ee7a0);
     fit(this.playerSprite, CONFIG.player.radius * 2);
 
-    // Gems at the bottom, then the horde. Shockwaves draw over the horde or the
-    // crowd would swallow them; the player and their blades stay on top of both.
+    this.markerSprite = new Sprite(this.textures.sprites.ring);
+    this.markerSprite.anchor.set(0.5);
+    // Kept faint on purpose: it is a note about the ground, and the player has
+    // a horde to read. Tinted unconditionally — this is interface, not an
+    // entity, so it stays the same colour whatever artwork is loaded.
+    this.markerSprite.tint = 0x6ee7a0;
+    this.markerSprite.alpha = 0.4;
+    this.markerSprite.visible = false;
+    fit(this.markerSprite, MARKER_SIZE);
+
+    // The move marker sits under everything, gems included: it must never hide
+    // something the player has to see. Then gems, then the horde. Shockwaves
+    // draw over the horde or the crowd would swallow them; the player and their
+    // blades stay on top of both.
     this.camera.addChild(
+      this.markerSprite,
       this.gemLayer,
       this.enemyLayer,
       this.flashLayer,
@@ -117,6 +136,12 @@ export class GameRenderer {
     this.playerSprite.position.set(playerX, playerY);
     this.playerSprite.alpha = world.player.invuln > 0 ? 0.45 : 1;
 
+    // Drawn straight from the order rather than faded out on arrival: the mark
+    // disappearing is how the player learns the order is spent.
+    const target = world.moveTarget;
+    this.markerSprite.visible = target !== null;
+    if (target !== null) this.markerSprite.position.set(target.x, target.y);
+
     this.drawEnemies(world, alpha);
     this.drawProjectiles(world, alpha);
     this.drawGems(world, alpha);
@@ -124,6 +149,31 @@ export class GameRenderer {
     this.drawOrbs(world, playerX, playerY, alpha);
 
     this.app.renderer.render(this.app.stage);
+  }
+
+  /**
+   * Turns a viewport position — a mouse event's client coordinates — into world
+   * units.
+   *
+   * Reads the camera as it was last drawn rather than recomputing it from the
+   * player. The click was aimed at a picture, and that picture is the last
+   * frame, interpolation and all; deriving the camera again from the tick the
+   * click landed in would answer a question nobody asked and miss by however
+   * far the player moved in between.
+   */
+  screenToWorld(clientX: number, clientY: number): MoveTarget {
+    const bounds = this.app.canvas.getBoundingClientRect();
+    // The camera is only scaled once a frame has been drawn; until then it is
+    // the identity, which is exactly what an unscaled reading should give.
+    const zoom = this.camera.scale.x || 1;
+
+    return viewToWorld(
+      clientX - bounds.left,
+      clientY - bounds.top,
+      this.camera.x,
+      this.camera.y,
+      zoom,
+    );
   }
 
   private drawEnemies(world: World, alpha: number): void {

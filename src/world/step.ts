@@ -1,7 +1,7 @@
 import { contactSystem } from '../systems/contact';
 import { effectSystem } from '../systems/effects';
 import { enemyAttackSystem } from '../systems/enemyAttack';
-import { movementSystem, separationSystem } from '../systems/movement';
+import { movementSystem, separationSystem, steeringSystem } from '../systems/movement';
 import { pickupSystem } from '../systems/pickup';
 import { progressionSystem } from '../systems/progression';
 import { projectileSystem } from '../systems/projectiles';
@@ -18,12 +18,13 @@ import type { World } from './world';
  *
  *   1. reap    — remove last tick's dead first, while no index is live
  *   2. spawn   — add new enemies before the grid is built
- *   3. move    — player and enemies advance
- *   4. rebuild — grid now matches the post-movement array exactly
- *   5. combat  — every consumer of the grid runs here, removing nothing;
+ *   3. steer   — a standing move order becomes this tick's intent
+ *   4. move    — player and enemies advance
+ *   5. rebuild — grid now matches the post-movement array exactly
+ *   6. combat  — every consumer of the grid runs here, removing nothing;
  *                the horde throws in this half too, which adds projectiles
  *                but never enemies, so no grid index moves
- *   6. progression — may flip the phase to 'levelup' and pause the run
+ *   7. progression — may flip the phase to 'levelup' and pause the run
  *
  * Cosmetic effects are advanced with the rest of the bookkeeping, after combat
  * has had its chance to spawn them.
@@ -38,6 +39,7 @@ export function stepWorld(world: World, dt: number): void {
 
   reapSystem(world);
   spawnSystem(world, dt);
+  steeringSystem(world, dt);
   movementSystem(world, dt);
   rebuildGrid(world);
   separationSystem(world, dt);

@@ -92,14 +92,18 @@ describe('help content', () => {
   });
 
   /**
-   * Keycaps are for a keyboard and gestures are for a thumb; a row that shows
-   * both to everyone is the drift this split exists to prevent.
+   * Keycaps are for a keyboard, and a row that shows both sets to everyone is
+   * the drift this split exists to prevent. A gesture on its own is not a touch
+   * tell — a right-click is a gesture a keyboard player makes with a mouse — so
+   * what a gesture row must not do is claim both audiences at once.
    */
-  it('scopes keycap rows to the keyboard and gesture rows to touch', () => {
+  it('scopes keycap rows to the keyboard and every row to one audience', () => {
     for (const row of ROWS) {
       if (row.kind !== 'keys') continue;
+      // A row shows keycaps or names a gesture; one with neither renders blank.
+      expect(row.keys.length > 0 || row.gesture !== undefined).toBe(true);
       if (row.keys.length > 0) expect(row.audience).toBe('keys');
-      if (row.gesture !== undefined) expect(row.audience).toBe('touch');
+      if (row.gesture !== undefined) expect(row.audience).not.toBe('both');
     }
   });
 
