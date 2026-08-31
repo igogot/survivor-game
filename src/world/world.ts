@@ -7,7 +7,7 @@ import { xpForLevel } from '../systems/progression';
 import type { UpgradeDef } from '../data/upgrades';
 import type { Effect, Enemy, Gem, Player, Projectile, WeaponState } from './types';
 
-export type Phase = 'playing' | 'levelup' | 'paused' | 'dead' | 'won';
+export type Phase = 'playing' | 'levelup' | 'paused' | 'dead';
 
 /**
  * The phases a run can be paused from, and therefore returned to. A finished
@@ -61,7 +61,27 @@ export class World {
   headingY = 0;
 
   spawnTimer = 0;
+  /** Whether a boss is on the field right now. Cleared when it dies. */
   bossSpawned = false;
+  /** Bosses felled this run. Sets the next one's HP and scores the run. */
+  bossesKilled = 0;
+  /**
+   * Run time at which the next boss arrives.
+   *
+   * A deadline rather than `time % interval`, because the duel itself takes
+   * time: the next boss is due an interval after the last one *died*, not an
+   * interval after it spawned.
+   */
+  // Annotated: `CONFIG` is `as const`, so inference would pin this to the
+  // literal 600 and refuse every later assignment.
+  nextBossAt: number = CONFIG.boss.interval;
+  /**
+   * Run time at which the horde resumes during a duel.
+   *
+   * Only meaningful while `bossSpawned`. Set on arrival rather than derived
+   * from it, because the fight has no other record of when it started.
+   */
+  hordeResumesAt = 0;
 
   /** Levels gained but not yet spent on an upgrade. */
   pendingLevels = 0;

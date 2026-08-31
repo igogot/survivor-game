@@ -11,18 +11,22 @@ import type { World } from '../world/world';
  * rather than guessed at.
  */
 export function spawnSystem(world: World, dt: number): void {
-  if (!world.bossSpawned && world.time >= CONFIG.runDuration) {
+  if (!world.bossSpawned && world.time >= world.nextBossAt) {
     world.bossSpawned = true;
-    spawnEnemy(world, BOSS, 1);
+    world.hordeResumesAt = world.time + CONFIG.boss.duelGrace;
+    spawnEnemy(world, BOSS, bossHpScale(world));
     return;
   }
 
-  // Once the boss is out, the run is a duel — stop feeding the horde.
-  if (world.bossSpawned) return;
-
-  // A breather first. Without it the duel is fought through six hundred grunts,
-  // and the boss is just a slightly larger dot in a wall of them.
-  if (world.time >= CONFIG.runDuration - CONFIG.spawn.bossLull) return;
+  if (world.bossSpawned) {
+    // The duel is quiet, but not for as long as the player likes. A boss they
+    // cannot finish has to be fought through the horde — see CONFIG.boss.
+    if (world.time < world.hordeResumesAt) return;
+  } else if (world.time >= world.nextBossAt - CONFIG.boss.lull) {
+    // A breather first. Without it the duel is fought through six hundred
+    // grunts, and the boss is just a slightly larger dot in a wall of them.
+    return;
+  }
 
   const minutes = world.time / 60;
   const rate = (1 + minutes * CONFIG.spawn.pressurePerMinute) * waveIntensity(world.time);
@@ -43,6 +47,32 @@ export function spawnSystem(world: World, dt: number): void {
       spawnEnemy(world, rollEnemyDef(world), hpScale);
     }
   }
+}
+
+/**
+ * How much HP the boss due now carries over the first one.
+ *
+ * Counts bosses rather than minutes on purpose — see `CONFIG.boss`. Exported so
+ * a test can assert the second duel is harder than the first without knowing
+ * the arithmetic.
+ */
+export function bossHpScale(world: World): number {
+  return 1 + world.bossesKilled * CONFIG.boss.hpScalePerBoss;
+}
+
+/**
+ * A boss dying is a checkpoint, not an ending.
+ *
+ * The horde resumes — the difficulty curve never stopped climbing while the
+ * duel was on, so what comes back is worse than what left — and the clock for
+ * the next arrival starts from this moment rather than from a fixed grid, so
+ * the breather is the same length whether the duel took twenty seconds or two
+ * minutes.
+ */
+export function defeatBoss(world: World): void {
+  world.bossesKilled++;
+  world.bossSpawned = false;
+  world.nextBossAt = world.time + CONFIG.boss.interval;
 }
 
 /**
