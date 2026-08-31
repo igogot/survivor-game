@@ -1,6 +1,8 @@
 import { CONFIG } from '../config';
 import { TAU, dist2 } from '../core/math';
 import { enemyById } from '../data/enemies';
+import { damagePlayer } from './damage';
+import { spawnEffect } from './effects';
 import { bodyCost, defeatBoss, hordeHpScale, spawnEnemyAt } from './spawn';
 import type { Enemy } from '../world/types';
 import type { World } from '../world/world';
@@ -30,6 +32,7 @@ export function reapSystem(world: World): void {
       dropGem(world, enemy);
       if (enemy.boss) defeatBoss(world);
       split(world, enemy);
+      detonate(world, enemy);
     }
 
     enemies[i] = enemies[enemies.length - 1];
@@ -86,6 +89,36 @@ function split(world: World, enemy: Enemy): void {
   // curve — see `bodyCost`.
   const unbudgeted = born - 1;
   if (unbudgeted > 0) world.spawnTimer += bodyCost(world) * unbudgeted;
+}
+
+/** How long the blast ring stays on screen. Cosmetic; the damage is instant. */
+const BLAST_LIFE = 0.28;
+
+/**
+ * The blast a bomber leaves behind.
+ *
+ * It hurts the player and nothing else, which is deliberate rather than
+ * unfinished: a blast that also thinned the horde would make killing bombers
+ * *good*, and the whole point of this enemy is that killing has a price. The
+ * ring is drawn for the same reason the shockwave is — an instant hit with no
+ * picture reads as the game cheating.
+ *
+ * It goes through `damagePlayer`, so it obeys the same invulnerability window
+ * as a body and a hex. That is also why it hits for more than the brute does:
+ * under that window the largest hit in flight wins, and a small blast would
+ * quietly protect the player instead of hurting them.
+ */
+function detonate(world: World, enemy: Enemy): void {
+  const def = enemyById(enemy.defId);
+  if (def?.detonate === undefined) return;
+
+  spawnEffect(world, enemy.x, enemy.y, def.detonate.radius, BLAST_LIFE, enemy.color);
+
+  const player = world.player;
+  const reach = def.detonate.radius + CONFIG.player.radius;
+  if (dist2(enemy.x, enemy.y, player.x, player.y) > reach * reach) return;
+
+  damagePlayer(world, def.detonate.damage);
 }
 
 function dropGem(world: World, enemy: Enemy): void {

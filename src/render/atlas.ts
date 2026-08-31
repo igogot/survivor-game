@@ -129,6 +129,22 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     ctx.fill();
   },
 
+  // A ring around a core, so it reads as charged rather than as another body.
+  // The player has to recognise this one before it is next to them.
+  bomber: (ctx, size) => {
+    const centre = size / 2;
+    ctx.fillStyle = WHITE;
+    ctx.beginPath();
+    ctx.arc(centre, centre, size * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = WHITE;
+    ctx.lineWidth = Math.max(2, size * 0.07);
+    ctx.beginPath();
+    ctx.arc(centre, centre, size * 0.38, 0, Math.PI * 2);
+    ctx.stroke();
+  },
+
   // A hooded wedge: narrow at the top, wide at the base, so it reads as
   // standing still and doing something rather than walking at you.
   caster: (ctx, size) => {
@@ -226,6 +242,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'splitter', size: 64 },
   { name: 'spawnling', size: 32 },
   { name: 'caster', size: 64 },
+  { name: 'bomber', size: 64 },
   { name: 'hex', size: 32 },
   { name: 'boss', size: 96 },
   { name: 'bolt', size: 32 },

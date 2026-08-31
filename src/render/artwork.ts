@@ -40,6 +40,7 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
   splitter: 123, // mushroom: a fungus bursting into spores needs no explaining
   spawnling: 124, // small round blob, the spore itself
   caster: 109, // robed figure, the only humanoid in the horde
+  bomber: 121, // pale wisp, the least solid thing in the sheet
   hex: 114, // green flask, which reads as something thrown
   boss: 122, // spider
   bolt: 103, // dagger, rotated to face its travel
