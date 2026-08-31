@@ -14,6 +14,14 @@ export interface EnemyDef {
   readonly unlockAt: number;
   /** Relative spawn weight among the types unlocked so far. */
   readonly weight: number;
+  /**
+   * What this leaves behind when killed.
+   *
+   * One object rather than a pair of optional fields, so "splits into nothing
+   * twice" is not expressible. The children are spawned by `reapSystem`, which
+   * is already where death is handled.
+   */
+  readonly split?: { readonly into: string; readonly count: number };
 }
 
 export const ENEMIES: readonly EnemyDef[] = [
@@ -40,6 +48,46 @@ export const ENEMIES: readonly EnemyDef[] = [
     color: 0xe0a13a,
     unlockAt: 90,
     weight: 6,
+  },
+  {
+    /*
+     * The first enemy that is not just another point on the hp/speed line.
+     * Killing it is a choice with a consequence — the crowd it leaves is
+     * faster than it was — which is something no amount of retuning the other
+     * three could produce.
+     *
+     * Its damage sits below the brute's on purpose. Contact damage takes only
+     * the single largest hit in range, so the hardest-hitting type sets the
+     * horde's entire damage ceiling; raising it here would make this a change
+     * to how lethal the game is rather than to what is in it.
+     */
+    id: 'splitter',
+    sprite: 'splitter',
+    hp: 30,
+    speed: 44,
+    damage: 10,
+    radius: 15,
+    xp: 3,
+    color: 0x5ac08a,
+    unlockAt: 420,
+    weight: 2,
+    split: { into: 'spawnling', count: 2 },
+  },
+  {
+    /*
+     * Never rolled: `unlockAt` keeps it out of `rollEnemyDef` forever, exactly
+     * as it does for the boss. It exists only at the end of a splitter.
+     */
+    id: 'spawnling',
+    sprite: 'spawnling',
+    hp: 4,
+    speed: 74,
+    damage: 4,
+    radius: 7,
+    xp: 1,
+    color: 0x9fd8b0,
+    unlockAt: Number.POSITIVE_INFINITY,
+    weight: 0,
   },
   {
     id: 'brute',
@@ -77,3 +125,14 @@ export const MAX_ENEMY_RADIUS = ENEMIES.reduce(
   (max, def) => Math.max(max, def.radius),
   BOSS.radius,
 );
+
+const BY_ID = new Map<string, EnemyDef>([...ENEMIES, BOSS].map((def) => [def.id, def]));
+
+/**
+ * Returns `undefined` for an unknown id rather than throwing — a split naming a
+ * type that no longer exists should cost the run nothing, the same contract
+ * `weaponById` keeps.
+ */
+export function enemyById(id: string): EnemyDef | undefined {
+  return BY_ID.get(id);
+}

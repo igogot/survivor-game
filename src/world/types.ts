@@ -31,6 +31,14 @@ export interface Player {
 export interface Enemy {
   /** Stable per-spawn id; projectiles use it to avoid hitting the same target twice. */
   id: number;
+  /**
+   * Which `EnemyDef` produced this one.
+   *
+   * The entity carries numbers rather than a reference to its definition, so
+   * this string is how death gets back to it — `reapSystem` needs to know what
+   * a splitter leaves behind.
+   */
+  defId: string;
   x: number;
   y: number;
   px: number;

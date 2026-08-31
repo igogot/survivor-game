@@ -136,6 +136,7 @@ export class World {
 function createEnemy(): Enemy {
   return {
     id: 0,
+    defId: '',
     x: 0,
     y: 0,
     px: 0,
