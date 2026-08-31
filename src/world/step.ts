@@ -1,5 +1,6 @@
 import { contactSystem } from '../systems/contact';
 import { effectSystem } from '../systems/effects';
+import { enemyAttackSystem } from '../systems/enemyAttack';
 import { movementSystem, separationSystem } from '../systems/movement';
 import { pickupSystem } from '../systems/pickup';
 import { progressionSystem } from '../systems/progression';
@@ -19,7 +20,9 @@ import type { World } from './world';
  *   2. spawn   — add new enemies before the grid is built
  *   3. move    — player and enemies advance
  *   4. rebuild — grid now matches the post-movement array exactly
- *   5. combat  — every consumer of the grid runs here, removing nothing
+ *   5. combat  — every consumer of the grid runs here, removing nothing;
+ *                the horde throws in this half too, which adds projectiles
+ *                but never enemies, so no grid index moves
  *   6. progression — may flip the phase to 'levelup' and pause the run
  *
  * Cosmetic effects are advanced with the rest of the bookkeeping, after combat
@@ -39,6 +42,7 @@ export function stepWorld(world: World, dt: number): void {
   rebuildGrid(world);
   separationSystem(world, dt);
   weaponSystem(world, dt);
+  enemyAttackSystem(world, dt);
   projectileSystem(world, dt);
   contactSystem(world);
   pickupSystem(world, dt);

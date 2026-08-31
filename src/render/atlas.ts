@@ -129,6 +129,28 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     ctx.fill();
   },
 
+  // A hooded wedge: narrow at the top, wide at the base, so it reads as
+  // standing still and doing something rather than walking at you.
+  caster: (ctx, size) => {
+    ctx.fillStyle = WHITE;
+    ctx.beginPath();
+    ctx.moveTo(size / 2, 3);
+    ctx.lineTo(size - 5, size - 6);
+    ctx.lineTo(5, size - 6);
+    ctx.closePath();
+    ctx.fill();
+  },
+
+  // A small ring rather than a solid dot: the one projectile the player must
+  // read as incoming, so it must not look like their own bolt.
+  hex: (ctx, size) => {
+    ctx.strokeStyle = WHITE;
+    ctx.lineWidth = Math.max(2, size * 0.16);
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - ctx.lineWidth, 0, Math.PI * 2);
+    ctx.stroke();
+  },
+
   // Spiked, so it never reads as a scaled-up brute.
   boss: (ctx, size) => {
     const centre = size / 2;
@@ -203,6 +225,8 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'brute', size: 64 },
   { name: 'splitter', size: 64 },
   { name: 'spawnling', size: 32 },
+  { name: 'caster', size: 64 },
+  { name: 'hex', size: 32 },
   { name: 'boss', size: 96 },
   { name: 'bolt', size: 32 },
   { name: 'orb', size: 32 },

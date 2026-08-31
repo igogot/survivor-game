@@ -22,6 +22,25 @@ export interface EnemyDef {
    * is already where death is handled.
    */
   readonly split?: { readonly into: string; readonly count: number };
+  /**
+   * Attacks from a distance instead of by touching.
+   *
+   * The horde's only answer to a player it cannot catch. Contact damage needs
+   * the enemy to reach the player, and nothing in the game can: the fastest
+   * type runs at 96 against a player at 175, or 275 once Light Boots are
+   * bought. A thrown hex travels at its own speed and does not care.
+   */
+  readonly ranged?: {
+    /** Distance it holds, and the furthest it will throw from. */
+    readonly range: number;
+    /** Seconds between throws. */
+    readonly cooldown: number;
+    readonly projectileSpeed: number;
+    readonly projectileRadius: number;
+    readonly damage: number;
+    /** Seconds a hex stays in the air before fizzling. */
+    readonly life: number;
+  };
 }
 
 export const ENEMIES: readonly EnemyDef[] = [
@@ -72,6 +91,38 @@ export const ENEMIES: readonly EnemyDef[] = [
     unlockAt: 420,
     weight: 2,
     split: { into: 'spawnling', count: 2 },
+  },
+  {
+    /*
+     * The enemy that reaches a player who keeps their distance.
+     *
+     * It holds `range` and throws. The hex is aimed where the player is going
+     * rather than where they are — at 205 against a player at up to 275 an
+     * unled shot would miss every time, and leading is also what makes the
+     * counter a decision instead of a reflex: the lead assumes the player keeps
+     * their heading, so turning beats it and running straight does not.
+     *
+     * Contact damage stays low. Walking into one should be the least of the
+     * problem it presents.
+     */
+    id: 'caster',
+    sprite: 'caster',
+    hp: 26,
+    speed: 40,
+    damage: 4,
+    radius: 12,
+    xp: 4,
+    color: 0xc9d6ff,
+    unlockAt: 900,
+    weight: 0.35,
+    ranged: {
+      range: 240,
+      cooldown: 4,
+      projectileSpeed: 205,
+      projectileRadius: 7,
+      damage: 9,
+      life: 3.2,
+    },
   },
   {
     /*

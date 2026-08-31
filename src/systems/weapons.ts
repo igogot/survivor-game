@@ -12,6 +12,7 @@ import {
 } from '../data/weapons';
 import { damageArea } from './damage';
 import { spawnEffect } from './effects';
+import { spawnProjectile } from './projectiles';
 import type { BoltWeaponDef, NovaWeaponDef, OrbitWeaponDef } from '../data/weapons';
 import type { Enemy, WeaponState } from '../world/types';
 import type { World } from '../world/world';
@@ -151,7 +152,7 @@ function fire(
   damage: number,
 ): void {
   const player = world.player;
-  const projectile = world.projectilePool.obtain();
+  const projectile = spawnProjectile(world);
 
   projectile.x = player.x;
   projectile.y = player.y;
@@ -165,8 +166,10 @@ function fire(
   projectile.pierce = state.pierce;
   projectile.lastHitId = 0;
   projectile.color = def.color;
-
-  world.projectiles.push(projectile);
+  // Written rather than assumed: the pool hands back whatever the last shot
+  // left, and the last shot may well have belonged to the horde.
+  projectile.hostile = false;
+  projectile.sprite = 'bolt';
 }
 
 /**
