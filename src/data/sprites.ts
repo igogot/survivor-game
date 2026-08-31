@@ -28,6 +28,8 @@ export type SpriteName =
   | 'spawnling'
   /** Keeps its distance and throws instead of touching. */
   | 'caster'
+  /** Costs something to kill: it goes off where it falls. */
+  | 'bomber'
   /** What a caster throws. The only projectile that belongs to the horde. */
   | 'hex'
   | 'boss'

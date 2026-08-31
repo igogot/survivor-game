@@ -30,6 +30,14 @@ export interface EnemyDef {
    * type runs at 96 against a player at 175, or 275 once Light Boots are
    * bought. A thrown hex travels at its own speed and does not care.
    */
+  /**
+   * Goes off where it falls, hurting the player and nobody else.
+   *
+   * The one thing in the game that gives killing a cost. Everything else on
+   * the field is strictly better dead, so "kill it" was never a decision;
+   * this asks *with what, and from how far*.
+   */
+  readonly detonate?: { readonly radius: number; readonly damage: number };
   readonly ranged?: {
     /** Distance it holds, and the furthest it will throw from. */
     readonly range: number;
@@ -91,6 +99,36 @@ export const ENEMIES: readonly EnemyDef[] = [
     unlockAt: 420,
     weight: 2,
     split: { into: 'spawnling', count: 2 },
+  },
+  {
+    /*
+     * Kills the idea that killing is free.
+     *
+     * Its blast reaches 60, which puts the blade ring inside it and the bolt's
+     * 430 far outside, so which weapon finishes it decides whether it costs
+     * anything. That is the first time a weapon choice in this game has a
+     * consequence beyond a damage number.
+     *
+     * The blast is 22 rather than something smaller on purpose. Contact damage
+     * takes only the largest single hit in range, so anything under the
+     * brute's 14 would land inside the same invulnerability window and *shield*
+     * the player from a bigger hit instead of hurting them — measured on the
+     * caster's hex before it was tuned.
+     *
+     * Slow on purpose too. It has to be killable on the way in, or the choice
+     * of weapon never gets to matter.
+     */
+    id: 'bomber',
+    sprite: 'bomber',
+    hp: 22,
+    speed: 46,
+    damage: 5,
+    radius: 13,
+    xp: 4,
+    color: 0xffb454,
+    unlockAt: 660,
+    weight: 0.5,
+    detonate: { radius: 60, damage: 22 },
   },
   {
     /*
