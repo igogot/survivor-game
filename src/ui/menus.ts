@@ -1,7 +1,51 @@
 import { formatTime, requireElement } from './hud';
 import { describeOffer } from './offers';
+import { renderHelp } from './help';
 import type { UpgradeDef } from '../data/upgrades';
 import type { World } from '../world/world';
+
+/**
+ * The briefing, shown before the first run and never again on its own.
+ *
+ * It exists because the game teaches nothing while it is running: weapons fire
+ * themselves, the level-up menu appears without warning and the boss arrives
+ * ten minutes in. A player who never reads this can still finish a run, but
+ * only by rediscovering rules the game had no way to state.
+ *
+ * The run is paused behind it rather than merely covered — a briefing that
+ * costs health is one nobody reads twice.
+ */
+export class StartScreen {
+  private readonly root = requireElement('start');
+  private readonly playButton = requireElement('start-play');
+
+  constructor(onStart: () => void) {
+    this.playButton.addEventListener('click', onStart);
+  }
+
+  show(): void {
+    this.root.hidden = false;
+  }
+
+  hide(): void {
+    this.root.hidden = true;
+  }
+}
+
+/**
+ * Fills every copy of the rules on the page.
+ *
+ * Three panels show the same text, so it is rendered from one source into all
+ * of them at boot instead of being written three times in the markup. Missing
+ * containers are skipped rather than thrown on: the panel is an aid, and a page
+ * that lost one should still be playable.
+ */
+export function mountHelp(ids: readonly string[]): void {
+  for (const id of ids) {
+    const host = document.getElementById(id);
+    if (host !== null) renderHelp(host);
+  }
+}
 
 /** The level-up screen. Rebuilt on each show — it appears a few dozen times a run. */
 export class UpgradeMenu {
