@@ -260,7 +260,9 @@ async function main(): Promise<void> {
     applyUpgrade(world, id);
     // Otherwise a still-held number key would immediately eat the next offer.
     input.clearPressed();
-    clicks.reset();
+    // Only the click: a right button still down goes on steering, which is the
+    // whole point of holding it.
+    clicks.clearPending();
     syncOverlays();
   }
 

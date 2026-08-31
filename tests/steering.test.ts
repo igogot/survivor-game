@@ -148,20 +148,27 @@ describe('ClickInput', () => {
     clicks.attach(surface);
   });
 
-  function pointerDown(button: number, x: number, y: number): void {
-    const event = new Event('pointerdown') as Event & {
+  function pointer(type: string, button: number, x: number, y: number, id = 1): void {
+    const event = new Event(type) as Event & {
+      pointerId: number;
       button: number;
       clientX: number;
       clientY: number;
     };
+    event.pointerId = id;
     event.button = button;
     event.clientX = x;
     event.clientY = y;
     surface.dispatchEvent(event);
   }
 
+  function pointerDown(button: number, x: number, y: number): void {
+    pointer('pointerdown', button, x, y);
+  }
+
   it('records a right-click and hands it over exactly once', () => {
     pointerDown(2, 120, 340);
+    pointer('pointerup', 2, 120, 340);
 
     expect(clicks.consume()).toEqual({ x: 120, y: 340 });
     expect(clicks.consume()).toBeNull();
@@ -179,15 +186,89 @@ describe('ClickInput', () => {
 
   it('keeps only the last order when two arrive inside one tick', () => {
     pointerDown(2, 1, 1);
+    pointer('pointerup', 2, 1, 1);
     pointerDown(2, 2, 2);
+    pointer('pointerup', 2, 2, 2);
 
     expect(clicks.consume()).toEqual({ x: 2, y: 2 });
 
     clicks.detach();
   });
 
+  it('keeps ordering the cursor while the button is held down', () => {
+    pointerDown(2, 400, 400);
+
+    // The mouse has not moved and no new event has arrived, but the camera
+    // rides the player: the same pixel is fresh ground every tick, so the
+    // order has to be reissued rather than handed over once.
+    expect(clicks.consume()).toEqual({ x: 400, y: 400 });
+    expect(clicks.consume()).toEqual({ x: 400, y: 400 });
+
+    clicks.detach();
+  });
+
+  it('follows the cursor while it is dragged', () => {
+    pointerDown(2, 400, 400);
+    pointer('pointermove', -1, 460, 380);
+
+    expect(clicks.consume()).toEqual({ x: 460, y: 380 });
+
+    clicks.detach();
+  });
+
+  it('finishes the walk to where the cursor last was, then stops ordering', () => {
+    pointerDown(2, 400, 400);
+    pointer('pointermove', -1, 500, 300);
+    pointer('pointerup', 2, 500, 300);
+
+    expect(clicks.consume()).toEqual({ x: 500, y: 300 });
+    expect(clicks.consume()).toBeNull();
+
+    clicks.detach();
+  });
+
+  it('ignores a pointer that was never holding the button', () => {
+    pointerDown(2, 400, 400);
+    pointer('pointermove', -1, 999, 999, 7);
+    pointer('pointerup', 2, 999, 999, 7);
+
+    expect(clicks.consume()).toEqual({ x: 400, y: 400 });
+
+    clicks.detach();
+  });
+
+  /** A tab switch, a dialog, a mouse unplugged: the browser takes the pointer. */
+  it('ends the hold when the system cancels the pointer', () => {
+    pointerDown(2, 400, 400);
+    pointer('pointercancel', -1, 400, 400);
+
+    expect(clicks.consume()).toEqual({ x: 400, y: 400 });
+    expect(clicks.consume()).toBeNull();
+
+    clicks.detach();
+  });
+
+  it('goes on steering through a level-up, which only drops the click', () => {
+    pointerDown(2, 400, 400);
+    clicks.clearPending();
+
+    expect(clicks.consume()).toEqual({ x: 400, y: 400 });
+
+    clicks.detach();
+  });
+
+  it('lets go of a held button when the run pauses', () => {
+    pointerDown(2, 400, 400);
+    clicks.reset();
+
+    expect(clicks.consume()).toBeNull();
+
+    clicks.detach();
+  });
+
   it('drops an unread order on reset', () => {
     pointerDown(2, 5, 5);
+    pointer('pointerup', 2, 5, 5);
     clicks.reset();
 
     expect(clicks.consume()).toBeNull();
@@ -207,6 +288,7 @@ describe('ClickInput', () => {
   it('stops listening once detached', () => {
     clicks.detach();
     pointerDown(2, 9, 9);
+    pointer('pointerup', 2, 9, 9);
 
     expect(clicks.consume()).toBeNull();
   });
