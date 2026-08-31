@@ -61,7 +61,7 @@ const PREFERENCE = [
  * crowd — but it kites, which is the one skill the genre actually requires, and
  * it is deterministic, so two runs of the same seed are the same run.
  */
-export function runBot(seed: number, seconds: number): World {
+export function runBot(seed: number, seconds: number, watch?: (world: World) => void): World {
   const world = new World(seed);
   const ticks = Math.round(seconds * CONFIG.tickRate);
 
@@ -86,6 +86,7 @@ export function runBot(seed: number, seconds: number): World {
     wander += WANDER_TURN * DT;
     steer(world, wander, gemX, gemY);
     stepWorld(world, DT);
+    watch?.(world);
   }
 
   return world;

@@ -13,16 +13,20 @@ import type { World } from '../world/world';
 export function spawnSystem(world: World, dt: number): void {
   if (!world.bossSpawned && world.time >= world.nextBossAt) {
     world.bossSpawned = true;
+    world.hordeResumesAt = world.time + CONFIG.boss.duelGrace;
     spawnEnemy(world, BOSS, bossHpScale(world));
     return;
   }
 
-  // Once the boss is out, the run is a duel — stop feeding the horde.
-  if (world.bossSpawned) return;
-
-  // A breather first. Without it the duel is fought through six hundred grunts,
-  // and the boss is just a slightly larger dot in a wall of them.
-  if (world.time >= world.nextBossAt - CONFIG.boss.lull) return;
+  if (world.bossSpawned) {
+    // The duel is quiet, but not for as long as the player likes. A boss they
+    // cannot finish has to be fought through the horde — see CONFIG.boss.
+    if (world.time < world.hordeResumesAt) return;
+  } else if (world.time >= world.nextBossAt - CONFIG.boss.lull) {
+    // A breather first. Without it the duel is fought through six hundred
+    // grunts, and the boss is just a slightly larger dot in a wall of them.
+    return;
+  }
 
   const minutes = world.time / 60;
   const rate = (1 + minutes * CONFIG.spawn.pressurePerMinute) * waveIntensity(world.time);

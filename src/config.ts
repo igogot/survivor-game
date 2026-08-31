@@ -19,6 +19,20 @@ export const CONFIG = {
     /** Quiet seconds before each arrival. */
     lull: 12,
     /**
+     * Quiet seconds *after* an arrival, before the horde comes back anyway.
+     *
+     * Without a bound the duel is a place to rest rather than a fight. The
+     * spawner is off while the boss lives, the boss is slower than the player,
+     * and the stand measured what that combination produces: duels of 407s and
+     * 1162s in which the player takes literally no damage — one seed spent
+     * nineteen minutes of a forty-minute run with the game switched off.
+     *
+     * Long enough to hold most first duels whole (measured at 37s, 73s and
+     * 89s), short enough that one the player cannot finish is fought in
+     * traffic.
+     */
+    duelGrace: 60,
+    /**
      * Extra HP each boss carries over the one before it, as a fraction.
      *
      * Boss HP is deliberately not on the horde's per-minute curve. That curve

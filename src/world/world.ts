@@ -75,6 +75,13 @@ export class World {
   // Annotated: `CONFIG` is `as const`, so inference would pin this to the
   // literal 600 and refuse every later assignment.
   nextBossAt: number = CONFIG.boss.interval;
+  /**
+   * Run time at which the horde resumes during a duel.
+   *
+   * Only meaningful while `bossSpawned`. Set on arrival rather than derived
+   * from it, because the fight has no other record of when it started.
+   */
+  hordeResumesAt = 0;
 
   /** Levels gained but not yet spent on an upgrade. */
   pendingLevels = 0;

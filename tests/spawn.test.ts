@@ -157,4 +157,37 @@ describe('the boss cycle', () => {
 
     expect(world.phase).toBe('playing');
   });
+
+  it('keeps the duel quiet while the grace lasts', () => {
+    const world = new World(4);
+    summonBoss(world);
+    world.enemies.length = 0;
+
+    spawnFor(world, CONFIG.boss.duelGrace - 2);
+
+    expect(world.bossSpawned).toBe(true);
+    expect(world.enemies).toHaveLength(0);
+  });
+
+  it('sends the horde back at a boss the player cannot finish', () => {
+    const world = new World(4);
+    summonBoss(world);
+    world.enemies.length = 0;
+
+    // Past the grace and still no kill: the duel stops being a place to rest.
+    spawnFor(world, CONFIG.boss.duelGrace + 5);
+
+    expect(world.bossSpawned).toBe(true);
+    expect(world.enemies.length).toBeGreaterThan(0);
+  });
+
+  it('measures the grace from the arrival, not from the schedule', () => {
+    const world = new World(4);
+    // Late to its own appointment: the world was paused, or a frame was long.
+    world.time = world.nextBossAt + 30;
+    spawnFor(world, 1);
+
+    expect(world.bossSpawned).toBe(true);
+    expect(world.hordeResumesAt).toBeCloseTo(world.time - 1 + CONFIG.boss.duelGrace, 0);
+  });
 });
