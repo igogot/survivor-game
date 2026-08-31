@@ -4,14 +4,16 @@ import { SPRITE_DRAWERS, SPRITE_SPECS } from '../src/render/atlas';
 import type { SpriteName } from '../src/data/sprites';
 
 /**
- * The one sprite with no artwork behind it.
+ * The sprites with no artwork behind them.
  *
- * A shockwave is an expanding outline; a dungeon tileset has no such thing, so
- * the ring keeps the shape this project draws for it. Listing it here rather
- * than allowing any gap is the point — a sprite that quietly lost its art would
- * otherwise look like a deliberate choice.
+ * A shockwave is an expanding outline and a dungeon tileset has no such thing.
+ * The lance is worse: it is the one frame stretched to fit its own reach, and a
+ * 16px icon smeared eight times along one axis reads as a smudge rather than as
+ * a weapon. Both keep the shapes this project draws for them. Listing them here
+ * rather than allowing any gap is the point — a sprite that quietly lost its
+ * art would otherwise look like a deliberate choice.
  */
-const DRAWN_ONLY: readonly SpriteName[] = ['ring'];
+const DRAWN_ONLY: readonly SpriteName[] = ['ring', 'spear'];
 
 describe('sprite artwork', () => {
   it('gives every sprite either a tile or a deliberate exemption', () => {

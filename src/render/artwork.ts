@@ -28,14 +28,17 @@ export const SHEET_TILES = 132;
  * crab so it looks like it takes a while to kill, and the boss is a spider so
  * it cannot be mistaken for a large brute.
  *
- * `ring` is absent on purpose — the shockwave is an expanding outline with no
- * equivalent in a dungeon tileset, so it keeps its drawn shape even when the
+ * `ring` and `spear` are absent on purpose. The shockwave is an expanding
+ * outline with no equivalent in a dungeon tileset, and the lance is stretched
+ * to the reach of its thrust — a 16px icon smeared eight times along one axis
+ * reads as a smudge, not as a weapon. Both keep their drawn shape even when the
  * artwork loads. Anything missing here falls through to `SPRITE_DRAWERS`.
  */
 export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
   playerBolt: 98, // bare-headed soldier: the one who shoots first
   playerOrbit: 96, // knight in a full helm, which is what a bodyguard looks like
   playerNova: 84, // wizard, and the only figure on the sheet dressed in nova's purple
+  playerSpear: 86, // bearded fighter in leather: the one head not confusable with the other three
   grunt: 108, // green slime
   runner: 120, // bat
   brute: 110, // crab

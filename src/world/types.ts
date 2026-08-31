@@ -167,6 +167,14 @@ export interface WeaponState {
    * only this one.
    */
   spinMul: number;
+  /**
+   * Seconds left of the thrust the spear is showing.
+   *
+   * The lance has no entity behind it: it is drawn from this and `angle`, the
+   * same two numbers the damage used, so it cannot be drawn anywhere other
+   * than where it hit.
+   */
+  swing: number;
 }
 
 /**

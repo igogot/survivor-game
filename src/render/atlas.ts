@@ -159,6 +159,27 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     });
   },
 
+  // The lance itself, laid across the chest: the emblem is the weapon, the same
+  // way the bolt wears its spark and the shockwave its ring.
+  playerSpear: (ctx, size) => {
+    playerBody(ctx, size);
+    carve(ctx, () => {
+      const mid = size / 2;
+      const half = size * 0.26;
+      const shaft = size * 0.055;
+      ctx.beginPath();
+      ctx.moveTo(mid - half, mid - shaft);
+      ctx.lineTo(mid + half * 0.4, mid - shaft);
+      ctx.lineTo(mid + half * 0.4, mid - shaft * 2.4);
+      ctx.lineTo(mid + half, mid);
+      ctx.lineTo(mid + half * 0.4, mid + shaft * 2.4);
+      ctx.lineTo(mid + half * 0.4, mid + shaft);
+      ctx.lineTo(mid - half, mid + shaft);
+      ctx.closePath();
+      ctx.fill();
+    });
+  },
+
   grunt: (ctx, size) => {
     ctx.fillStyle = WHITE;
     ctx.beginPath();
@@ -251,6 +272,32 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     polygon(ctx, size, 4, 2);
   },
 
+  /**
+   * A lance pointing right, drawn to be stretched.
+   *
+   * Every other frame is scaled uniformly; this one is squeezed to the length
+   * and width of the thrust that just landed, so what is drawn here are the
+   * proportions of the box the lance fills, not of a lance. The head keeps its
+   * share of that box at any reach, which is what stops a long thrust from
+   * reading as a plank.
+   */
+  spear: (ctx, size) => {
+    const mid = size / 2;
+    const shaft = size * 0.42;
+    const neck = size * 0.76;
+    ctx.fillStyle = WHITE;
+    ctx.beginPath();
+    ctx.moveTo(0, mid - shaft / 2);
+    ctx.lineTo(neck, mid - shaft / 2);
+    ctx.lineTo(neck, 1);
+    ctx.lineTo(size - 1, mid);
+    ctx.lineTo(neck, size - 1);
+    ctx.lineTo(neck, mid + shaft / 2);
+    ctx.lineTo(0, mid + shaft / 2);
+    ctx.closePath();
+    ctx.fill();
+  },
+
   gem: (ctx, size) => {
     ctx.fillStyle = WHITE;
     polygon(ctx, size, 4, 2);
@@ -278,6 +325,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'playerBolt', size: 64 },
   { name: 'playerOrbit', size: 64 },
   { name: 'playerNova', size: 64 },
+  { name: 'playerSpear', size: 64 },
   { name: 'grunt', size: 64 },
   { name: 'runner', size: 64 },
   { name: 'brute', size: 64 },
@@ -288,6 +336,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'boss', size: 96 },
   { name: 'bolt', size: 32 },
   { name: 'orb', size: 32 },
+  { name: 'spear', size: 64 },
   { name: 'gem', size: 32 },
   { name: 'gemRich', size: 32 },
   { name: 'ring', size: 96 },

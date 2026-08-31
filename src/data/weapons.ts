@@ -95,7 +95,37 @@ export interface NovaWeaponDef extends WeaponBase {
   readonly effectLife: number;
 }
 
-export type WeaponDef = BoltWeaponDef | OrbitWeaponDef | NovaWeaponDef;
+/**
+ * A thrust that runs everyone standing behind the target through.
+ *
+ * The answer to the one thing the spawner already does on purpose:
+ * `CONFIG.spawn.aheadBias` puts two thirds of every wave in the player's path,
+ * so the nearest enemy is usually the front rank of a wall. The bolt picks that
+ * wall apart one body at a time and the shockwave waits for it to arrive; the
+ * spear opens it. Everything on the line is hit by one thrust, so a queue of
+ * grunts costs the same as a single one.
+ *
+ * Piercing is not a stat here, it is the shape: the whole lance resolves as one
+ * damage event, so every enemy along it is hit exactly once and none twice.
+ *
+ * Aimed at the nearest enemy, like every other weapon. An earlier version
+ * pointed the lance along the player's smoothed heading instead, and the
+ * balance stand cut it down: a survivor player drives *away* from the horde, so
+ * the thrust kept landing in empty space and the run's kills nearly halved.
+ * What the player steers here is reach, not aim.
+ */
+export interface SpearWeaponDef extends WeaponBase {
+  readonly kind: 'spear';
+  /** Reach of the thrust, measured from the player's centre. */
+  readonly length: number;
+  readonly lengthPerLevel: number;
+  /** Half-width of the lance: how far off the line an enemy can stand. */
+  readonly thickness: number;
+  /** Seconds the lance stays on screen after a thrust. */
+  readonly swingTime: number;
+}
+
+export type WeaponDef = BoltWeaponDef | OrbitWeaponDef | NovaWeaponDef | SpearWeaponDef;
 
 export const BOLT: BoltWeaponDef = {
   kind: 'bolt',
@@ -144,7 +174,22 @@ export const NOVA: NovaWeaponDef = {
   effectLife: 0.32,
 };
 
-export const WEAPONS: readonly WeaponDef[] = [BOLT, ORBIT, NOVA];
+export const SPEAR: SpearWeaponDef = {
+  kind: 'spear',
+  id: 'spear',
+  name: 'Lunge Spear',
+  playerSprite: 'playerSpear',
+  cooldown: 0.85,
+  damage: 20,
+  damagePerLevel: 8,
+  color: 0xff9f6b,
+  length: 132,
+  lengthPerLevel: 20,
+  thickness: 13,
+  swingTime: 0.13,
+};
+
+export const WEAPONS: readonly WeaponDef[] = [BOLT, ORBIT, NOVA, SPEAR];
 
 const BY_ID = new Map<string, WeaponDef>(WEAPONS.map((def) => [def.id, def]));
 
@@ -227,6 +272,15 @@ export function orbitRadius(def: OrbitWeaponDef, state: WeaponState): number {
   return def.orbRadius * state.areaMul;
 }
 
+export function spearLength(def: SpearWeaponDef, state: WeaponState): number {
+  return (def.length + def.lengthPerLevel * (state.level - 1)) * state.areaMul;
+}
+
+/** Half-width of the lance. Reach widens the line as well as lengthening it. */
+export function spearThickness(def: SpearWeaponDef, state: WeaponState): number {
+  return def.thickness * state.areaMul;
+}
+
 export function novaRadius(def: NovaWeaponDef, state: WeaponState): number {
   return (def.radius + def.radiusPerLevel * (state.level - 1)) * state.areaMul;
 }
@@ -251,5 +305,6 @@ export function createWeaponState(defId: string): WeaponState {
     projectiles: 1,
     pierce: 0,
     spinMul: 1,
+    swing: 0,
   };
 }

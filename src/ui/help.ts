@@ -67,6 +67,7 @@ const WEAPON_ROLES: Readonly<Record<string, string>> = {
   bolt: 'Fires at the nearest enemy in range. The only weapon that reaches across the screen, which makes it the forgiving one to open with.',
   orbit: 'Blades circle you and cut what they touch. They guard the ground you are standing on, not the ground ahead.',
   nova: 'A burst of damage around you every few seconds. It does not care how many enemies are caught in it.',
+  spear: 'Lunges at the nearest enemy and hits everything standing behind them. The way through a wall rather than around it.',
 };
 
 /**

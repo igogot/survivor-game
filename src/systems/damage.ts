@@ -68,6 +68,59 @@ export function damagePlayer(world: World, amount: number): boolean {
  * Returns the number of enemies hit — handy for tests and for future
  * on-hit effects.
  */
+/**
+ * Damages every enemy within `radius` of a line, at most once per damage event.
+ *
+ * The lance the spear thrusts. A single circle cannot express it: the weapon's
+ * whole point is that a queue of enemies standing one behind the other costs
+ * one thrust, and a circle wide enough to hold that queue would also sweep up
+ * everything to the sides of it.
+ *
+ * `dx`/`dy` must be a unit vector; `length` is measured from `x`,`y` along it.
+ * The broad-phase is asked for one circle around the middle of the line, which
+ * is cheaper than walking cells along it and, at the reaches this weapon has,
+ * barely wider.
+ *
+ * Returns the number of enemies hit.
+ */
+export function damageSegment(
+  world: World,
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  length: number,
+  radius: number,
+  damage: number,
+  event: number,
+): number {
+  const { grid, enemies, scratch } = world;
+
+  const half = length / 2;
+  const midX = x + dx * half;
+  const midY = y + dy * half;
+  grid.query(midX, midY, half + radius + MAX_ENEMY_RADIUS + BROADPHASE_PAD, scratch);
+
+  let hits = 0;
+  for (let i = 0; i < scratch.length; i++) {
+    const enemy = enemies[scratch[i]];
+    if (enemy === undefined || enemy.hp <= 0) continue;
+    if (enemy.hitTag === event) continue;
+
+    // Nearest point on the segment, which is the projection clamped to its ends
+    // — an enemy past the tip is out of reach rather than infinitely in it.
+    const travel = Math.min(Math.max((enemy.x - x) * dx + (enemy.y - y) * dy, 0), length);
+    const reach = radius + enemy.radius;
+    if (dist2(x + dx * travel, y + dy * travel, enemy.x, enemy.y) > reach * reach) continue;
+
+    enemy.hitTag = event;
+    applyDamage(world, enemy, damage);
+    hits++;
+  }
+
+  return hits;
+}
+
 export function damageArea(
   world: World,
   x: number,

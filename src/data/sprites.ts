@@ -13,12 +13,13 @@ export type SpriteName =
    *
    * A run is played as the weapon that started it, so the figure on screen
    * says which one that was — the choice is visible for the whole run instead
-   * of only on the screen where it was made. All three share a body and differ
-   * by the emblem cut out of it, so the player still reads as the player.
+   * of only on the screen where it was made. They share a body and differ by
+   * the emblem cut out of it, so the player still reads as the player.
    */
   | 'playerBolt'
   | 'playerOrbit'
   | 'playerNova'
+  | 'playerSpear'
   | 'grunt'
   | 'runner'
   | 'brute'
@@ -33,6 +34,8 @@ export type SpriteName =
   | 'boss'
   | 'bolt'
   | 'orb'
+  /** The lance, drawn stretched to the reach of the thrust that landed. */
+  | 'spear'
   | 'gem'
   /** A pickup worth more than one XP, told apart by frame rather than by tint. */
   | 'gemRich'

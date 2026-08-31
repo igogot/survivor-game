@@ -6,14 +6,21 @@ import {
   orbitDistance,
   orbitRadius,
   orbitSpin,
+  spearLength,
+  spearThickness,
   weaponById,
   weaponCooldown,
   weaponDamage,
 } from '../data/weapons';
-import { damageArea } from './damage';
+import { damageArea, damageSegment } from './damage';
 import { spawnEffect } from './effects';
 import { spawnProjectile } from './projectiles';
-import type { BoltWeaponDef, NovaWeaponDef, OrbitWeaponDef } from '../data/weapons';
+import type {
+  BoltWeaponDef,
+  NovaWeaponDef,
+  OrbitWeaponDef,
+  SpearWeaponDef,
+} from '../data/weapons';
 import type { Enemy, WeaponState } from '../world/types';
 import type { World } from '../world/world';
 
@@ -44,6 +51,9 @@ export function weaponSystem(world: World, dt: number): void {
         break;
       case 'nova':
         stepNova(world, def, state, dt);
+        break;
+      case 'spear':
+        stepSpear(world, def, state, dt);
         break;
       default: {
         // Exhaustiveness check: adding a weapon kind without a routine here
@@ -142,6 +152,43 @@ function stepNova(world: World, def: NovaWeaponDef, state: WeaponState, dt: numb
 
   damageArea(world, player.x, player.y, radius, damage, world.nextDamageEvent());
   spawnEffect(world, player.x, player.y, radius, def.effectLife, def.color);
+}
+
+function stepSpear(world: World, def: SpearWeaponDef, state: WeaponState, dt: number): void {
+  // The lance fades on its own clock, so a slow weapon does not leave one
+  // hanging on screen until the next thrust.
+  if (state.swing > 0) state.swing = Math.max(0, state.swing - dt);
+
+  state.cooldown -= dt;
+  if (state.cooldown > 0) return;
+
+  // Nothing in reach means the thrust is not spent: the lance stays cocked and
+  // lands the instant something walks into it.
+  const length = spearLength(def, state);
+  const target = findNearestEnemy(world, length);
+  if (target === null) return;
+
+  const player = world.player;
+  state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
+  state.angle = Math.atan2(target.y - player.y, target.x - player.x);
+  state.swing = def.swingTime;
+
+  const dx = Math.cos(state.angle);
+  const dy = Math.sin(state.angle);
+
+  // One event for the whole lance: an enemy the line passes through is hit
+  // once, however long the line is.
+  damageSegment(
+    world,
+    player.x,
+    player.y,
+    dx,
+    dy,
+    length,
+    spearThickness(def, state),
+    weaponDamage(def, state) * player.stats.damageMul,
+    world.nextDamageEvent(),
+  );
 }
 
 function fire(
