@@ -90,11 +90,28 @@ describe('describeOffer', () => {
 
   it('describes every shipped upgrade without throwing', () => {
     for (const offer of UPGRADES) {
-      for (let taken = 0; taken < offer.maxStacks; taken++) {
+      // Clamped: the tail upgrades have no stack cap, so the honest bound is
+      // "a few more takes than any designed upgrade allows".
+      const takes = Math.min(offer.maxStacks, 8);
+      for (let taken = 0; taken < takes; taken++) {
         const label = describeOffer(offer, taken);
         expect(label.progress).not.toBe('');
         expect(['weapon', 'stat']).toContain(label.kind);
       }
     }
+  });
+
+  it('never calls an uncapped upgrade maxed, however many times it is taken', () => {
+    const endless = UPGRADES.find((upgrade) => upgrade.fallback === true);
+    expect(endless).toBeDefined();
+    if (endless === undefined) return;
+
+    for (const taken of [0, 1, 9, 100]) {
+      const label = describeOffer(endless, taken);
+      expect(label.isMax).toBe(false);
+      expect(label.progress).not.toContain('MAX');
+    }
+
+    expect(describeOffer(endless, 3).progress).toBe('Lv 3 → 4');
   });
 });
