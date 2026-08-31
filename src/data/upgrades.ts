@@ -4,8 +4,23 @@ interface UpgradeBase {
   readonly id: string;
   readonly name: string;
   readonly description: string;
-  /** How many times this upgrade may be taken in one run. */
+  /** How many times this upgrade may be taken in one run. `Infinity` for the tail. */
   readonly maxStacks: number;
+  /**
+   * Held back until the designed pool can no longer fill a level-up menu.
+   *
+   * The thirteen designed upgrades total fifty stacks, so a run that reaches
+   * level 51 spends the last one and every level after it is worth nothing —
+   * `progressionSystem` used to swallow them silently. That is unreachable in a
+   * ten-minute run and routine in a long one: a bot left to survive past the
+   * boss hit the cap at 51 and took twenty-three more levels for no reward.
+   *
+   * Kept out of the roll entirely until then rather than mixed in and made
+   * rare. A bigger pool makes every designed card rarer, including the ones a
+   * run is actually built on, and the balance stand has caught that before —
+   * see the note on `OFFERS_PER_LEVEL`.
+   */
+  readonly fallback?: boolean;
 }
 
 /**
@@ -196,4 +211,108 @@ export const UPGRADES: readonly UpgradeDef[] = [
       weapon.attackSpeedMul += 0.4;
     },
   },
+
+  /*
+   * The tail: what a level is worth once everything above it is bought.
+   *
+   * Uncapped, and deliberately weaker per pick than the designed upgrades they
+   * echo — Whetstone buys +25% damage five times, Grindstone buys +10% forever.
+   * The tail is not a replacement for a build, it is what keeps a level from
+   * being nothing, and it stays flat enough that a long run scales by degrees
+   * instead of running away.
+   *
+   * Six entries for four slots, so the menu still differs between level-ups
+   * instead of showing the same card set forever. Three of them are scoped to a
+   * weapon and therefore filtered by ownership, which is what makes the mix
+   * depend on the build rather than on nothing.
+   *
+   * Nothing that compounds, and no move speed. It is the obvious extra line and
+   * the one that breaks: enemies spawn into the player's path, so speed bought
+   * without limit stops being a stat and starts being an exit.
+   */
+  {
+    kind: 'stat',
+    id: 'grindstone',
+    name: 'Grindstone',
+    description: '+10% damage',
+    maxStacks: Infinity,
+    fallback: true,
+    apply: (stats) => {
+      stats.damageMul += 0.1;
+    },
+  },
+  {
+    kind: 'stat',
+    id: 'reflexes',
+    name: 'Muscle Memory',
+    description: '+8% attack speed',
+    maxStacks: Infinity,
+    fallback: true,
+    apply: (stats) => {
+      stats.attackSpeedMul += 0.08;
+    },
+  },
+  {
+    kind: 'stat',
+    id: 'scar-tissue',
+    name: 'Scar Tissue',
+    description: '+20 max HP, healed on pickup',
+    maxStacks: Infinity,
+    fallback: true,
+    apply: (stats) => {
+      stats.maxHp += 20;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'bolt-heft',
+    weaponId: 'bolt',
+    name: 'Heavier Bolts',
+    description: '+15% Auto Bolt damage',
+    maxStacks: Infinity,
+    fallback: true,
+    apply: (weapon) => {
+      weapon.damageMul += 0.15;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'orbit-edge',
+    weaponId: 'orbit',
+    name: 'Keener Edge',
+    description: '+15% Orbit Blades damage',
+    maxStacks: Infinity,
+    fallback: true,
+    apply: (weapon) => {
+      weapon.damageMul += 0.15;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'nova-depth',
+    weaponId: 'nova',
+    name: 'Deeper Thunder',
+    description: '+15% Shockwave damage',
+    maxStacks: Infinity,
+    fallback: true,
+    apply: (weapon) => {
+      weapon.damageMul += 0.15;
+    },
+  },
 ];
+
+/**
+ * The hand-tuned pool, in declaration order.
+ *
+ * `rollUpgrades` shuffles this and nothing else while it can fill a menu, so a
+ * run that never exhausts it draws exactly the offers it drew before the tail
+ * existed — the balance table stays comparable across the change.
+ */
+export const DESIGNED_UPGRADES: readonly UpgradeDef[] = UPGRADES.filter(
+  (upgrade) => upgrade.fallback !== true,
+);
+
+/** The uncapped tail, offered only to fill what `DESIGNED_UPGRADES` cannot. */
+export const FALLBACK_UPGRADES: readonly UpgradeDef[] = UPGRADES.filter(
+  (upgrade) => upgrade.fallback === true,
+);

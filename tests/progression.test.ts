@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { UPGRADES } from '../src/data/upgrades';
+import { DESIGNED_UPGRADES, FALLBACK_UPGRADES, UPGRADES } from '../src/data/upgrades';
+import { Rng } from '../src/core/rng';
 import {
   applyUpgrade,
   isOfferable,
@@ -199,5 +200,95 @@ describe('offer filtering by ownership', () => {
     expect(world.stacks.get(mod.id)).toBe(1);
     expect(orbit.areaMul * orbit.attackSpeedMul).toBeGreaterThan(1);
     expect(bolt).toEqual(boltBefore);
+  });
+});
+
+describe('the uncapped tail', () => {
+  const TAIL = new Set(FALLBACK_UPGRADES.map((upgrade) => upgrade.id));
+
+  /** A run past level 51: every designed upgrade it could reach is bought. */
+  function spentWorld(seed: number): World {
+    const world = new World(seed);
+    grantWeapon(world, 'orbit');
+    grantWeapon(world, 'nova');
+    for (const upgrade of DESIGNED_UPGRADES) world.stacks.set(upgrade.id, upgrade.maxStacks);
+    return world;
+  }
+
+  it('has entries, and none of them in the designed pool', () => {
+    expect(FALLBACK_UPGRADES.length).toBeGreaterThanOrEqual(4);
+    const designed = new Set(DESIGNED_UPGRADES.map((upgrade) => upgrade.id));
+    for (const upgrade of FALLBACK_UPGRADES) expect(designed.has(upgrade.id)).toBe(false);
+  });
+
+  it('is held out of the roll while the designed pool can fill a menu', () => {
+    const world = new World(21);
+    grantWeapon(world, 'orbit');
+    grantWeapon(world, 'nova');
+
+    for (let i = 0; i < 200; i++) {
+      for (const offer of rollUpgrades(world)) expect(TAIL.has(offer.id)).toBe(false);
+    }
+  });
+
+  it('costs the run no randomness until then', () => {
+    const world = new World(30);
+    const available = DESIGNED_UPGRADES.filter((upgrade) => isOfferable(world, upgrade));
+    expect(available.length).toBeGreaterThan(4);
+
+    rollUpgrades(world);
+
+    // `shuffled` draws once per swap, so a designed-only roll costs exactly
+    // `available.length - 1`. Any extra draw would mean the tail was shuffled
+    // as well, and every seeded run — the balance table with it — would drift.
+    const mirror = new Rng(30);
+    for (let i = 0; i < available.length - 1; i++) mirror.next();
+    expect(world.rng.next()).toBe(mirror.next());
+  });
+
+  it('fills a full menu once every designed upgrade is spent', () => {
+    const world = spentWorld(22);
+    expect(DESIGNED_UPGRADES.some((upgrade) => isOfferable(world, upgrade))).toBe(false);
+
+    const offers = rollUpgrades(world);
+
+    expect(offers).toHaveLength(4);
+    expect(new Set(offers.map((offer) => offer.id)).size).toBe(offers.length);
+    for (const offer of offers) expect(TAIL.has(offer.id)).toBe(true);
+  });
+
+  it('still filters its weapon lines by ownership', () => {
+    const world = new World(25);
+    for (const upgrade of DESIGNED_UPGRADES) world.stacks.set(upgrade.id, upgrade.maxStacks);
+
+    // Only the starter weapon, so the orbit and nova lines of the tail are as
+    // dead as their designed counterparts and must not reach the menu.
+    expect(world.weapons.some((weapon) => weapon.defId === 'orbit')).toBe(false);
+    for (const offer of rollUpgrades(world)) {
+      expect(offer.kind === 'weaponMod' ? offer.weaponId : 'bolt').toBe('bolt');
+    }
+  });
+
+  it('stops a level from being swallowed', () => {
+    const world = spentWorld(23);
+    world.pendingLevels = 1;
+
+    progressionSystem(world);
+
+    expect(world.phase).toBe('levelup');
+    expect(world.offered.length).toBeGreaterThan(0);
+  });
+
+  it('can be taken again past any designed cap', () => {
+    const world = spentWorld(24);
+    const before = world.player.stats.damageMul;
+
+    for (let i = 0; i < 10; i++) {
+      world.pendingLevels = 1;
+      applyUpgrade(world, 'grindstone');
+    }
+
+    expect(world.stacks.get('grindstone')).toBe(10);
+    expect(world.player.stats.damageMul).toBeCloseTo(before + 1);
   });
 });
