@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
-import { spawnSystem, waveIntensity } from '../src/systems/spawn';
+import { bossHpScale, defeatBoss, spawnSystem, waveIntensity } from '../src/systems/spawn';
 import { World } from '../src/world/world';
 
 const DT = 1 / CONFIG.tickRate;
@@ -82,9 +82,9 @@ describe('spawn placement', () => {
 describe('boss arrival', () => {
   it('stops spawning during the lull before the boss', () => {
     const world = new World(2);
-    world.time = CONFIG.runDuration - CONFIG.spawn.bossLull;
+    world.time = world.nextBossAt - CONFIG.boss.lull;
 
-    spawnFor(world, CONFIG.spawn.bossLull - 1);
+    spawnFor(world, CONFIG.boss.lull - 1);
 
     expect(world.enemies).toHaveLength(0);
     expect(world.bossSpawned).toBe(false);
@@ -92,12 +92,69 @@ describe('boss arrival', () => {
 
   it('spawns exactly one boss when the timer runs out', () => {
     const world = new World(2);
-    world.time = CONFIG.runDuration - 0.5;
+    world.time = world.nextBossAt - 0.5;
 
     spawnFor(world, 5);
 
     expect(world.bossSpawned).toBe(true);
     expect(world.enemies.filter((enemy) => enemy.boss)).toHaveLength(1);
     expect(world.enemies).toHaveLength(1);
+  });
+});
+
+describe('the boss cycle', () => {
+  /** Runs the spawner up to the boss and puts it on the field. */
+  function summonBoss(world: World): void {
+    world.time = world.nextBossAt - 0.5;
+    spawnFor(world, 1);
+    expect(world.bossSpawned).toBe(true);
+  }
+
+  it('resumes the horde once the boss is down', () => {
+    const world = new World(3);
+    summonBoss(world);
+
+    defeatBoss(world);
+    spawnFor(world, 5);
+
+    expect(world.bossSpawned).toBe(false);
+    expect(world.bossesKilled).toBe(1);
+    expect(world.enemies.length).toBeGreaterThan(0);
+  });
+
+  it('measures the next arrival from the kill, not from a fixed grid', () => {
+    const world = new World(3);
+    summonBoss(world);
+    // A long duel: the breather afterwards has to be a full interval even so.
+    world.time += 90;
+
+    const killedAt = world.time;
+    defeatBoss(world);
+
+    expect(world.nextBossAt).toBeCloseTo(killedAt + CONFIG.boss.interval);
+  });
+
+  it('sends a second boss, and a harder one', () => {
+    const world = new World(3);
+    summonBoss(world);
+    const first = world.enemies[0].maxHp;
+
+    defeatBoss(world);
+    world.enemies.length = 0;
+    summonBoss(world);
+
+    const second = world.enemies.filter((enemy) => enemy.boss);
+    expect(second).toHaveLength(1);
+    expect(second[0].maxHp).toBeGreaterThan(first);
+    expect(second[0].maxHp).toBeCloseTo(first * bossHpScale(world));
+  });
+
+  it('does not end the run', () => {
+    const world = new World(3);
+    summonBoss(world);
+
+    defeatBoss(world);
+
+    expect(world.phase).toBe('playing');
   });
 });

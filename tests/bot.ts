@@ -70,7 +70,7 @@ export function runBot(seed: number, seconds: number): World {
   let gemY = 0;
 
   for (let i = 0; i < ticks; i++) {
-    if (world.phase === 'dead' || world.phase === 'won') break;
+    if (world.phase === 'dead') break;
 
     if (world.phase === 'levelup') {
       applyUpgrade(world, choose(world));

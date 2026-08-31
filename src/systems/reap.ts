@@ -1,11 +1,13 @@
 import { CONFIG } from '../config';
 import { dist2 } from '../core/math';
+import { defeatBoss } from './spawn';
 import type { Enemy } from '../world/types';
 import type { World } from '../world/world';
 
 /**
  * Removes enemies killed last tick and those that wandered too far, dropping XP
- * gems for the kills.
+ * gems for the kills. A dead boss is handed to `defeatBoss`, which schedules
+ * the next one — nothing here ends the run.
  *
  * Runs at the very top of the tick, before the grid is rebuilt, so no live
  * broad-phase index is ever invalidated mid-iteration.
@@ -25,7 +27,7 @@ export function reapSystem(world: World): void {
 
     if (killed) {
       dropGem(world, enemy);
-      if (enemy.boss) world.phase = 'won';
+      if (enemy.boss) defeatBoss(world);
     }
 
     enemies[i] = enemies[enemies.length - 1];

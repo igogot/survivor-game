@@ -118,7 +118,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (phase === 'dead' || phase === 'won') {
+    if (phase === 'dead') {
       if (input.consumePressed('KeyR')) restart();
     }
   }
@@ -200,7 +200,7 @@ async function main(): Promise<void> {
       upgradeMenu.hide();
     }
 
-    if (world.phase === 'dead' || world.phase === 'won') {
+    if (world.phase === 'dead') {
       resultScreen.show(world);
     } else {
       resultScreen.hide();
