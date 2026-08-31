@@ -63,7 +63,11 @@ export function movementSystem(world: World, dt: number): void {
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy);
     if (distance > 0.001) {
-      const step = (enemy.speed * dt) / distance;
+      // A ranged enemy closes to its standoff and stops. Walking the last four
+      // hundred pixels would make it an ordinary enemy that also throws, and
+      // the point of it is to be the one thing kiting does not solve.
+      const closing = distance > enemy.standoff ? 1 : 0;
+      const step = (closing * enemy.speed * dt) / distance;
       enemy.x += dx * step;
       enemy.y += dy * step;
     }

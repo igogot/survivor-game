@@ -219,6 +219,10 @@ export function spawnEnemyAt(
   enemy.flash = 0;
   enemy.hitTag = 0;
   enemy.boss = def.id === BOSS.id;
+  enemy.standoff = def.ranged?.range ?? 0;
+  // Staggered by a fraction of the cooldown, otherwise every caster that
+  // arrived in the same batch throws on the same tick for the rest of the run.
+  enemy.attackCooldown = def.ranged === undefined ? 0 : world.rng.next() * def.ranged.cooldown;
 
   world.enemies.push(enemy);
 }

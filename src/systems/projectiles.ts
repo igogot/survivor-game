@@ -1,8 +1,23 @@
+import { CONFIG } from '../config';
 import { MAX_ENEMY_RADIUS } from '../data/enemies';
 import { dist2 } from '../core/math';
-import { applyDamage } from './damage';
+import { applyDamage, damagePlayer } from './damage';
 import { BROADPHASE_PAD } from './shared';
+import type { Projectile } from '../world/types';
 import type { World } from '../world/world';
+
+/**
+ * Takes a projectile from the pool and puts it in the world.
+ *
+ * The caller writes every field, without exception. A pooled projectile
+ * carries whatever the last one left, and `hostile` is the field where
+ * forgetting that turns the player's bolt into something that shoots them.
+ */
+export function spawnProjectile(world: World): Projectile {
+  const projectile = world.projectilePool.obtain();
+  world.projectiles.push(projectile);
+  return projectile;
+}
 
 /**
  * Advances projectiles and resolves their hits.
@@ -28,7 +43,17 @@ export function projectileSystem(world: World, dt: number): void {
 
     let spent = projectile.life <= 0;
 
-    if (!spent) {
+    if (!spent && projectile.hostile) {
+      // One target, so no broad-phase: the horde's shots look for the player
+      // and nothing else. They deliberately go through the same
+      // invulnerability window as a body — see `damagePlayer`.
+      const player = world.player;
+      const reach = projectile.radius + CONFIG.player.radius;
+      if (dist2(projectile.x, projectile.y, player.x, player.y) <= reach * reach) {
+        damagePlayer(world, projectile.damage);
+        spent = true;
+      }
+    } else if (!spent) {
       grid.query(projectile.x, projectile.y, projectile.radius + queryPad, scratch);
 
       for (let c = 0; c < scratch.length; c++) {

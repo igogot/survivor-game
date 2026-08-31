@@ -43,6 +43,13 @@ export interface Enemy {
   /** Stable per-spawn id; projectiles use it to avoid hitting the same target twice. */
   id: number;
   /**
+   * Distance this enemy tries to keep from the player. 0 for everything that
+   * attacks by walking into them.
+   */
+  standoff: number;
+  /** Seconds until this enemy may attack again. Only used when it can. */
+  attackCooldown: number;
+  /**
    * Which `EnemyDef` produced this one.
    *
    * The entity carries numbers rather than a reference to its definition, so
@@ -92,6 +99,17 @@ export interface Projectile {
   /** Last enemy hit, so a piercing shot cannot re-hit it next tick. */
   lastHitId: number;
   color: number;
+  /**
+   * Whose shot this is.
+   *
+   * The horde and the player share one pool and one system rather than two of
+   * each: everything about a projectile except who it looks for is identical,
+   * and a second copy of the movement and lifetime code is exactly where the
+   * two would drift apart.
+   */
+  hostile: boolean;
+  /** Which frame the renderer draws. A hex must not look like the player's bolt. */
+  sprite: SpriteName;
 }
 
 export interface Gem {

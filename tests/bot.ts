@@ -14,6 +14,11 @@ const WANDER_TURN = 0.35;
 /** Ticks between gem searches. Gems are not in the grid, so this stays linear. */
 const GEM_INTERVAL = 6;
 
+/** How far ahead the bot looks for a hex that is going to hit it, in seconds. */
+const DODGE_HORIZON = 1.1;
+/** How much a sidestep outweighs everything else when a hex is about to land. */
+const DODGE_WEIGHT = 2.5;
+
 /**
  * The bot's own broad-phase buffer.
  *
@@ -137,6 +142,46 @@ function steer(world: World, wander: number, pullX: number, pullY: number): void
   const flee = Math.min(1, pressure);
   let x = pushX * flee + pullX * (1 - flee);
   let y = pushY * flee + pullY * (1 - flee);
+
+  // A hex is aimed where the bot is going, so the counter is to stop going
+  // there. Without this the stand measures a player who never uses the only
+  // defence the mechanic has — the same mistake the upgrade priorities made,
+  // and the reason the balance table is worth anything at all.
+  //
+  // The loop is empty whenever nothing hostile is in the air, and every run
+  // that never meets a caster therefore steers exactly as it did before this
+  // existed. That is what keeps the older tables comparable.
+  const projectiles = world.projectiles;
+  for (let i = 0; i < projectiles.length; i++) {
+    const hex = projectiles[i];
+    if (!hex.hostile) continue;
+
+    const toX = player.x - hex.x;
+    const toY = player.y - hex.y;
+    const speedSq = hex.vx * hex.vx + hex.vy * hex.vy;
+    if (speedSq === 0) continue;
+
+    // Time at which the hex is closest to where the bot stands now. Negative
+    // means it is already past and no longer anyone's problem.
+    const closest = (toX * hex.vx + toY * hex.vy) / speedSq;
+    if (closest <= 0 || closest > DODGE_HORIZON) continue;
+
+    const missX = toX - hex.vx * closest;
+    const missY = toY - hex.vy * closest;
+    const miss = Math.hypot(missX, missY);
+    // Twice the hit radius: a shot that is merely close still deserves a step,
+    // because the bot is moving and the margin is what the lead is aiming at.
+    const threat = (hex.radius + CONFIG.player.radius) * 2;
+    if (miss >= threat) continue;
+
+    // Sideways, on the side the bot is already on, so the step is the short
+    // one. Sooner is more urgent, and a shot dead on line gets the full push.
+    const urgency = (1 - closest / DODGE_HORIZON) * (1 - miss / threat);
+    const side = missX * -hex.vy + missY * hex.vx >= 0 ? 1 : -1;
+    const speed = Math.sqrt(speedSq);
+    x += ((-hex.vy / speed) * side) * DODGE_WEIGHT * urgency;
+    y += ((hex.vx / speed) * side) * DODGE_WEIGHT * urgency;
+  }
 
   if (Math.hypot(x, y) < 0.05) {
     x = Math.cos(wander);

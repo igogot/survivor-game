@@ -162,6 +162,8 @@ function createEnemy(): Enemy {
     flash: 0,
     hitTag: 0,
     boss: false,
+    standoff: 0,
+    attackCooldown: 0,
   };
 }
 
@@ -179,6 +181,8 @@ function createProjectile(): Projectile {
     pierce: 0,
     lastHitId: 0,
     color: 0xffffff,
+    hostile: false,
+    sprite: 'bolt',
   };
 }
 

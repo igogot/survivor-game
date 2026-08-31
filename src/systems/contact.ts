@@ -1,6 +1,7 @@
 import { CONFIG } from '../config';
 import { MAX_ENEMY_RADIUS } from '../data/enemies';
 import { dist2 } from '../core/math';
+import { damagePlayer } from './damage';
 import { BROADPHASE_PAD } from './shared';
 import type { World } from '../world/world';
 
@@ -36,13 +37,5 @@ export function contactSystem(world: World): void {
     if (enemy.damage > worstHit) worstHit = enemy.damage;
   }
 
-  if (worstHit <= 0) return;
-
-  player.hp -= worstHit;
-  player.invuln = CONFIG.player.invulnTime;
-
-  if (player.hp <= 0) {
-    player.hp = 0;
-    world.phase = 'dead';
-  }
+  damagePlayer(world, worstHit);
 }

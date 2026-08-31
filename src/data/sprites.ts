@@ -16,6 +16,10 @@ export type SpriteName =
   | 'splitter'
   /** What a splitter leaves behind. */
   | 'spawnling'
+  /** Keeps its distance and throws instead of touching. */
+  | 'caster'
+  /** What a caster throws. The only projectile that belongs to the horde. */
+  | 'hex'
   | 'boss'
   | 'bolt'
   | 'orb'

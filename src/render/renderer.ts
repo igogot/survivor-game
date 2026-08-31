@@ -259,6 +259,9 @@ export class GameRenderer {
         lerp(projectile.px, projectile.x, alpha),
         lerp(projectile.py, projectile.y, alpha),
       );
+      // Per-projectile frame: a hex thrown at the player must not read as one
+      // of their own bolts. Same source texture, so the layer still batches.
+      sprite.texture = this.textures.sprites[projectile.sprite];
       fit(sprite, projectile.radius * 2);
       // The blade points up in the sheet; turn it to face where it is going.
       sprite.rotation = Math.atan2(projectile.vy, projectile.vx) + Math.PI / 2;

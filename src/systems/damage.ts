@@ -1,3 +1,4 @@
+import { CONFIG } from '../config';
 import { MAX_ENEMY_RADIUS } from '../data/enemies';
 import { dist2 } from '../core/math';
 import { BROADPHASE_PAD } from './shared';
@@ -25,6 +26,34 @@ export function applyDamage(world: World, enemy: Enemy, amount: number): void {
   enemy.hp -= amount;
   enemy.flash = FLASH_TIME;
   if (enemy.hp <= 0) world.kills++;
+}
+
+/**
+ * The single place the *player* loses health.
+ *
+ * Two things reach them now — a body touching them and a hex landing on them —
+ * and both must agree on the invulnerability window and on what happens at
+ * zero. The window is the game's damage governor: it is why standing in a
+ * crowd of forty is survivable, and routing the horde's projectiles through it
+ * rather than around it is what keeps that promise while still letting them
+ * land when nothing is close enough to touch.
+ *
+ * Returns whether the hit landed, so a caller can tell a blocked hit from one
+ * that connected.
+ */
+export function damagePlayer(world: World, amount: number): boolean {
+  const player = world.player;
+  if (player.invuln > 0 || amount <= 0) return false;
+
+  player.hp -= amount;
+  player.invuln = CONFIG.player.invulnTime;
+
+  if (player.hp <= 0) {
+    player.hp = 0;
+    world.phase = 'dead';
+  }
+
+  return true;
 }
 
 /**
