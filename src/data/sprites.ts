@@ -12,6 +12,10 @@ export type SpriteName =
   | 'grunt'
   | 'runner'
   | 'brute'
+  /** Comes apart on death; see `EnemyDef.split`. */
+  | 'splitter'
+  /** What a splitter leaves behind. */
+  | 'spawnling'
   | 'boss'
   | 'bolt'
   | 'orb'

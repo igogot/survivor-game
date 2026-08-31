@@ -28,11 +28,9 @@ export function spawnSystem(world: World, dt: number): void {
     return;
   }
 
-  const minutes = world.time / 60;
-  const rate = (1 + minutes * CONFIG.spawn.pressurePerMinute) * waveIntensity(world.time);
-  const interval = Math.max(0.05, CONFIG.spawn.baseInterval / rate);
-  const batchSize = 1 + Math.floor(minutes * CONFIG.spawn.batchPerMinute);
-  const hpScale = 1 + minutes * CONFIG.spawn.hpScalePerMinute;
+  const interval = spawnInterval(world);
+  const batchSize = spawnBatch(world);
+  const hpScale = hordeHpScale(world);
 
   world.spawnTimer -= dt;
   while (world.spawnTimer <= 0) {
@@ -47,6 +45,43 @@ export function spawnSystem(world: World, dt: number): void {
       spawnEnemy(world, rollEnemyDef(world), hpScale);
     }
   }
+}
+
+/** Seconds between spawn ticks right now, surges included. */
+export function spawnInterval(world: World): number {
+  const minutes = world.time / 60;
+  const rate = (1 + minutes * CONFIG.spawn.pressurePerMinute) * waveIntensity(world.time);
+  return Math.max(0.05, CONFIG.spawn.baseInterval / rate);
+}
+
+/** Enemies delivered per spawn tick right now. */
+export function spawnBatch(world: World): number {
+  return 1 + Math.floor((world.time / 60) * CONFIG.spawn.batchPerMinute);
+}
+
+/**
+ * What one enemy costs the spawner in seconds, at the current difficulty.
+ *
+ * Anything that puts a body on the field outside the spawner charges itself
+ * this, so the horde's budget stays the horde's budget. Without it a splitter
+ * is a hole in the difficulty curve: every one killed leaves a net extra
+ * enemy, so a player who kills well is punished for it, and the stand measured
+ * exactly that — a fifth off the average run, insensitive to the splitter's
+ * own weight, speed and HP because none of those was the mechanism.
+ */
+export function bodyCost(world: World): number {
+  return spawnInterval(world) / spawnBatch(world);
+}
+
+/**
+ * The HP multiplier every ordinary enemy spawned right now carries.
+ *
+ * A pure function of elapsed time, so anything that puts an enemy into the
+ * world outside the spawner — a splitter coming apart, a test — gets exactly
+ * what the spawner would have given it, without having to remember the formula.
+ */
+export function hordeHpScale(world: World): number {
+  return 1 + (world.time / 60) * CONFIG.spawn.hpScalePerMinute;
 }
 
 /**
@@ -140,10 +175,37 @@ export function spawnEnemy(world: World, def: EnemyDef, hpScale: number): void {
   const angle = spawnAngle(world);
   const distance = CONFIG.spawn.ringRadius;
 
+  spawnEnemyAt(
+    world,
+    def,
+    hpScale,
+    world.player.x + Math.cos(angle) * distance,
+    world.player.y + Math.sin(angle) * distance,
+  );
+}
+
+/**
+ * Puts one enemy at an exact position.
+ *
+ * Split out from `spawnEnemy` because the ring is the only thing that makes a
+ * spawn a spawn: a splitter's children have to appear where it died, in plain
+ * sight, and everything else about them is identical.
+ *
+ * Every field is written unconditionally. The enemy comes from a pool, so a
+ * field left alone is not a default — it is whatever the last occupant left.
+ */
+export function spawnEnemyAt(
+  world: World,
+  def: EnemyDef,
+  hpScale: number,
+  x: number,
+  y: number,
+): void {
   const enemy = world.enemyPool.obtain();
   enemy.id = world.nextEntityId++;
-  enemy.x = world.player.x + Math.cos(angle) * distance;
-  enemy.y = world.player.y + Math.sin(angle) * distance;
+  enemy.defId = def.id;
+  enemy.x = x;
+  enemy.y = y;
   enemy.px = enemy.x;
   enemy.py = enemy.y;
   enemy.hp = def.hp * hpScale;

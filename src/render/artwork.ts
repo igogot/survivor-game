@@ -37,6 +37,8 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
   grunt: 108, // green slime
   runner: 120, // bat
   brute: 110, // crab
+  splitter: 123, // mushroom: a fungus bursting into spores needs no explaining
+  spawnling: 124, // small round blob, the spore itself
   boss: 122, // spider
   bolt: 103, // dagger, rotated to face its travel
   orb: 118, // axe head, which reads as a blade when it circles

@@ -102,6 +102,33 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     polygon(ctx, size, 6, 2);
   },
 
+  // Two fused lobes, so it reads as something already made of parts before it
+  // is hit — the split should look inevitable rather than surprising.
+  splitter: (ctx, size) => {
+    const radius = size * 0.29;
+    ctx.fillStyle = WHITE;
+    ctx.beginPath();
+    ctx.arc(size * 0.36, size * 0.44, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(size * 0.64, size * 0.58, radius, 0, Math.PI * 2);
+    ctx.fill();
+  },
+
+  // A droplet: pointed at the top so a fragment never reads as a small grunt.
+  spawnling: (ctx, size) => {
+    const centre = size / 2;
+    const radius = size * 0.3;
+    const belly = centre + radius * 0.5;
+    ctx.fillStyle = WHITE;
+    ctx.beginPath();
+    ctx.moveTo(centre, 2);
+    ctx.lineTo(centre + radius, belly);
+    ctx.arc(centre, belly, radius, 0, Math.PI);
+    ctx.closePath();
+    ctx.fill();
+  },
+
   // Spiked, so it never reads as a scaled-up brute.
   boss: (ctx, size) => {
     const centre = size / 2;
@@ -174,6 +201,8 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'grunt', size: 64 },
   { name: 'runner', size: 64 },
   { name: 'brute', size: 64 },
+  { name: 'splitter', size: 64 },
+  { name: 'spawnling', size: 32 },
   { name: 'boss', size: 96 },
   { name: 'bolt', size: 32 },
   { name: 'orb', size: 32 },
