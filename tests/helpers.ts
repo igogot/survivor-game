@@ -17,7 +17,7 @@ export function runHeadless(seed: number, seconds: number): World {
   const ticks = Math.round(seconds * CONFIG.tickRate);
 
   for (let i = 0; i < ticks; i++) {
-    if (world.phase === 'dead' || world.phase === 'won') break;
+    if (world.phase === 'dead') break;
 
     if (world.phase === 'levelup') {
       // Always take the first offer; the point is to keep the run moving, not

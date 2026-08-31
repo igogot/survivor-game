@@ -72,15 +72,13 @@ describe('pauseRun', () => {
   });
 
   it('refuses to pause a finished run', () => {
-    for (const phase of ['dead', 'won'] as const) {
-      const world = new World(4);
-      world.phase = phase;
+    const world = new World(4);
+    world.phase = 'dead';
 
-      expect(canPause(world)).toBe(false);
-      pauseRun(world);
+    expect(canPause(world)).toBe(false);
+    pauseRun(world);
 
-      expect(world.phase).toBe(phase);
-    }
+    expect(world.phase).toBe('dead');
   });
 
   it('ignores a resume that was never paused', () => {

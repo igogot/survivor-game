@@ -167,7 +167,13 @@ export class PauseScreen {
   }
 }
 
-/** End-of-run screen, shown on death and on beating the boss. */
+/**
+ * End-of-run screen.
+ *
+ * There is one ending now, so the screen has one title. What varies is the line
+ * under it: a run that felled a boss ended differently from one that never got
+ * there, and the number itself is on the stat row either way.
+ */
 export class ResultScreen {
   private readonly root = requireElement('result');
   private readonly againButton = requireElement('result-again');
@@ -176,21 +182,20 @@ export class ResultScreen {
   private readonly time = requireElement('result-time');
   private readonly kills = requireElement('result-kills');
   private readonly level = requireElement('result-level');
+  private readonly bosses = requireElement('result-bosses');
 
   constructor(onRestart: () => void) {
     this.againButton.addEventListener('click', onRestart);
   }
 
   show(world: World): void {
-    const won = world.phase === 'won';
-    this.title.textContent = won ? 'Survived' : 'You Died';
-    this.subtitle.textContent = won
-      ? 'The horde is broken.'
-      : 'The horde does not stop. Try standing somewhere else.';
+    this.title.textContent = 'You Died';
+    this.subtitle.textContent = resultSubtitle(world.bossesKilled);
 
     this.time.textContent = formatTime(world.time);
     this.kills.textContent = String(world.kills);
     this.level.textContent = String(world.player.level);
+    this.bosses.textContent = String(world.bossesKilled);
 
     this.root.hidden = false;
   }
@@ -198,4 +203,16 @@ export class ResultScreen {
   hide(): void {
     this.root.hidden = true;
   }
+}
+
+/**
+ * The one line that still reports how the run went.
+ *
+ * Exported and free of the DOM so the wording is testable in plain Node, the
+ * same split `describeOffer` uses.
+ */
+export function resultSubtitle(bossesKilled: number): string {
+  if (bossesKilled === 0) return 'The horde does not stop. Try standing somewhere else.';
+  if (bossesKilled === 1) return 'One boss down. The horde kept coming anyway.';
+  return `${bossesKilled} bosses down. The horde kept coming anyway.`;
 }

@@ -385,7 +385,7 @@
 
       #result-stats {
         display: grid;
-        grid-template-columns: repeat(3, minmax(90px, 1fr));
+        grid-template-columns: repeat(4, minmax(74px, 1fr));
         gap: 16px;
         margin: 8px 0 24px;
       }
@@ -649,7 +649,7 @@
         }
 
         #result-stats {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 8px;
         }
       }
@@ -700,6 +700,7 @@
       <div id="stats">
         <span id="stat-weapons">bolt</span>
         <span id="stat-kills">kills 0</span>
+        <span id="stat-bosses" hidden>bosses 0</span>
         <span id="stat-entities">enemies 0</span>
         <span id="stat-pool">pool 0</span>
         <span id="stat-fps">-- fps</span>
@@ -761,6 +762,7 @@
           <div><span class="value" id="result-time">00:00</span><span class="label">survived</span></div>
           <div><span class="value" id="result-kills">0</span><span class="label">kills</span></div>
           <div><span class="value" id="result-level">1</span><span class="label">level</span></div>
+          <div><span class="value" id="result-bosses">0</span><span class="label">bosses</span></div>
         </div>
         <p class="hint">Press <kbd>R</kbd> to run again</p>
         <div class="actions">

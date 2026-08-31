@@ -1,4 +1,4 @@
-import { UPGRADES } from '../data/upgrades';
+import { DESIGNED_UPGRADES, FALLBACK_UPGRADES, UPGRADES } from '../data/upgrades';
 import { grantWeapon } from './weapons';
 import type { UpgradeDef } from '../data/upgrades';
 import type { World } from '../world/world';
@@ -33,7 +33,9 @@ export function progressionSystem(world: World): void {
 
   const offers = rollUpgrades(world);
   if (offers.length === 0) {
-    // Everything is maxed — swallow the level instead of showing an empty menu.
+    // Unreachable while the tail has entries — it is uncapped, so there is
+    // always something to offer. Kept as the guard against an empty menu, not
+    // as a state the game is expected to reach.
     world.pendingLevels = 0;
     return;
   }
@@ -71,10 +73,22 @@ export function isOfferable(world: World, upgrade: UpgradeDef): boolean {
  */
 export const OFFERS_PER_LEVEL = 4;
 
-/** Picks up to `count` distinct upgrades that can actually affect this run. */
+/**
+ * Picks up to `count` distinct upgrades that can actually affect this run.
+ *
+ * The designed pool is drawn first and alone. Only when it can no longer fill
+ * the menu is the uncapped tail shuffled in, and that second shuffle is the
+ * only extra draw from the run's PRNG — so a run that never spends all fifty
+ * designed stacks produces byte-identical offers to one rolled before the tail
+ * existed. That is what keeps the balance table in the README comparable.
+ */
 export function rollUpgrades(world: World, count = OFFERS_PER_LEVEL): UpgradeDef[] {
-  const available = UPGRADES.filter((upgrade) => isOfferable(world, upgrade));
-  return world.rng.shuffled(available).slice(0, count);
+  const available = DESIGNED_UPGRADES.filter((upgrade) => isOfferable(world, upgrade));
+  const offers = world.rng.shuffled(available).slice(0, count);
+  if (offers.length >= count) return offers;
+
+  const spare = FALLBACK_UPGRADES.filter((upgrade) => isOfferable(world, upgrade));
+  return offers.concat(world.rng.shuffled(spare).slice(0, count - offers.length));
 }
 
 /**

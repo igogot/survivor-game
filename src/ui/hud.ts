@@ -29,6 +29,7 @@ export class Hud {
   private readonly timer = requireElement('timer');
   private readonly weapons = requireElement('stat-weapons');
   private readonly kills = requireElement('stat-kills');
+  private readonly bosses = requireElement('stat-bosses');
   private readonly entities = requireElement('stat-entities');
   private readonly pool = requireElement('stat-pool');
   private readonly fps = requireElement('stat-fps');
@@ -57,9 +58,15 @@ export class Hud {
     this.updateHealth(player, Math.min(elapsed, 0.1));
     this.xpFill.style.width = `${percent(player.xp, player.xpToNext)}%`;
 
-    this.timer.textContent = formatTime(Math.min(world.time, CONFIG.runDuration));
+    // Unclamped: the run has no end for it to stop at.
+    this.timer.textContent = formatTime(world.time);
     this.weapons.textContent = describeWeapons(world);
     this.kills.textContent = `kills ${world.kills}`;
+
+    // Hidden until there is one, otherwise it is a zero the player carries for
+    // the first ten minutes of every run.
+    this.bosses.textContent = `bosses ${world.bossesKilled}`;
+    this.bosses.hidden = world.bossesKilled === 0;
     this.entities.textContent = `enemies ${world.enemies.length}`;
 
     // Surfaced deliberately: `allocated` should plateau while the game keeps
@@ -107,7 +114,7 @@ export class Hud {
 
     // The lull before the boss is silent otherwise: enemies simply stop
     // arriving, which reads as the game breaking rather than as a warning.
-    const lullStart = CONFIG.runDuration - CONFIG.spawn.bossLull;
+    const lullStart = world.nextBossAt - CONFIG.boss.lull;
     this.warning.hidden = !(
       world.phase === 'playing' &&
       !world.bossSpawned &&
