@@ -38,6 +38,7 @@ const candidates: number[] = [];
 const PREFERENCE = [
   'nova',
   'orbit',
+  'spear',
   'damage',
   'haste',
   // Rate before reach, and both before the remaining stats: a weapon-specific
@@ -45,12 +46,16 @@ const PREFERENCE = [
   // and the blades for its kills. Leaving these at the bottom of the list, as
   // they were when they had no rate line to compete with, measured a player who
   // never takes them while they still crowd every roll — the worst reading of
-  // the pool rather than the honest one.
+  // the pool rather than the honest one. The spear's two lines sit beside
+  // their opposite numbers for the same reason: a weapon the bot is offered and
+  // never takes is a weapon this stand cannot measure, only pay for.
   'nova-cadence',
   'orbit-spin',
+  'spear-cadence',
   'multishot',
   'nova-blast',
   'orbit-reach',
+  'spear-haft',
   'vitality',
   'pierce',
   'magnet',

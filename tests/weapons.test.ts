@@ -5,9 +5,12 @@ import { UPGRADES } from '../src/data/upgrades';
 import {
   NOVA,
   ORBIT,
+  SPEAR,
   orbitDistance,
   orbitRadius,
   orbitSpin,
+  spearLength,
+  spearThickness,
   weaponCooldown,
   weaponDamage,
 } from '../src/data/weapons';
@@ -281,6 +284,114 @@ describe('effectSystem', () => {
  * bought only reach. Reach covers more ground but kills nothing faster, so a
  * weapon with reach alone stops scaling exactly when the horde stops thinning.
  */
+describe('lunge spear', () => {
+  /**
+   * The lance points at the nearest body, not at the player's heading. An
+   * earlier version read the heading, which pointed the weapon at empty space
+   * for anyone kiting; this pins the rule the balance stand paid for.
+   */
+  it('points the lance at the nearest enemy, not along the heading', () => {
+    const world = new World(7);
+    grantWeapon(world, 'spear');
+    world.headingX = 1;
+    world.headingY = 0;
+
+    const ahead = placeEnemy(world, 100, 0);
+    const behind = placeEnemy(world, -40, 0);
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(behind.hp).toBeLessThan(DUMMY_HP);
+    expect(ahead.hp).toBe(DUMMY_HP);
+  });
+
+  /**
+   * Piercing is the shape of this weapon rather than a stat it buys: the lance
+   * is one damage event, so a queue costs one thrust and nobody in it is hit
+   * twice for standing where two parts of the line overlap.
+   */
+  it('skewers a queue, hitting each enemy exactly once', () => {
+    const world = new World(8);
+    grantWeapon(world, 'spear');
+
+    const state = weaponState(world, 'spear');
+    const damage = weaponDamage(SPEAR, state) * world.player.stats.damageMul;
+    const queue = [30, 60, 90, 120].map((x) => placeEnemy(world, x, 0));
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    for (const enemy of queue) {
+      expect(enemy.hp).toBeCloseTo(DUMMY_HP - damage);
+    }
+  });
+
+  /**
+   * The projection onto the line is clamped to its ends, so the tip is a tip.
+   * Without the clamp an enemy anywhere along the infinite line would be in
+   * reach, and the reach upgrade would buy nothing.
+   */
+  it('stops at the tip', () => {
+    const world = new World(9);
+    grantWeapon(world, 'spear');
+
+    const state = weaponState(world, 'spear');
+    const reach = spearLength(SPEAR, state) + spearThickness(SPEAR, state) + ENEMY_RADIUS;
+    // Something has to be in reach for the thrust to happen at all; this one
+    // also fixes the direction the tip is measured along.
+    placeEnemy(world, 20, 0);
+    const inside = placeEnemy(world, reach - 2, 0);
+    const outside = placeEnemy(world, reach + 2, 0);
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(inside.hp).toBeLessThan(DUMMY_HP);
+    expect(outside.hp).toBe(DUMMY_HP);
+  });
+
+  /**
+   * A thrust into nobody is not spent. The slowest weapon in the game would
+   * otherwise burn its whole cooldown on empty ground and be on cooldown at
+   * the exact moment the wave arrives.
+   */
+  it('holds the thrust while nothing is in reach', () => {
+    const world = new World(10);
+    grantWeapon(world, 'spear');
+
+    const state = weaponState(world, 'spear');
+    rebuildGrid(world);
+
+    for (let tick = 0; tick < 30; tick++) weaponSystem(world, DT);
+    expect(state.cooldown).toBeLessThanOrEqual(0);
+    expect(state.swing).toBe(0);
+
+    const arrival = placeEnemy(world, 40, 0);
+    rebuildGrid(world);
+    weaponSystem(world, DT);
+
+    expect(arrival.hp).toBeLessThan(DUMMY_HP);
+  });
+
+  /** The lance is what the renderer draws; a thrust that shows nothing is a bug. */
+  it('flags a thrust for the renderer and lets it expire', () => {
+    const world = new World(11);
+    grantWeapon(world, 'spear');
+    placeEnemy(world, 40, 0);
+    rebuildGrid(world);
+
+    const state = weaponState(world, 'spear');
+    weaponSystem(world, DT);
+    expect(state.swing).toBe(SPEAR.swingTime);
+
+    for (let tick = 0; tick < Math.ceil(SPEAR.swingTime / DT) + 1; tick++) {
+      weaponSystem(world, DT);
+    }
+    expect(state.swing).toBe(0);
+  });
+});
+
 describe('rate upgrades', () => {
   it('turns the blade ring faster and cuts more often', () => {
     const world = new World(30);

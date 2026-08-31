@@ -3,7 +3,14 @@ import type { Texture } from 'pixi.js';
 import { CONFIG } from '../config';
 import { TAU, lerp } from '../core/math';
 import { viewToWorld } from '../core/steering';
-import { orbitCount, orbitDistance, orbitRadius, weaponById } from '../data/weapons';
+import {
+  orbitCount,
+  orbitDistance,
+  orbitRadius,
+  spearLength,
+  spearThickness,
+  weaponById,
+} from '../data/weapons';
 import { FLASH_TIME } from '../systems/damage';
 import { GRID_TEXTURE_SIZE, createTextures } from './textures';
 import type { TextureSet } from './textures';
@@ -49,6 +56,7 @@ export class GameRenderer {
   private readonly flashLayer = new Container();
   private readonly effectLayer = new Container();
   private readonly orbLayer = new Container();
+  private readonly spearLayer = new Container();
   private readonly projectileLayer = new Container();
 
   private playerSprite!: Sprite;
@@ -59,6 +67,7 @@ export class GameRenderer {
   private readonly gemSprites: Sprite[] = [];
   private readonly effectSprites: Sprite[] = [];
   private readonly orbSprites: Sprite[] = [];
+  private readonly spearSprites: Sprite[] = [];
 
   async init(host: HTMLElement): Promise<void> {
     await this.app.init({
@@ -112,6 +121,7 @@ export class GameRenderer {
       this.effectLayer,
       this.playerSprite,
       this.orbLayer,
+      this.spearLayer,
       this.projectileLayer,
     );
     this.app.stage.addChild(this.background, this.camera);
@@ -152,6 +162,7 @@ export class GameRenderer {
     this.drawGems(world, alpha);
     this.drawEffects(world, alpha);
     this.drawOrbs(world, playerX, playerY, alpha);
+    this.drawSpears(world, playerX, playerY);
 
     this.app.renderer.render(this.app.stage);
   }
@@ -360,6 +371,60 @@ export class GameRenderer {
         sprite.rotation = a;
         sprite.tint = this.variantTint(def.color);
       }
+    }
+  }
+
+  /**
+   * The lance, drawn from the same two numbers the thrust used.
+   *
+   * Like the blades it has no entity behind it: `angle` is where the damage
+   * went and `swing` is how much of the flash is left, so the lance cannot be
+   * drawn anywhere other than where it hit. Only weapons mid-thrust take a
+   * sprite, which is why the pool stays at one per spear rather than one per
+   * frame of animation.
+   */
+  private drawSpears(world: World, playerX: number, playerY: number): void {
+    const weapons = world.weapons;
+
+    let needed = 0;
+    for (let i = 0; i < weapons.length; i++) {
+      const def = weaponById(weapons[i].defId);
+      if (def === undefined || def.kind !== 'spear') continue;
+      if (weapons[i].swing > 0) needed++;
+    }
+
+    this.resize(this.spearSprites, this.spearLayer, needed, this.textures.sprites.spear);
+
+    let next = 0;
+    for (let i = 0; i < weapons.length; i++) {
+      const state = weapons[i];
+      const def = weaponById(state.defId);
+      if (def === undefined || def.kind !== 'spear' || state.swing <= 0) continue;
+
+      const length = spearLength(def, state);
+      const thickness = spearThickness(def, state);
+      const dx = Math.cos(state.angle);
+      const dy = Math.sin(state.angle);
+      const sprite = this.spearSprites[next++];
+
+      // Anchored in the middle like every other sprite, so the lance is placed
+      // at the midpoint of the line the damage swept.
+      sprite.position.set(playerX + (dx * length) / 2, playerY + (dy * length) / 2);
+      sprite.rotation = state.angle;
+      // Not `fit`: this is the one frame that is not scaled uniformly — it has
+      // to be exactly as long and as wide as the thrust that landed.
+      sprite.scale.set(
+        length / sprite.texture.width,
+        (thickness * 2) / sprite.texture.height,
+      );
+      // Not `variantTint`: that leaves artwork alone because artwork carries its
+      // own colour, and the lance has none — it is a drawn mask whichever
+      // texture set loaded, so it is always the one that has to be tinted. The
+      // shockwave ring is the same case and does the same thing.
+      sprite.tint = def.color;
+      // Fades over the thrust rather than blinking out, so a fast spear reads
+      // as a rhythm instead of a strobe.
+      sprite.alpha = state.swing / def.swingTime;
     }
   }
 

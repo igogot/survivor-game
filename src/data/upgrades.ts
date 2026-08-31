@@ -213,6 +213,43 @@ export const UPGRADES: readonly UpgradeDef[] = [
   },
 
   /*
+   * The spear, and the two lines that pull it in opposite directions: one buys
+   * a longer line, the other more thrusts along it. Appended for the same
+   * reason as the pair above — `rollUpgrades` shuffles this array, so inserting
+   * anywhere but the end changes the offers every seed produces.
+   */
+  {
+    kind: 'weapon',
+    id: 'spear',
+    weaponId: 'spear',
+    name: 'Lunge Spear',
+    description: 'Lunges at the nearest enemy and skewers everyone behind them. +reach and damage per level',
+    maxStacks: 4,
+  },
+  {
+    kind: 'weaponMod',
+    id: 'spear-haft',
+    weaponId: 'spear',
+    name: 'Long Haft',
+    description: 'Lunge Spear reaches further and sweeps wider',
+    maxStacks: 3,
+    apply: (weapon) => {
+      weapon.areaMul += 0.2;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'spear-cadence',
+    weaponId: 'spear',
+    name: 'Quick Thrust',
+    description: 'Lunge Spear thrusts more often',
+    maxStacks: 3,
+    apply: (weapon) => {
+      weapon.attackSpeedMul += 0.4;
+    },
+  },
+
+  /*
    * The tail: what a level is worth once everything above it is bought.
    *
    * Uncapped, and deliberately weaker per pick than the designed upgrades they
@@ -293,6 +330,18 @@ export const UPGRADES: readonly UpgradeDef[] = [
     weaponId: 'nova',
     name: 'Deeper Thunder',
     description: '+15% Shockwave damage',
+    maxStacks: Infinity,
+    fallback: true,
+    apply: (weapon) => {
+      weapon.damageMul += 0.15;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'spear-point',
+    weaponId: 'spear',
+    name: 'Honed Point',
+    description: '+15% Lunge Spear damage',
     maxStacks: Infinity,
     fallback: true,
     apply: (weapon) => {
