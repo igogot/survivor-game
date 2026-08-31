@@ -85,14 +85,20 @@ function theDeal(): HelpSection {
       },
       {
         kind: 'note',
-        term: 'Waiting does not work',
-        detail: `Enemies arrive faster and tougher every minute and never stop coming. At ${formatTime(CONFIG.runDuration)} the horde breaks off and the boss arrives.`,
+        term: 'There is no finish line',
+        detail: `The run has no length. Enemies arrive faster and tougher every minute, a boss lands each time the clock runs another ${formatTime(CONFIG.boss.interval)}, and felling one only buys you until the next. The only ending is yours.`,
       },
       {
         kind: 'note',
         term: 'One life',
         detail:
           'Nothing heals you except a Vitality card, and that only pays back the health it adds. Damage taken is gone for the rest of the run.',
+      },
+      {
+        kind: 'note',
+        term: 'The score is how long',
+        detail:
+          'Time survived and bosses felled. Both come from the same thing — staying alive — so there is nothing to trade one for.',
       },
     ],
   };
@@ -212,7 +218,7 @@ function dangers(): HelpSection {
       {
         kind: 'note',
         term: 'The boss',
-        detail: `It arrives with ${BOSS.hp} health and hits for ${BOSS.damage}. Nothing else spawns while it lives — fell it and the run is won.`,
+        detail: `The first arrives with ${BOSS.hp} health and hits for ${BOSS.damage}, and every one after it is tougher than the last. The horde stops for the duel — but only for ${CONFIG.boss.duelGrace} seconds, so a boss you cannot finish is one you fight in traffic.`,
       },
       {
         kind: 'note',

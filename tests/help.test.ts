@@ -60,9 +60,17 @@ describe('help content', () => {
     );
   });
 
-  it('quotes the run length the simulation actually uses', () => {
-    const minutes = Math.floor(CONFIG.runDuration / 60);
+  it('quotes the boss cadence the simulation actually uses', () => {
+    const minutes = Math.floor(CONFIG.boss.interval / 60);
     expect(detailsText()).toContain(`${minutes}:00`);
+  });
+
+  /**
+   * The run stopped having an end when bosses became a cycle. A panel still
+   * promising a finish line is the exact drift these tests exist to catch.
+   */
+  it('does not promise a run that can be won', () => {
+    expect(detailsText().toLowerCase()).not.toContain('the run is won');
   });
 
   it("quotes the boss's real numbers", () => {
