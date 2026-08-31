@@ -6,7 +6,7 @@ import { TouchInput } from './core/touch-input';
 import { GameRenderer } from './render/renderer';
 import { applyUpgrade } from './systems/progression';
 import { Hud } from './ui/hud';
-import { PauseScreen, ResultScreen, UpgradeMenu } from './ui/menus';
+import { PauseScreen, ResultScreen, StartScreen, UpgradeMenu, mountHelp } from './ui/menus';
 import { StickView } from './ui/stick';
 import { canPause, pauseRun, resumeRun } from './world/pause';
 import { stepWorld } from './world/step';
@@ -33,13 +33,41 @@ async function main(): Promise<void> {
   const resultScreen = new ResultScreen(restart);
   const pauseScreen = new PauseScreen(resumeGame, restart);
   const upgradeMenu = new UpgradeMenu(pickUpgrade);
+  const startScreen = new StartScreen(beginRun);
+
+  // One source of rules, printed into the briefing, the pause screen and the
+  // result screen. Rendered once at boot: the text never changes within a
+  // session, and rebuilding it on every pause would be work for nothing.
+  mountHelp(['help-start', 'help-pause', 'help-result']);
 
   const pauseButton = document.getElementById('pause-button');
   pauseButton?.addEventListener('click', togglePause);
 
+  /**
+   * Whether a machine is driving this page.
+   *
+   * The same dev flag that unwires auto-pause also skips the briefing: both
+   * exist because a harness has no eyes to read with and no hand to dismiss a
+   * screen. A player cannot reach it — the flag is inert outside a dev build.
+   */
+  const unattended = autoPauseDisabled(window.location.search, import.meta.env.DEV);
+
   // Reassigned on restart, so every closure below reads the binding rather than
   // capturing one instance.
   let world = newWorld();
+
+  /**
+   * Whether the briefing is still up.
+   *
+   * The run is genuinely paused behind it, which means `syncOverlays` would
+   * otherwise show the pause screen — the two states are the same to the
+   * simulation and different to the player. This flag is what tells them apart,
+   * and it is cleared for good on the first start: someone who has already read
+   * the rules and pressed Restart wants the next run, not the briefing again.
+   */
+  let briefing = !unattended;
+  if (briefing) pauseRun(world);
+  syncOverlays();
 
   const loop = new GameLoop(CONFIG.tickRate, CONFIG.maxFrameTime, tick, draw);
   loop.start();
@@ -52,7 +80,7 @@ async function main(): Promise<void> {
   // is never focused or visible, so these two would fire continuously and the
   // run could never advance. `?nopause` is dev-only, so nothing a player runs
   // can take this branch.
-  if (!autoPauseDisabled(window.location.search, import.meta.env.DEV)) {
+  if (!unattended) {
     window.addEventListener('blur', autoPause);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) autoPause();
@@ -83,6 +111,20 @@ async function main(): Promise<void> {
     const phase = world.phase;
 
     if (phase === 'paused') {
+      if (briefing) {
+        // Any of the three keys a player reaches for on a title screen. Move
+        // keys are deliberately not among them: the first thing a hand does
+        // here is settle onto WASD.
+        if (
+          input.consumePressed('Space') ||
+          input.consumePressed('Enter') ||
+          input.consumePressed('NumpadEnter')
+        ) {
+          beginRun();
+        }
+        return;
+      }
+
       if (pausePressed()) {
         resumeGame();
         return;
@@ -144,6 +186,11 @@ async function main(): Promise<void> {
   }
 
   function togglePause(): void {
+    // The briefing is paused too, and this button would lift that pause while
+    // leaving the panel up — a run advancing behind a screen that says it has
+    // not started. Its own button is the only way out of it.
+    if (briefing) return;
+
     if (world.phase === 'paused') {
       resumeGame();
       return;
@@ -159,6 +206,20 @@ async function main(): Promise<void> {
     // and the world must not resume still holding its last direction.
     touch.reset();
     syncOverlays();
+  }
+
+  /**
+   * Leaves the briefing for the first time.
+   *
+   * Goes through `resumeGame` rather than setting the phase itself, so the
+   * accumulator resync and the pressed-key clear that every other unpause
+   * performs happen here too — the key that dismissed this screen must not also
+   * be read by the run it starts.
+   */
+  function beginRun(): void {
+    if (!briefing) return;
+    briefing = false;
+    resumeGame();
   }
 
   function resumeGame(): void {
@@ -188,7 +249,13 @@ async function main(): Promise<void> {
 
   /** Single source of truth for which overlay is visible. */
   function syncOverlays(): void {
-    if (world.phase === 'paused') {
+    if (world.phase === 'paused' && briefing) {
+      startScreen.show();
+    } else {
+      startScreen.hide();
+    }
+
+    if (world.phase === 'paused' && !briefing) {
       pauseScreen.show();
     } else {
       pauseScreen.hide();

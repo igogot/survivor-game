@@ -67,7 +67,11 @@ export function isOfferable(world: World, upgrade: UpgradeDef): boolean {
  * card restores roughly the odds three gave out of nine, and it is worth a win
  * in eight on the table in the README.
  */
-const OFFERS_PER_LEVEL = 4;
+/*
+ * Exported because the help panel prints the keys that take each card. A hint
+ * reading "press 1 2 3" over four cards is worse than no hint at all.
+ */
+export const OFFERS_PER_LEVEL = 4;
 
 /**
  * Picks up to `count` distinct upgrades that can actually affect this run.

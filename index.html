@@ -414,6 +414,13 @@
         margin-top: 22px;
       }
 
+      /* On the briefing the button comes before the rules rather than after
+         them: a start button under five sections of text is a start button the
+         player has to go looking for. */
+      .actions--first {
+        margin-top: 4px;
+      }
+
       .action {
         pointer-events: auto;
         padding: 10px 20px;
@@ -447,6 +454,93 @@
       .hint {
         color: var(--muted);
         font-size: 12px;
+      }
+
+      /* A panel carrying the rules is tall enough to overflow a laptop in
+         landscape, so it scrolls itself rather than the page — the body is
+         `overscroll-behavior: none` and cannot. */
+      .panel--help {
+        max-height: min(92vh, 92dvh);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+        text-align: left;
+      }
+
+      .panel--help > h2,
+      .panel--help > .sub,
+      .panel--help > .actions,
+      .panel--help > .hint,
+      .panel--help > #result-stats {
+        text-align: center;
+      }
+
+      /* Two columns where there is room. The sections are short and reading
+         five stacked ones on a wide screen is mostly scrolling. */
+      .help {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 8px 24px;
+        margin-top: 22px;
+        border-top: 1px solid var(--border);
+        padding-top: 18px;
+        text-align: left;
+      }
+
+      .help-section {
+        break-inside: avoid;
+      }
+
+      .help-section h3 {
+        margin: 10px 0 8px;
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      .help dl {
+        margin: 0;
+      }
+
+      .help dt {
+        margin-top: 9px;
+        font-size: 12px;
+        color: var(--text);
+      }
+
+      /* Keycaps sit in a row with room to breathe; a bare gesture reads as a
+         label instead. */
+      .help dt kbd + kbd {
+        margin-left: 4px;
+      }
+
+      .help dt.help-gesture {
+        color: var(--accent);
+      }
+
+      .help dd {
+        margin: 3px 0 0;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      /* Rows that only make sense with a keyboard. The mirror of `touch-only`:
+         a coarse pointer hides them and shows the gesture rows instead. */
+      .keys-only {
+        display: revert;
+      }
+
+      @media (pointer: coarse) {
+        .keys-only {
+          display: none;
+        }
+      }
+
+      .action--go {
+        border-color: var(--accent);
+        color: var(--accent);
       }
 
       /* The thumb stick. Drawn where the finger landed, so it has no place of
@@ -488,6 +582,13 @@
       @media (pointer: coarse) {
         .touch-only {
           display: inline-flex;
+        }
+
+        /* The rule above is shaped for the pause button. Inside the help panel
+           the same class marks rows of a definition list, and a flex `dt` would
+           collapse the layout it sits in. */
+        .help .touch-only {
+          display: revert;
         }
       }
 
@@ -625,8 +726,22 @@
       </div>
     </div>
 
+    <!-- Shown once, before the first run. The button is the only way out, so a
+         player who lands here cannot be killed while reading. -->
+    <div class="overlay" id="start" hidden>
+      <div class="panel panel--help">
+        <h2>Survivor</h2>
+        <p class="sub">One life, no finish line. Read this once.</p>
+        <div class="actions actions--first">
+          <button class="action action--go" id="start-play" type="button">Start the run</button>
+        </div>
+        <p class="hint keys-only">or press <kbd>Space</kbd></p>
+        <div class="help" id="help-start"></div>
+      </div>
+    </div>
+
     <div class="overlay" id="pause" hidden>
-      <div class="panel">
+      <div class="panel panel--help">
         <h2>Paused</h2>
         <p class="sub">
           <kbd>Esc</kbd> or <kbd>P</kbd> to resume &middot; <kbd>R</kbd> to restart
@@ -635,11 +750,12 @@
           <button class="action" id="pause-resume" type="button">Resume</button>
           <button class="action" id="pause-restart" type="button">Restart run</button>
         </div>
+        <div class="help" id="help-pause"></div>
       </div>
     </div>
 
     <div class="overlay" id="result" hidden>
-      <div class="panel">
+      <div class="panel panel--help">
         <h2 id="result-title">Run Over</h2>
         <p class="sub" id="result-sub"></p>
         <div id="result-stats">
@@ -652,6 +768,7 @@
         <div class="actions">
           <button class="action" id="result-again" type="button">Run again</button>
         </div>
+        <div class="help" id="help-result"></div>
       </div>
     </div>
 
