@@ -6,6 +6,17 @@ import type { SpriteName } from '../data/sprites';
  * stays smooth even though the simulation only advances 60 times per second.
  */
 
+/**
+ * A place on the ground the player was told to walk to, in world units.
+ *
+ * Not an entity: it has no size, nothing collides with it and it never moves.
+ * It is one standing instruction, and the tick that fulfils it drops it.
+ */
+export interface MoveTarget {
+  x: number;
+  y: number;
+}
+
 export interface PlayerStats {
   maxHp: number;
   moveSpeed: number;

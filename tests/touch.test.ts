@@ -6,7 +6,7 @@ import { TouchInput } from '../src/core/touch-input';
  * The stick is DOM-free for the same reason the simulation is: what it does is
  * arithmetic, and arithmetic can be checked without a phone in hand. An
  * `EventTarget` is all `TouchInput` needs — it only adds listeners and reads
- * `pointerId` and the client coordinates off the event.
+ * `pointerId`, `button` and the client coordinates off the event.
  */
 const surface = new EventTarget();
 let touch: TouchInput;
@@ -17,9 +17,17 @@ beforeEach(() => {
   touch.attach(surface);
 });
 
-function pointer(type: string, x: number, y: number, id = 1): void {
-  const event = new Event(type) as Event & { pointerId: number; clientX: number; clientY: number };
+function pointer(type: string, x: number, y: number, id = 1, button = 0): void {
+  const event = new Event(type) as Event & {
+    pointerId: number;
+    button: number;
+    clientX: number;
+    clientY: number;
+  };
   event.pointerId = id;
+  // A finger and a pen both report the primary button; only a mouse reports
+  // anything else, and the stick is not what a right-click is for.
+  event.button = button;
   event.clientX = x;
   event.clientY = y;
   surface.dispatchEvent(event);
@@ -97,6 +105,16 @@ describe('TouchInput', () => {
     expect(touch.origin).toEqual({ x: 100, y: 100 });
     expect(touch.y).toBeCloseTo(1);
     expect(touch.x).toBeCloseTo(0);
+  });
+
+  /** The right button orders a walk; grabbing the stick too would fight it. */
+  it('leaves the right mouse button alone', () => {
+    pointer('pointerdown', 100, 100, 1, 2);
+    pointer('pointermove', 100 + STICK_RADIUS, 100, 1);
+
+    expect(touch.active).toBe(false);
+    expect(touch.x).toBe(0);
+    expect(touch.y).toBe(0);
   });
 
   it('keeps steering when the other finger lifts', () => {
