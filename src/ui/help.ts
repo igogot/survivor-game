@@ -117,6 +117,14 @@ function controls(): HelpSection {
       {
         kind: 'keys',
         keys: [],
+        gesture: 'Right-click',
+        detail:
+          'Walk to that spot and stop there. Touching a movement key takes the wheel back at once, so an order can never carry you somewhere you did not want to go.',
+        audience: 'keys',
+      },
+      {
+        kind: 'keys',
+        keys: [],
         gesture: 'Drag anywhere',
         detail:
           'A stick appears under your thumb wherever it lands. How far you push it is how fast you go, so a small push is a slow, precise step.',

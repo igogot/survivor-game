@@ -5,7 +5,7 @@ import { SpatialGrid } from './grid';
 import { STARTER_WEAPON_ID, createWeaponState } from '../data/weapons';
 import { xpForLevel } from '../systems/progression';
 import type { UpgradeDef } from '../data/upgrades';
-import type { Effect, Enemy, Gem, Player, Projectile, WeaponState } from './types';
+import type { Effect, Enemy, Gem, MoveTarget, Player, Projectile, WeaponState } from './types';
 
 export type Phase = 'playing' | 'levelup' | 'paused' | 'dead';
 
@@ -52,6 +52,16 @@ export class World {
   /** Movement intent for this tick, written by the input layer or a test. */
   intentX = 0;
   intentY = 0;
+
+  /**
+   * Where a click told the player to walk, or null when nobody has ordered one.
+   *
+   * Kept beside the intent rather than folded into it because the two answer
+   * different questions: the intent is this tick, the order outlives it. The
+   * steering system turns one into the other, and a hand on the keys cancels
+   * it — see `steeringSystem`.
+   */
+  moveTarget: MoveTarget | null = null;
 
   /**
    * Smoothed movement direction. The spawner reads it to put enemies in the

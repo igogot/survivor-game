@@ -74,6 +74,9 @@ export class TouchInput {
   private onPointerDown = (event: Event): void => {
     const pointer = event as PointerEvent;
     if (this.pointerId !== null) return;
+    // The right button gives a move order instead — see `ClickInput`. A finger
+    // and a pen both report button 0, so nothing but a mouse takes this branch.
+    if (pointer.button !== 0) return;
 
     this.pointerId = pointer.pointerId;
     this.originX = pointer.clientX;
