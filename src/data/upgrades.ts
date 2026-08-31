@@ -69,7 +69,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     id: 'orbit',
     weaponId: 'orbit',
     name: 'Orbit Blades',
-    description: 'Blades circle you and cut what they touch. +1 blade per level',
+    description: 'A guard ring at arm’s length, cutting whatever reaches you. +1 blade per level',
     maxStacks: 4,
   },
   {
@@ -137,7 +137,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     id: 'orbit-reach',
     weaponId: 'orbit',
     name: 'Long Reach',
-    description: 'Orbit Blades swing wider, and the blades grow with the ring',
+    description: 'Orbit Blades grow, thickening the guard instead of pushing it away',
     maxStacks: 3,
     apply: (weapon) => {
       weapon.areaMul += 0.18;
