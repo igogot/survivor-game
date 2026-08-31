@@ -26,6 +26,14 @@ export interface PlayerStats {
 }
 
 export interface Player {
+  /**
+   * Which figure the player is, decided by the weapon the run opened with.
+   *
+   * On the entity like an enemy's, so the renderer stays a pure read of world
+   * state and a run that started as a wizard is still a wizard after a
+   * restart, a pause or a reload.
+   */
+  sprite: SpriteName;
   x: number;
   y: number;
   px: number;

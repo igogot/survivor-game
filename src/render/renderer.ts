@@ -7,6 +7,7 @@ import { orbitCount, orbitDistance, orbitRadius, weaponById } from '../data/weap
 import { FLASH_TIME } from '../systems/damage';
 import { GRID_TEXTURE_SIZE, createTextures } from './textures';
 import type { TextureSet } from './textures';
+import type { SpriteName } from '../data/sprites';
 import type { MoveTarget } from '../world/types';
 import type { World } from '../world/world';
 
@@ -81,11 +82,13 @@ export class GameRenderer {
       height: this.app.screen.height,
     });
 
-    this.playerSprite = new Sprite(this.textures.sprites.player);
+    // The frame is chosen per draw from the world, because which figure the
+    // player is depends on the weapon the run opened with and a restart can
+    // change it.
+    this.playerSprite = new Sprite(this.textures.sprites.playerBolt);
     this.playerSprite.anchor.set(0.5);
     // Artwork carries its own colour; only the white shapes need tinting into it.
     this.playerSprite.tint = this.variantTint(0x6ee7a0);
-    fit(this.playerSprite, CONFIG.player.radius * 2);
 
     this.markerSprite = new Sprite(this.textures.sprites.ring);
     this.markerSprite.anchor.set(0.5);
@@ -133,6 +136,8 @@ export class GameRenderer {
     // background one draw call regardless of how far the player has travelled.
     this.background.tilePosition.set(cameraX % GRID_TEXTURE_SIZE, cameraY % GRID_TEXTURE_SIZE);
 
+    this.playerSprite.texture = this.textures.sprites[world.player.sprite];
+    fit(this.playerSprite, CONFIG.player.radius * 2);
     this.playerSprite.position.set(playerX, playerY);
     this.playerSprite.alpha = world.player.invuln > 0 ? 0.45 : 1;
 
@@ -150,6 +155,16 @@ export class GameRenderer {
 
     this.app.renderer.render(this.app.stage);
   }
+
+  /**
+   * Draws one sprite onto a canvas, for interface outside the scene graph.
+   *
+   * A bound method, so the weapon picker can be handed this one capability
+   * instead of the whole renderer.
+   */
+  paintSprite = (name: SpriteName, canvas: HTMLCanvasElement): void => {
+    this.textures.paint(name, canvas);
+  };
 
   /**
    * Turns a viewport position — a mouse event's client coordinates — into world

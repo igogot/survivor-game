@@ -1,3 +1,4 @@
+import type { SpriteName } from './sprites';
 import type { WeaponState } from '../world/types';
 
 /**
@@ -17,9 +18,17 @@ interface WeaponBase {
   readonly damage: number;
   readonly damagePerLevel: number;
   readonly color: number;
+  /**
+   * The player's silhouette when a run opens with this weapon.
+   *
+   * On the definition rather than in a table beside it, for the same reason an
+   * enemy carries its own sprite name: the picker, the world and the atlas all
+   * have to agree about it, and a separate lookup is how they would stop.
+   */
+  readonly playerSprite: SpriteName;
 }
 
-/** Auto-aimed shots at the nearest enemy. The weapon every run starts with. */
+/** Auto-aimed shots at the nearest enemy. The weapon a run opens with by default. */
 export interface BoltWeaponDef extends WeaponBase {
   readonly kind: 'bolt';
   readonly projectileSpeed: number;
@@ -92,6 +101,7 @@ export const BOLT: BoltWeaponDef = {
   kind: 'bolt',
   id: 'bolt',
   name: 'Auto Bolt',
+  playerSprite: 'playerBolt',
   cooldown: 0.55,
   damage: 8,
   damagePerLevel: 0,
@@ -107,6 +117,7 @@ export const ORBIT: OrbitWeaponDef = {
   kind: 'orbit',
   id: 'orbit',
   name: 'Orbit Blades',
+  playerSprite: 'playerOrbit',
   cooldown: 0.22,
   damage: 10,
   damagePerLevel: 3,
@@ -123,6 +134,7 @@ export const NOVA: NovaWeaponDef = {
   kind: 'nova',
   id: 'nova',
   name: 'Shockwave',
+  playerSprite: 'playerNova',
   cooldown: 2.2,
   damage: 14,
   damagePerLevel: 7,
@@ -141,7 +153,27 @@ export function weaponById(id: string): WeaponDef | undefined {
   return BY_ID.get(id);
 }
 
+/**
+ * What a run opens with when nobody chose — a headless run, a harness, a test.
+ *
+ * The bolt, because it is the only weapon that reaches across the screen and
+ * so the only one that can be played badly and still teach the game.
+ */
 export const STARTER_WEAPON_ID = BOLT.id;
+
+/**
+ * The weapon a run should open with, given whatever the caller was told.
+ *
+ * Takes anything and answers with a real definition. The id reaches the world
+ * from a picker built out of `WEAPONS`, so it is always valid — but a saved
+ * link, a typo in a query string or a weapon deleted between releases must
+ * open a run with the starter rather than one with no weapon at all, which is
+ * unplayable and looks like the game is broken.
+ */
+export function starterWeapon(id: string | null | undefined): WeaponDef {
+  const chosen = id === null || id === undefined ? undefined : BY_ID.get(id);
+  return chosen ?? BOLT;
+}
 
 /*
  * Level scaling lives here rather than in the systems because the renderer

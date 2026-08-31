@@ -16,6 +16,7 @@
  * than a placeholder detail.
  */
 
+import { TAU } from '../core/math';
 import type { SpriteName } from '../data/sprites';
 
 export interface FrameSpec {
@@ -61,6 +62,60 @@ function polygon(ctx: CanvasRenderingContext2D, size: number, sides: number, ins
 }
 
 /**
+ * A star with `points` points, first one up.
+ *
+ * Shared by the spark, the boss and the emblem cut into one of the players —
+ * three shapes that were the same loop written three times.
+ */
+function star(
+  ctx: CanvasRenderingContext2D,
+  centre: number,
+  outer: number,
+  inner: number,
+  points: number,
+): void {
+  const vertices = points * 2;
+  ctx.beginPath();
+  for (let i = 0; i < vertices; i++) {
+    const radius = i % 2 === 0 ? outer : inner;
+    const angle = -Math.PI / 2 + (i * TAU) / vertices;
+    const x = centre + Math.cos(angle) * radius;
+    const y = centre + Math.sin(angle) * radius;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
+ * The body all three players share: blocky and deliberate, the one thing on
+ * screen under the player's control.
+ */
+function playerBody(ctx: CanvasRenderingContext2D, size: number): void {
+  const inset = 3;
+  ctx.fillStyle = WHITE;
+  ctx.beginPath();
+  ctx.roundRect(inset, inset, size - inset * 2, size - inset * 2, size * 0.28);
+  ctx.fill();
+}
+
+/**
+ * Cuts a shape out of what has already been drawn.
+ *
+ * The players differ by the emblem removed from the shared body rather than by
+ * a mark drawn on top of it, because a mask has exactly one colour: anything
+ * drawn over the body would vanish the moment the sprite was tinted, which is
+ * how the damage flash and every enemy variant are coloured.
+ */
+function carve(ctx: CanvasRenderingContext2D, cut: () => void): void {
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  cut();
+  ctx.restore();
+}
+
+/**
  * Silhouettes, not just tints.
  *
  * A crowd of six hundred is read at a glance by shape long before colour, so
@@ -68,14 +123,40 @@ function polygon(ctx: CanvasRenderingContext2D, size: number, sides: number, ins
  * still, and a brute should look like it takes a while to kill.
  */
 export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
-  // Blocky and deliberate — the one thing on screen under the player's control.
-  player: (ctx, size) => {
-    const inset = 3;
-    const radius = size * 0.28;
-    ctx.fillStyle = WHITE;
-    ctx.beginPath();
-    ctx.roundRect(inset, inset, size - inset * 2, size - inset * 2, radius);
-    ctx.fill();
+  // The spark the weapon fires, worn as a badge.
+  playerBolt: (ctx, size) => {
+    playerBody(ctx, size);
+    carve(ctx, () => star(ctx, size / 2, size * 0.3, size * 0.1, 4));
+  },
+
+  // Four blades around a centre: the ring the weapon keeps, at rest.
+  playerOrbit: (ctx, size) => {
+    playerBody(ctx, size);
+    carve(ctx, () => {
+      for (let i = 0; i < 4; i++) {
+        const angle = (i * TAU) / 4;
+        ctx.beginPath();
+        ctx.arc(
+          size / 2 + Math.cos(angle) * size * 0.26,
+          size / 2 + Math.sin(angle) * size * 0.26,
+          size * 0.085,
+          0,
+          TAU,
+        );
+        ctx.fill();
+      }
+    });
+  },
+
+  // The wave itself: a ring leaving the middle.
+  playerNova: (ctx, size) => {
+    playerBody(ctx, size);
+    carve(ctx, () => {
+      ctx.lineWidth = size * 0.09;
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size * 0.27, 0, TAU);
+      ctx.stroke();
+    });
   },
 
   grunt: (ctx, size) => {
@@ -131,41 +212,16 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
 
   // Spiked, so it never reads as a scaled-up brute.
   boss: (ctx, size) => {
-    const centre = size / 2;
     const outer = size / 2 - 2;
-    const inner = outer * 0.62;
     ctx.fillStyle = WHITE;
-    ctx.beginPath();
-    for (let i = 0; i < 16; i++) {
-      const radius = i % 2 === 0 ? outer : inner;
-      const angle = -Math.PI / 2 + (i * Math.PI) / 8;
-      const x = centre + Math.cos(angle) * radius;
-      const y = centre + Math.sin(angle) * radius;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
+    star(ctx, size / 2, outer, outer * 0.62, 8);
   },
 
-  // A four-pointed spark. Projectiles are drawn without rotation, so the shape
-  // has to look right at every angle.
+  // A four-pointed spark, drawn to read right at every angle.
   bolt: (ctx, size) => {
-    const centre = size / 2;
     const outer = size / 2 - 2;
-    const inner = outer * 0.34;
     ctx.fillStyle = WHITE;
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const radius = i % 2 === 0 ? outer : inner;
-      const angle = -Math.PI / 2 + (i * Math.PI) / 4;
-      const x = centre + Math.cos(angle) * radius;
-      const y = centre + Math.sin(angle) * radius;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
+    star(ctx, size / 2, outer, outer * 0.34, 4);
   },
 
   orb: (ctx, size) => {
@@ -197,7 +253,9 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
 };
 
 export const SPRITE_SPECS: readonly FrameSpec[] = [
-  { name: 'player', size: 64 },
+  { name: 'playerBolt', size: 64 },
+  { name: 'playerOrbit', size: 64 },
+  { name: 'playerNova', size: 64 },
   { name: 'grunt', size: 64 },
   { name: 'runner', size: 64 },
   { name: 'brute', size: 64 },

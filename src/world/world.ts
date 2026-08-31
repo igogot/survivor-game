@@ -2,7 +2,7 @@ import { CONFIG } from '../config';
 import { Pool } from '../core/pool';
 import { Rng } from '../core/rng';
 import { SpatialGrid } from './grid';
-import { STARTER_WEAPON_ID, createWeaponState } from '../data/weapons';
+import { STARTER_WEAPON_ID, createWeaponState, starterWeapon } from '../data/weapons';
 import { xpForLevel } from '../systems/progression';
 import type { UpgradeDef } from '../data/upgrades';
 import type { Effect, Enemy, Gem, MoveTarget, Player, Projectile, WeaponState } from './types';
@@ -113,10 +113,21 @@ export class World {
    */
   readonly scratch: number[] = [];
 
-  constructor(seed: number) {
+  /** The weapon this run opened with. Every run is played as one of them. */
+  readonly starterId: string;
+
+  constructor(seed: number, starterId: string = STARTER_WEAPON_ID) {
     this.seed = seed;
     this.rng = new Rng(seed);
+
+    // Resolved once, here, so nothing downstream has to cope with an id that
+    // names no weapon: the player would be granted nothing and stand there
+    // unarmed while the horde arrived.
+    const starter = starterWeapon(starterId);
+    this.starterId = starter.id;
+
     this.player = {
+      sprite: starter.playerSprite,
       x: 0,
       y: 0,
       px: 0,
@@ -135,7 +146,7 @@ export class World {
       },
     };
 
-    this.weapons.push(createWeaponState(STARTER_WEAPON_ID));
+    this.weapons.push(createWeaponState(starter.id));
   }
 
   nextDamageEvent(): number {
