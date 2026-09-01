@@ -46,6 +46,10 @@ export class StartScreen {
   private readonly keys = requireElement('start-keys');
   private readonly modePanel = requireElement('step-mode');
   private readonly weaponsPanel = requireElement('step-weapons');
+  /** The board and the account, which belong to no step. See `step`. */
+  private readonly extras = requireElement('start-actions');
+  /** The briefing, which belongs to every step but the first. */
+  private readonly rules = requireElement('help-start');
   private readonly lobby: LobbyView;
   private current: StartStep = 'mode';
 
@@ -72,15 +76,27 @@ export class StartScreen {
   /**
    * Which panel of the opening screen is up.
    *
-   * The screen is a small flow now rather than one page: pick a mode, then
-   * either a weapon or a team. It is written as one overlay with panels rather
-   * than several overlays because everything around the panels — the frame, the
-   * language switch, the rules — belongs to all of them.
+   * The screen is a flow rather than one page: pick a mode, then either a
+   * weapon or a team. It is written as one overlay with panels rather than
+   * several overlays because the frame and the language switch belong to all of
+   * them.
+   *
+   * The first panel is the exception to everything else on this screen. It asks
+   * solo or company and shows nothing besides — no board, no account, no
+   * briefing — because a screen with one question on it should have one
+   * question on it, and because none of those three can be answered before the
+   * mode is: the board is a solo table, and the rules a player wants are the
+   * rules for the way they are about to play. So they arrive together, the
+   * moment the question is answered.
    */
   private step(step: StartStep): void {
     this.current = step;
     this.modePanel.hidden = step !== 'mode';
     this.weaponsPanel.hidden = step !== 'weapons';
+
+    const answered = step !== 'mode';
+    this.extras.hidden = !answered;
+    this.rules.hidden = !answered;
 
     if (step === 'party') {
       this.lobby.open();
