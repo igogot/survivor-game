@@ -7,6 +7,7 @@ import { progressionSystem } from '../systems/progression';
 import { projectileSystem } from '../systems/projectiles';
 import { reapSystem } from '../systems/reap';
 import { spawnSystem } from '../systems/spawn';
+import { trailSystem } from '../systems/trail';
 import { weaponSystem } from '../systems/weapons';
 import type { World } from './world';
 
@@ -26,8 +27,9 @@ import type { World } from './world';
  *                but never enemies, so no grid index moves
  *   7. progression — may flip the phase to 'levelup' and pause the run
  *
- * Cosmetic effects are advanced with the rest of the bookkeeping, after combat
- * has had its chance to spawn them.
+ * Cosmetic effects and the burning ground the trail leaves are advanced with
+ * the rest of the bookkeeping, after combat has had its chance to lay them.
+ * Neither touches an enemy, so neither can invalidate an index.
  *
  * Separation nudges enemies by a few pixels after the rebuild; the combat
  * systems widen their queries by BROADPHASE_PAD to absorb that drift.
@@ -49,6 +51,7 @@ export function stepWorld(world: World, dt: number): void {
   contactSystem(world);
   pickupSystem(world, dt);
   effectSystem(world, dt);
+  trailSystem(world, dt);
   progressionSystem(world);
 }
 

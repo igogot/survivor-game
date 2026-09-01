@@ -120,9 +120,9 @@ export interface Projectile {
    * Which frame the renderer draws, the same way `Enemy.sprite` works.
    *
    * A hex must not look like the player's bolt, and colour cannot carry that
-   * distinction: `variantTint` returns white once the artwork loads, because
-   * artwork brings its own. Shape is what survives the swap, so whoever fires
-   * says what the shot looks like.
+   * distinction: a frame cut from the sheet is not tinted at all, because it
+   * brings its own colour — see `TextureSet.masked`. Shape is what survives
+   * the swap, so whoever fires says what the shot looks like.
    */
   sprite: SpriteName;
 }
@@ -182,6 +182,40 @@ export interface WeaponState {
    * than where it hit.
    */
   swing: number;
+  /**
+   * Trail-only: where the last patch of fire was laid.
+   *
+   * A position rather than a timer, because the trail is laid by distance
+   * covered and not on a clock — that is what makes the ribbon continuous at
+   * any speed, and what makes standing still lay nothing at all.
+   */
+  trailX: number;
+  trailY: number;
+}
+
+/**
+ * One patch of burning ground.
+ *
+ * The only entity in the game that never moves and is not attached to
+ * anything: it is laid where the player passed and it stays there until it
+ * burns out. That is why it carries no `px`/`py` — there is nothing for the
+ * renderer to interpolate between.
+ *
+ * It carries its own `radius` and `color` rather than reading them back off
+ * the weapon, so a patch is what the weapon was when it laid it. Levelling the
+ * trail mid-run widens the next patch and leaves the ones already on the
+ * ground alone, which is both the honest behaviour and what keeps the renderer
+ * a pure read of world state.
+ */
+export interface Flame {
+  x: number;
+  y: number;
+  radius: number;
+  /** Seconds of burning left. */
+  life: number;
+  /** What `life` started at, so the renderer can fade the patch out. */
+  maxLife: number;
+  color: number;
 }
 
 /**

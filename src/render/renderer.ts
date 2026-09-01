@@ -23,6 +23,19 @@ const GEM_SIZE = 11;
 /** The player's own green, worn by the figure and by the mark it was sent to. */
 const PLAYER_COLOR = 0x6ee7a0;
 
+/**
+ * Opacity of a freshly laid patch of fire.
+ *
+ * Well under half, because a trail is a few dozen overlapping patches and they
+ * stack: four fresh ones on the same ground already come to nine tenths. Any
+ * higher and the ribbon becomes a wall the player cannot see their own gems
+ * through.
+ */
+const FLAME_ALPHA = 0.42;
+
+/** Radians of turn per world unit, to break up the ribbon. See `drawFlames`. */
+const FLAME_TURN = 0.05;
+
 /** Diameter of the mark left where a click sent the player, in world units. */
 const MARKER_SIZE = 26;
 
@@ -54,6 +67,7 @@ export class GameRenderer {
   private background!: TilingSprite;
 
   private readonly camera = new Container();
+  private readonly flameLayer = new Container();
   private readonly gemLayer = new Container();
   private readonly enemyLayer = new Container();
   private readonly flashLayer = new Container();
@@ -67,6 +81,7 @@ export class GameRenderer {
   private readonly enemySprites: Sprite[] = [];
   private readonly flashSprites: Sprite[] = [];
   private readonly projectileSprites: Sprite[] = [];
+  private readonly flameSprites: Sprite[] = [];
   private readonly gemSprites: Sprite[] = [];
   private readonly effectSprites: Sprite[] = [];
   private readonly orbSprites: Sprite[] = [];
@@ -111,11 +126,14 @@ export class GameRenderer {
     fit(this.markerSprite, MARKER_SIZE);
 
     // The move marker sits under everything, gems included: it must never hide
-    // something the player has to see. Then gems, then the horde. Shockwaves
-    // draw over the horde or the crowd would swallow them; the player and their
-    // blades stay on top of both.
+    // something the player has to see. Then the burning ground, which is
+    // ground — it must not cover a gem lying in it or an enemy walking through
+    // it. Then gems, then the horde. Shockwaves draw over the horde or the
+    // crowd would swallow them; the player and their blades stay on top of
+    // both.
     this.camera.addChild(
       this.markerSprite,
+      this.flameLayer,
       this.gemLayer,
       this.enemyLayer,
       this.flashLayer,
@@ -162,6 +180,7 @@ export class GameRenderer {
     this.markerSprite.visible = target !== null;
     if (target !== null) this.markerSprite.position.set(target.x, target.y);
 
+    this.drawFlames(world);
     this.drawEnemies(world, alpha);
     this.drawProjectiles(world, alpha);
     this.drawGems(world, alpha);
@@ -205,6 +224,40 @@ export class GameRenderer {
       this.camera.y,
       zoom,
     );
+  }
+
+  /**
+   * The burning ground, drawn exactly where it burns.
+   *
+   * No interpolation, because a patch never moves — and no shrinking as it
+   * dies, only fading. The radius on screen is the radius that damages, which
+   * is this project's rule for every weapon; a patch that visibly narrowed
+   * while still burning its full width would be the blade ring's old lie in a
+   * different shape.
+   *
+   * Each patch is turned by its own position. The frame has a wobbling edge so
+   * a ribbon does not read as a row of circles, and without the rotation that
+   * wobble would line up between neighbours and read as a scallop instead. The
+   * angle is a pure function of where the patch lies, so it costs the world
+   * nothing to store and the simulation no random draw — which matters, because
+   * a draw here would move every seed in the balance table.
+   */
+  private drawFlames(world: World): void {
+    const flames = world.flames;
+    this.resize(this.flameSprites, this.flameLayer, flames.length, this.textures.sprites.ember);
+
+    for (let i = 0; i < flames.length; i++) {
+      const flame = flames[i];
+      const sprite = this.flameSprites[i];
+
+      sprite.position.set(flame.x, flame.y);
+      fit(sprite, flame.radius * 2);
+      sprite.rotation = (flame.x + flame.y) * FLAME_TURN;
+      sprite.tint = this.tintFor('ember', flame.color);
+      // Fading out is how a patch says it is nearly spent, and the only warning
+      // a player gets that the ground behind them has gone cold.
+      sprite.alpha = FLAME_ALPHA * (flame.life / flame.maxLife);
+    }
   }
 
   private drawEnemies(world: World, alpha: number): void {
