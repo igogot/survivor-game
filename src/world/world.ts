@@ -225,6 +225,8 @@ function createEnemy(): Enemy {
     flash: 0,
     hitTag: 0,
     boss: false,
+    ability: '',
+    abilityTimer: 0,
     standoff: 0,
     attackCooldown: 0,
   };

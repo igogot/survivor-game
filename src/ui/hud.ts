@@ -56,6 +56,7 @@ export class Hud {
   private readonly pool = requireElement('stat-pool');
   private readonly fps = requireElement('stat-fps');
   private readonly boss = requireElement('boss');
+  private readonly bossName = requireElement('boss-name');
   private readonly bossFill = requireElement('boss-fill');
   private readonly warning = requireElement('warning');
   private readonly chestMarker = requireElement('chest-marker');
@@ -247,6 +248,7 @@ export class Hud {
     this.boss.hidden = boss === null;
     if (boss !== null) {
       this.bossFill.style.width = `${percent(boss.hp, boss.maxHp)}%`;
+      this.bossName.textContent = bossTitle(boss.ability);
     }
 
     // The lull before the boss is silent otherwise: enemies simply stop
@@ -259,6 +261,44 @@ export class Hud {
     );
   }
 }
+
+/**
+ * What the bar over the boss says it is.
+ *
+ * The horde's own name, then the ability, because the second half is the part
+ * that changes and the part the player has to react to. An unknown id falls
+ * back to the plain name rather than printing a blank: a boss with no title is
+ * better than a title that is a gap.
+ */
+function bossTitle(ability: string): string {
+  const id = `boss.${ability}`;
+  if (!isBossTitle(id)) return t('hud.bossName');
+  return `${t('hud.bossName')} · ${t(id)}`;
+}
+
+function isBossTitle(id: string): id is BossTitleId {
+  return BOSS_TITLES.includes(id as BossTitleId);
+}
+
+type BossTitleId = (typeof BOSS_TITLES)[number];
+
+/**
+ * Listed rather than derived, because `t` takes a known id and a template
+ * string is not one. `tests/boss.test.ts` checks the list against the
+ * abilities, so an ability added without a name here stops being silent.
+ */
+const BOSS_TITLES = [
+  'boss.charge',
+  'boss.summon',
+  'boss.volley',
+  'boss.burst',
+  'boss.quake',
+  'boss.enrage',
+  'boss.leech',
+  'boss.blink',
+  'boss.ward',
+  'boss.thorns',
+] as const;
 
 /**
  * Scans for the boss only once one exists. By then the spawner has stopped, so

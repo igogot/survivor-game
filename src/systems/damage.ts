@@ -1,4 +1,5 @@
 import { CONFIG } from '../config';
+import { bossAbilityById } from '../data/bossAbilities';
 import { MAX_ENEMY_RADIUS } from '../data/enemies';
 import { anyAlive, nearestPlayer, nextLiving } from '../world/party';
 import { respawnDelay } from './respawn';
@@ -25,9 +26,43 @@ export const FLASH_TIME = 0.08;
 export function applyDamage(world: World, enemy: Enemy, amount: number): void {
   if (enemy.hp <= 0) return;
 
-  enemy.hp -= amount;
+  const landed = enemy.boss ? bossToll(world, enemy, amount) : amount;
+
+  enemy.hp -= landed;
   enemy.flash = FLASH_TIME;
   if (enemy.hp <= 0) world.kills++;
+}
+
+/**
+ * What a boss's own trick does to a hit on the way in.
+ *
+ * Two of the ten abilities are about damage arriving rather than about anything
+ * the boss does with a cooldown, so they belong here and not in
+ * `bossAbilitySystem`: a ward that lived in the ability system would have to
+ * reach into this function anyway, and a reflection would have to guess how
+ * much actually landed.
+ *
+ * Returns what should come off the boss, and may cost the player on the way.
+ */
+function bossToll(world: World, enemy: Enemy, amount: number): number {
+  const ability = bossAbilityById(enemy.ability);
+  if (ability === undefined) return amount;
+
+  if (ability.id === 'ward') {
+    // Only while the window is up. Outside it a warded boss is an ordinary one,
+    // which is what makes the window worth waiting out.
+    return enemy.abilityTimer > 0 ? amount * ability.power : amount;
+  }
+
+  if (ability.id === 'thorns') {
+    const player = nearestPlayer(world, enemy.x, enemy.y);
+    // Through `damagePlayer`, so a reflection obeys the same invulnerability
+    // window as a body does — otherwise a fast weapon would return the whole
+    // volley at once and kill through it.
+    if (player !== null) damagePlayer(world, player, amount * ability.power);
+  }
+
+  return amount;
 }
 
 /**

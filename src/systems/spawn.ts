@@ -1,6 +1,7 @@
 import { CONFIG } from '../config';
 import { TAU } from '../core/math';
 import { BOSS, ENEMIES } from '../data/enemies';
+import { bossAbility } from '../data/bossAbilities';
 import { arrivalScale, healthScale, partyAnchor, partySize } from '../world/party';
 import type { EnemyDef } from '../data/enemies';
 import type { PartyAnchor } from '../world/party';
@@ -275,10 +276,25 @@ export function spawnEnemyAt(
   enemy.flash = 0;
   enemy.hitTag = 0;
   enemy.boss = def.id === BOSS.id;
+  // The nth boss of a run takes the nth ability, so the first ten duels are ten
+  // different fights. `bossesKilled` is that index: only one boss lives at a
+  // time and the next is not scheduled until this one is down, so the count of
+  // the fallen is the number of the one arriving.
+  enemy.ability = enemy.boss ? bossAbility(world.bossesKilled).id : '';
+  enemy.abilityTimer = 0;
   enemy.standoff = def.ranged?.range ?? 0;
-  // Staggered by a fraction of the cooldown, otherwise every caster that
-  // arrived in the same batch throws on the same tick for the rest of the run.
-  enemy.attackCooldown = def.ranged === undefined ? 0 : world.rng.next() * def.ranged.cooldown;
+  // A boss waits one full cooldown before its first use: arriving and charging
+  // on the same tick is a hit the player never saw coming, and the lull before
+  // a duel exists precisely so they get to see it coming.
+  //
+  // Casters are staggered by a fraction of theirs instead, otherwise every one
+  // that arrived in the same batch throws on the same tick for the rest of the
+  // run. Everything else attacks by walking into somebody and never reads this.
+  if (enemy.boss) {
+    enemy.attackCooldown = bossAbility(world.bossesKilled).cooldown;
+  } else {
+    enemy.attackCooldown = def.ranged === undefined ? 0 : world.rng.next() * def.ranged.cooldown;
+  }
 
   world.enemies.push(enemy);
 }
