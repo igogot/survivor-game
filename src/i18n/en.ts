@@ -102,6 +102,8 @@ export const EN = {
   'room.beginAlone': 'Waiting for somebody to join',
   'room.beginHint': 'Everyone plays in one world. This machine runs it.',
   'room.guestWait': 'Waiting for the host to start.',
+  'room.weapon': 'You bring',
+  'room.change': 'Change',
   'room.leave': 'Leave the team',
   'room.notYet': 'The team gathers, but the run itself is not networked yet — that is the next piece of work, and this screen is the door it opens onto.',
   'room.reach':

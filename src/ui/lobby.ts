@@ -3,6 +3,7 @@ import { isCode, normaliseCode, secureRandom } from '../net/code';
 import { Lobby, MAX_PARTY } from '../net/lobby';
 import { openLobbyChannel } from '../net/channel';
 import { requireElement } from './hud';
+import { cssColor, starterChoices } from './starters';
 import type { LobbyChannel } from '../net/channel';
 import type { LobbyError, LobbyMessage, LobbyStart, LobbyState } from '../net/lobby';
 
@@ -55,6 +56,8 @@ export class LobbyView {
   private readonly chatInput = requireElement('chat-input');
   private readonly beginButton = requireElement('room-begin');
   private readonly beginHint = requireElement('room-begin-hint');
+  private readonly weaponName = requireElement('room-weapon');
+  private readonly weaponButton = requireElement('room-change');
 
   private readonly channel: LobbyChannel;
   private readonly lobby: Lobby;
@@ -81,12 +84,21 @@ export class LobbyView {
 
   /**
    * `onBack` is the way out of multiplayer entirely, back to the mode choice,
-   * and `onStart` is the way forward — the moment a room stops being a room and
-   * becomes a run.
+   * `onStart` is the way forward — the moment a room stops being a room and
+   * becomes a run — and `onPickWeapon` asks for the panel this view does not
+   * own.
+   *
+   * The weapon cards belong to `StartScreen`: they are painted from the sprite
+   * sheet, and there is one set of them for the whole opening screen rather
+   * than one per path through it. So the waiting room asks for that panel and
+   * is told the answer through `choose`, instead of growing a second copy of
+   * six cards that would have to be kept in step with the first.
    */
   constructor(
     private readonly onBack: () => void,
     onStart: (start: LobbyStart) => void,
+    onPickWeapon: () => void,
+    starter: string,
   ) {
     this.channel = openLobbyChannel((message) => {
       // Signalling shares this channel and belongs to whoever is connecting;
@@ -95,7 +107,7 @@ export class LobbyView {
       this.lobby.receive(message);
       this.afterChange();
     });
-    this.lobby = new Lobby((message) => this.channel.send(message), secureRandom);
+    this.lobby = new Lobby((message) => this.channel.send(message), secureRandom, starter);
     this.lobby.onStart = onStart;
 
     requireElement('party-create').addEventListener('click', () => this.create());
@@ -104,6 +116,7 @@ export class LobbyView {
     requireElement('join-back').addEventListener('click', () => this.show('party'));
     requireElement('room-leave').addEventListener('click', () => this.leaveRoom());
     this.beginButton.addEventListener('click', () => this.lobby.begin());
+    this.weaponButton.addEventListener('click', onPickWeapon);
     this.copyButton.addEventListener('click', () => void this.copy());
 
     this.joinForm.addEventListener('submit', (event) => {
@@ -147,6 +160,30 @@ export class LobbyView {
   /** Enters the multiplayer flow at its first panel. */
   open(): void {
     this.show('party');
+  }
+
+  /**
+   * Comes back to whichever panel was up.
+   *
+   * Distinct from `open` because the weapon panel is a detour rather than an
+   * exit: somebody who steps out of the waiting room to change what they are
+   * bringing must come back to the waiting room, not to the create-or-join
+   * choice, and certainly not to a room they have been silently removed from.
+   */
+  resume(): void {
+    this.show(this.step);
+  }
+
+  /**
+   * What this player brings, chosen on the panel `StartScreen` owns.
+   *
+   * Handed straight to the lobby, which is what makes it travel. Nothing about
+   * the local screen decides a party run's weapons — the host's roster does,
+   * and this is how a guest gets into it.
+   */
+  choose(starter: string): void {
+    this.lobby.choose(starter);
+    this.render();
   }
 
   private chatting(): boolean {
@@ -316,6 +353,13 @@ export class LobbyView {
     (this.beginButton as HTMLButtonElement).disabled = !ready;
     this.beginHint.textContent = state.hosting ? t('room.beginHint') : t('room.guestWait');
 
+    // The player's own choice rather than their seat's, so it is right even
+    // before a roster has come back to confirm it.
+    const mine = weaponLabel(state.starter);
+    this.weaponName.textContent = mine.name;
+    this.weaponName.style.color = mine.color;
+    this.weaponButton.textContent = t('room.change');
+
     this.chatLog.replaceChildren(...chatRows(state));
     // Pinned to the newest line. A log that has to be scrolled to see the reply
     // you were waiting for is a log nobody reads.
@@ -373,6 +417,7 @@ function rosterRows(state: LobbyState): HTMLElement[] {
     const member = state.members[seat];
     const row = document.createElement('li');
 
+    const who = document.createElement('span');
     const name = document.createElement('span');
     const tag = document.createElement('span');
     tag.className = 'tag';
@@ -381,17 +426,45 @@ function rosterRows(state: LobbyState): HTMLElement[] {
       row.className = 'roster--empty';
       name.textContent = t('room.slot', { n: seat + 1 });
       tag.textContent = t('room.waiting');
+      who.append(name);
     } else {
       name.textContent = t('room.slot', { n: seat + 1 });
+
+      // What they are bringing, under their number and in that weapon's own
+      // colour — the same colour its card, its projectiles and its level-up
+      // cards use, so the team can be read at a glance rather than by name.
+      const brings = document.createElement('span');
+      brings.className = 'brings';
+      const weapon = weaponLabel(state.starters[seat]);
+      brings.textContent = weapon.name;
+      brings.style.color = weapon.color;
+
+      who.append(name, brings);
+
       const marks: string[] = [];
       if (seat === 0) marks.push(t('room.host'));
       if (member === state.self) marks.push(t('room.you'));
       tag.textContent = marks.join(' · ');
     }
 
-    row.append(name, tag);
+    row.append(who, tag);
     rows.push(row);
   }
 
   return rows;
+}
+
+/**
+ * A weapon id as something to put on the screen.
+ *
+ * An id with no weapon behind it is drawn as the bolt, because that is what
+ * `World` will build with it — `starterWeapon` resolves an unknown id to the
+ * bolt rather than failing. Showing the name of a weapon nobody will be holding
+ * would be the one dishonest option.
+ */
+function weaponLabel(starter: string | undefined): { name: string; color: string } {
+  const choices = starterChoices();
+  const choice = choices.find((option) => option.id === starter) ?? choices[0];
+
+  return { name: choice.name, color: cssColor(choice.color) };
 }

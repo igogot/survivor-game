@@ -92,7 +92,12 @@ async function main(): Promise<void> {
 
   /** The name this run was put on the board under, if it was. */
   let placedAs: string | undefined;
-  const startScreen = new StartScreen(startRun, renderer.paintSprite, startTeamRun);
+  const startScreen = new StartScreen(
+    startRun,
+    renderer.paintSprite,
+    startTeamRun,
+    STARTER_WEAPON_ID,
+  );
 
   /** The weapons on offer, in the order their cards and their keys appear. */
   const starters = starterChoices();
@@ -264,7 +269,11 @@ async function main(): Promise<void> {
     placedAs = undefined;
     roster = start.members;
     hostingRun = start.hosting;
-    world = new World(start.seed, start.members.map(() => STARTER_WEAPON_ID));
+    // Everybody's own choice, made in the waiting room and carried here by the
+    // host's roster. Same list on every machine, so every machine builds the
+    // same world — which is what lets a guest draw a teammate correctly without
+    // being told anything more about them.
+    world = new World(start.seed, start.starters);
 
     // Two ways to reach the others, and both are used. The local one carries a
     // second window on this machine and costs nothing; the peer connections
@@ -335,7 +344,10 @@ async function main(): Promise<void> {
         // gesture: read three cards, pick one, live with it.
         for (let i = 0; i < starters.length; i++) {
           if (input.consumePressed(`Digit${i + 1}`)) {
-            startRun(starters[i].id);
+            // `pick`, not `startRun`: on the party path this panel is choosing
+            // what to bring to a team, and a digit must not mean something the
+            // mouse does not.
+            startScreen.pick(starters[i].id);
             return;
           }
         }
@@ -353,7 +365,7 @@ async function main(): Promise<void> {
           input.consumePressed('Enter') ||
           input.consumePressed('NumpadEnter')
         ) {
-          startRun(starters[0].id);
+          startScreen.pick(starters[0].id);
         }
         return;
       }

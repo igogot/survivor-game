@@ -93,6 +93,8 @@ export const RU: Record<StringId, string> = {
   'room.beginAlone': 'Ждём, пока кто-нибудь войдёт',
   'room.beginHint': 'Все играют в одном мире. Считает его эта машина.',
   'room.guestWait': 'Ждём, пока создавший начнёт.',
+  'room.weapon': 'Вы идёте с',
+  'room.change': 'Сменить',
   'room.leave': 'Выйти из команды',
   'room.notYet': 'Команда собирается, но сам забег по сети пока не идёт — это следующая работа, и этот экран — дверь в неё.',
   'room.reach':
