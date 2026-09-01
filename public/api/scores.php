@@ -43,6 +43,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require __DIR__ . '/config.php';
+// The checks that need neither the database nor the request.
+require __DIR__ . '/validate.php';
 
 /** Sends a JSON body and stops. */
 function respond(int $status, array $body): void
@@ -113,75 +115,6 @@ function db(): PDO
     return $pdo;
 }
 
-/**
- * The ceiling at `$x`, read off a sampled curve.
- *
- * Both curves are monotonic, so a value between two samples takes the higher
- * one. That errs towards accepting, which is the direction a bound on the
- * impossible has to err in: refusing a real run costs a player their place,
- * while accepting a slightly generous one costs nothing anybody notices.
- */
-function ceilingFrom(array $samples, float $x): float
-{
-    $ceiling = 0.0;
-    foreach ($samples as [$at, $value]) {
-        $ceiling = (float) $value;
-        if ($x <= (float) $at) {
-            return $ceiling;
-        }
-    }
-
-    return $ceiling;
-}
-
-/**
- * Strips what a keyboard did not mean to send, then trims and caps.
- *
- * Deliberately the same rules as `cleanName` in src/core/scores.ts, including
- * the bidi block: those characters are not typos, they reorder the glyphs
- * around them, and one name carrying an override rewrites how its neighbours
- * read on a public board.
- */
-function cleanName(string $raw, int $maxLength): ?string
-{
-    $kept = '';
-    $length = mb_strlen($raw, 'UTF-8');
-
-    for ($i = 0; $i < $length; $i++) {
-        $character = mb_substr($raw, $i, 1, 'UTF-8');
-        $point = mb_ord($character, 'UTF-8');
-        if ($point === false) {
-            continue;
-        }
-        if ($point < 0x20) {
-            continue;
-        }
-        if ($point >= 0x7f && $point <= 0x9f) {
-            continue;
-        }
-        if ($point >= 0x200b && $point <= 0x200f) {
-            continue;
-        }
-        if ($point === 0x2028 || $point === 0x2029) {
-            continue;
-        }
-        if ($point >= 0x202a && $point <= 0x202e) {
-            continue;
-        }
-        if ($point >= 0x2066 && $point <= 0x2069) {
-            continue;
-        }
-        $kept .= $character;
-    }
-
-    $trimmed = trim($kept);
-    if ($trimmed === '') {
-        return null;
-    }
-
-    return mb_substr($trimmed, 0, $maxLength, 'UTF-8');
-}
-
 /** The client's address, as far as a shared host can tell. */
 function clientFingerprint(): string
 {
@@ -235,11 +168,33 @@ if (!is_array($body)) {
 }
 
 $limits = limits();
+
+/*
+ * Checked before the database is opened at all.
+ *
+ * These cost nothing — no I/O, no connection — so a payload that could not
+ * describe a run is refused without MySQL ever hearing about it. It also means
+ * every 422 path here can be exercised on a machine with no database, which is
+ * how tests/api.php gets to run at all.
+ */
+$fault = faultInRun($body, $limits);
+if ($fault !== null) {
+    fail(422, $fault);
+}
+
+$name = (string) $body['name'];
+$timeMs = (int) $body['timeMs'];
+$kills = (int) $body['kills'];
+$level = (int) $body['level'];
+$bosses = (int) $body['bosses'];
+$seed = (int) $body['seed'];
+$weapon = is_string($body['weapon'] ?? null) ? substr($body['weapon'], 0, 16) : '';
+
 $pdo = db();
 
-// Rate limit before anything expensive. One machine hammering the endpoint is
-// the failure this host actually sees, long before anybody bothers forging a
-// plausible run.
+// Then the rate limit, which is the first thing that needs the database. One
+// machine hammering the endpoint is the failure this host actually sees, long
+// before anybody bothers forging a plausible run.
 $fingerprint = clientFingerprint();
 // The window is interpolated rather than bound: MySQL will not accept a
 // placeholder as the quantity of an INTERVAL. It is an integer constant from
@@ -253,49 +208,6 @@ $recent = $pdo->prepare(
 $recent->execute([$fingerprint]);
 if ((int) $recent->fetchColumn() >= SUBMIT_LIMIT) {
     fail(429, 'too-many-submissions');
-}
-
-$name = is_string($body['name'] ?? null)
-    ? cleanName($body['name'], (int) $limits['maxNameLength'])
-    : null;
-if ($name === null) {
-    fail(422, 'name');
-}
-
-/** Reads an integer field, refusing anything that is not already one. */
-function whole(array $body, string $key): int
-{
-    $value = $body[$key] ?? null;
-    if (!is_int($value)) {
-        // A float that happens to be whole is still a client that rounded
-        // somewhere it should not have, and letting it through means two
-        // clients can disagree about the same run.
-        fail(422, 'shape');
-    }
-    return $value;
-}
-
-$timeMs = whole($body, 'timeMs');
-$kills = whole($body, 'kills');
-$level = whole($body, 'level');
-$bosses = whole($body, 'bosses');
-$seed = whole($body, 'seed');
-$weapon = is_string($body['weapon'] ?? null) ? substr($body['weapon'], 0, 16) : '';
-
-if ($timeMs < 0 || $timeMs > (int) $limits['maxRunMs']) {
-    fail(422, 'time');
-}
-if ($kills < 0 || $kills > ceilingFrom($limits['killCeiling'], $timeMs / 1000)) {
-    fail(422, 'kills');
-}
-if ($level < 1 || $level > ceilingFrom($limits['levelCeiling'], $kills)) {
-    fail(422, 'level');
-}
-
-$bossCeiling = (int) floor(($timeMs / 1000) / (float) $limits['bossIntervalSeconds'])
-    * (int) $limits['bossesPerInterval'];
-if ($bosses < 0 || $bosses > $bossCeiling) {
-    fail(422, 'bosses');
 }
 
 $pdo->prepare('INSERT INTO submissions (fingerprint, created_at) VALUES (?, NOW())')
