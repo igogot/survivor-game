@@ -828,9 +828,10 @@
         <h2>Survivor</h2>
         <p class="sub">One life, no finish line. Choose what you open with.</p>
         <div class="starters" id="start-weapons"></div>
-        <p class="hint keys-only">
-          press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> &middot; <kbd>Space</kbd> takes the first
-        </p>
+        <!-- Filled by StartScreen from the weapons themselves. It said "1 2 3"
+             here for two weapons longer than that was true, which is what a
+             hint written twice always comes to. -->
+        <p class="hint keys-only" id="start-keys"></p>
         <p class="hint touch-only">tap a weapon to begin</p>
         <div class="help" id="help-start"></div>
       </div>

@@ -69,6 +69,7 @@ const WEAPON_ROLES: Readonly<Record<string, string>> = {
   nova: 'A burst of damage around you every few seconds. It does not care how many enemies are caught in it.',
   spear: 'Lunges at the nearest enemy and hits everything standing behind them. The way through a wall rather than around it.',
   harpoon: 'Spikes the biggest thing in range, not the closest. Slow to reload and wasted on a grunt, which is the point: it is what you bring to a boss.',
+  ember: 'Leaves burning ground wherever you walk, and everything standing in it burns. The only weapon that pays you for running, and the only one that stops while you stand still.',
 };
 
 /**

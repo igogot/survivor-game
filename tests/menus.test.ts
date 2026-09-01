@@ -58,4 +58,13 @@ describe('markup the UI requires', () => {
       expect(markup, `index.html is missing id="${id}"`).toContain(`id="${id}"`);
     }
   });
+
+  /**
+   * The digits under the weapon cards belong to the roster, not to the markup.
+   * Written by hand they went stale in silence: the page said "press 1 2 3"
+   * while five weapons were on the screen, and nothing in the suite could tell.
+   */
+  it('leaves the weapon key hint empty for the code to fill', () => {
+    expect(markup).toMatch(/id="start-keys"[^>]*><\/p>/);
+  });
 });

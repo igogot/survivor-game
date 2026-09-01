@@ -8,6 +8,8 @@ import {
   orbitSpin,
   spearLength,
   spearThickness,
+  trailRadius,
+  trailSpacing,
   weaponById,
   weaponCooldown,
   weaponDamage,
@@ -15,12 +17,14 @@ import {
 import { damageArea, damageSegment } from './damage';
 import { spawnEffect } from './effects';
 import { spawnProjectile } from './projectiles';
+import { burnTrail, layFlame } from './trail';
 import type {
   BoltWeaponDef,
   HarpoonWeaponDef,
   NovaWeaponDef,
   OrbitWeaponDef,
   SpearWeaponDef,
+  TrailWeaponDef,
 } from '../data/weapons';
 import type { Enemy, WeaponState } from '../world/types';
 import type { World } from '../world/world';
@@ -58,6 +62,9 @@ export function weaponSystem(world: World, dt: number): void {
         break;
       case 'harpoon':
         stepHarpoon(world, def, state, dt);
+        break;
+      case 'trail':
+        stepTrail(world, def, state, dt);
         break;
       default: {
         // Exhaustiveness check: adding a weapon kind without a routine here
@@ -223,6 +230,46 @@ function stepHarpoon(
     weaponDamage(def, state) * player.stats.damageMul,
     state.pierce + def.pierce,
   );
+}
+
+/**
+ * The trail: lay fire where the player has been, and burn what is standing in
+ * it.
+ *
+ * Two clocks, and they are deliberately not the same one. Patches go down by
+ * distance covered, so the ribbon is continuous whether the player is walking
+ * or sprinting and there is none of it at all while they stand still. The burn
+ * runs on the weapon's cooldown like every other weapon, which is what makes
+ * Quick Hands and White Heat mean the obvious thing: the fire bites more often
+ * rather than the trail growing longer.
+ *
+ * Splitting them is also what stops the weapon paying twice for speed. Laying
+ * on the cooldown would have made a faster player lay a longer trail *and* burn
+ * more often, so Light Boots would have been the trail's best damage card by
+ * some distance.
+ */
+function stepTrail(world: World, def: TrailWeaponDef, state: WeaponState, dt: number): void {
+  const player = world.player;
+  const radius = trailRadius(def, state);
+  const spacing = trailSpacing(def, state);
+
+  // One patch at most per tick. The gap the player opens in a single tick is
+  // under five pixels even with every boot bought, against a spacing of at
+  // least twenty — so a tick can never owe the trail two patches.
+  if (dist2(state.trailX, state.trailY, player.x, player.y) >= spacing * spacing) {
+    // Only on success: a trail stopped by the cap resumes from where it
+    // stopped rather than teleporting to wherever the player has reached.
+    if (layFlame(world, player.x, player.y, radius, def.life, def.color)) {
+      state.trailX = player.x;
+      state.trailY = player.y;
+    }
+  }
+
+  state.cooldown -= dt;
+  if (state.cooldown > 0) return;
+  state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
+
+  burnTrail(world, weaponDamage(def, state) * player.stats.damageMul, world.nextDamageEvent());
 }
 
 /**

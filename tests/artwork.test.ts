@@ -9,11 +9,13 @@ import type { SpriteName } from '../src/data/sprites';
  * A shockwave is an expanding outline and a dungeon tileset has no such thing.
  * The lance is worse: it is the one frame stretched to fit its own reach, and a
  * 16px icon smeared eight times along one axis reads as a smudge rather than as
- * a weapon. Both keep the shapes this project draws for them. Listing them here
- * rather than allowing any gap is the point — a sprite that quietly lost its
- * art would otherwise look like a deliberate choice.
+ * a weapon. A patch of burning ground has no tile either — the only fire on the
+ * sheet is a wall sconce, mortared into its own bricks. All three keep the
+ * shapes this project draws for them. Listing them here rather than allowing
+ * any gap is the point — a sprite that quietly lost its art would otherwise
+ * look like a deliberate choice.
  */
-const DRAWN_ONLY: readonly SpriteName[] = ['ring', 'spear'];
+const DRAWN_ONLY: readonly SpriteName[] = ['ring', 'spear', 'ember'];
 
 describe('sprite artwork', () => {
   it('gives every sprite either a tile or a deliberate exemption', () => {

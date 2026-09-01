@@ -9,11 +9,14 @@ interface UpgradeBase {
   /**
    * Held back until the designed pool can no longer fill a level-up menu.
    *
-   * The thirteen designed upgrades total fifty stacks, so a run that reaches
-   * level 51 spends the last one and every level after it is worth nothing —
-   * `progressionSystem` used to swallow them silently. That is unreachable in a
-   * ten-minute run and routine in a long one: a bot left to survive past the
-   * boss hit the cap at 51 and took twenty-three more levels for no reward.
+   * The designed pool is finite: twenty-one entries totalling seventy-seven
+   * stacks, so a run that reaches level 78 spends the last one and every level
+   * after it is worth nothing — `progressionSystem` used to swallow them
+   * silently. That is unreachable in a ten-minute run and routine in a long
+   * one, and it was measured rather than argued: with the pool at fifty, a bot
+   * left to survive past the boss hit the cap at 51 and took twenty-three more
+   * levels for no reward. Three weapons have been added since, which pushed the
+   * ceiling up without changing what happens above it.
    *
    * Kept out of the roll entirely until then rather than mixed in and made
    * rare. A bigger pool makes every designed card rarer, including the ones a
@@ -269,6 +272,48 @@ export const UPGRADES: readonly UpgradeDef[] = [
   },
 
   /*
+   * The trail, and the two lines it can be built along: a wider ribbon, or a
+   * hotter one. Appended for the same reason as everything above — offers come
+   * out of a shuffle of this array, so inserting anywhere but the end changes
+   * what every seed is shown and makes the balance table incomparable with the
+   * one before it. Adding entries at all moves the table; adding them in the
+   * middle moves it for two reasons at once.
+   */
+  {
+    kind: 'weapon',
+    id: 'ember',
+    weaponId: 'ember',
+    name: 'Ember Trail',
+    description: 'Burning ground behind you, wherever you go. +damage and width per level',
+    maxStacks: 4,
+  },
+  {
+    kind: 'weaponMod',
+    id: 'ember-spread',
+    weaponId: 'ember',
+    name: 'Wildfire',
+    description: 'Ember Trail burns a wider path',
+    maxStacks: 3,
+    apply: (weapon) => {
+      // Widening the ribbon also spaces the patches further apart — spacing is
+      // a fraction of the radius — so this buys ground covered without buying
+      // a single extra broad-phase query. See `TrailWeaponDef`.
+      weapon.areaMul += 0.2;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'ember-heat',
+    weaponId: 'ember',
+    name: 'White Heat',
+    description: 'Ember Trail burns more often',
+    maxStacks: 3,
+    apply: (weapon) => {
+      weapon.attackSpeedMul += 0.4;
+    },
+  },
+
+  /*
    * The tail: what a level is worth once everything above it is bought.
    *
    * Uncapped, and deliberately weaker per pick than the designed upgrades they
@@ -277,8 +322,8 @@ export const UPGRADES: readonly UpgradeDef[] = [
    * being nothing, and it stays flat enough that a long run scales by degrees
    * instead of running away.
    *
-   * Eight entries for four slots, so the menu still differs between level-ups
-   * instead of showing the same card set forever. Five of them are scoped to a
+   * Nine entries for four slots, so the menu still differs between level-ups
+   * instead of showing the same card set forever. Six of them are scoped to a
    * weapon and therefore filtered by ownership, which is what makes the mix
    * depend on the build rather than on nothing.
    *
@@ -373,6 +418,18 @@ export const UPGRADES: readonly UpgradeDef[] = [
     weaponId: 'harpoon',
     name: 'Heavier Head',
     description: '+15% Siege Harpoon damage',
+    maxStacks: Infinity,
+    fallback: true,
+    apply: (weapon) => {
+      weapon.damageMul += 0.15;
+    },
+  },
+  {
+    kind: 'weaponMod',
+    id: 'ember-fuel',
+    weaponId: 'ember',
+    name: 'Richer Fuel',
+    description: '+15% Ember Trail damage',
     maxStacks: Infinity,
     fallback: true,
     apply: (weapon) => {

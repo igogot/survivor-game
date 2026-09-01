@@ -21,6 +21,7 @@ export type SpriteName =
   | 'playerNova'
   | 'playerSpear'
   | 'playerHarpoon'
+  | 'playerEmber'
   | 'grunt'
   | 'runner'
   | 'brute'
@@ -42,6 +43,8 @@ export type SpriteName =
   | 'orb'
   /** The lance, drawn stretched to the reach of the thrust that landed. */
   | 'spear'
+  /** One patch of burning ground. A trail is a few dozen of these overlapping. */
+  | 'ember'
   | 'gem'
   /** A pickup worth more than one XP, told apart by frame rather than by tint. */
   | 'gemRich'

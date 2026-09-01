@@ -28,6 +28,7 @@ const STARTER_ART_SIZE = 64;
 export class StartScreen {
   private readonly root = requireElement('start');
   private readonly cards = requireElement('start-weapons');
+  private readonly keys = requireElement('start-keys');
 
   /**
    * Built once, not on every show.
@@ -37,9 +38,13 @@ export class StartScreen {
    * since each one may have come out of the artwork sheet.
    */
   constructor(onStart: (weaponId: string) => void, paint: SpritePainter) {
-    for (const choice of starterChoices()) {
+    const choices = starterChoices();
+
+    for (const choice of choices) {
       this.cards.append(starterCard(choice, onStart, paint));
     }
+
+    this.keys.replaceChildren(...keyHint(choices));
   }
 
   show(): void {
@@ -98,6 +103,32 @@ function starterCard(
   card.append(top, art, detail);
   card.addEventListener('click', () => onStart(choice.id));
   return card;
+}
+
+/**
+ * The line of digits under the cards.
+ *
+ * Built from the choices rather than typed into the markup, for the reason the
+ * help panel gives about its own numbers: a hint written by hand goes stale
+ * silently and confidently. This one said "press 1 2 3" while there were five
+ * weapons on the screen.
+ */
+function keyHint(choices: readonly StarterChoice[]): readonly Node[] {
+  const nodes: Node[] = [document.createTextNode('press ')];
+
+  for (const choice of choices) {
+    nodes.push(keycap(choice.key), document.createTextNode(' '));
+  }
+
+  nodes.push(document.createTextNode('· '), keycap('Space'));
+  nodes.push(document.createTextNode(' takes the first'));
+  return nodes;
+}
+
+function keycap(label: string): HTMLElement {
+  const key = document.createElement('kbd');
+  key.textContent = label;
+  return key;
 }
 
 /**
