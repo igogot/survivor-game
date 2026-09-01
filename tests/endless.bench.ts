@@ -16,14 +16,40 @@ import type { World } from '../src/world/world';
  * win. It is "what was happening to the player", and the column that matters is
  * `hits/min`: how often the horde actually lands a blow. A run nobody can lose
  * shows up there long before it shows up in a survival time.
+ *
+ * What it no longer is, and this is worth being plain about, is a window onto
+ * something `npm run balance` cannot see. It was that when a run reached minute
+ * ninety and the balance stand watched twelve. Runs now end inside fourteen, so
+ * the two overlap almost entirely and the only thing this still holds alone is
+ * the pair of columns balance does not print: how often a player is hit, and how
+ * low they got. Those are worth a stand. A separate forty-minute window is worth
+ * rather less than it was, and the day a run stops reaching minute ten is the day
+ * to fold this into `balance` rather than lower the bar again.
  */
 const SEEDS = [42, 1337, 99, 7, 11, 2024, 5, 808];
 
 /** Forty minutes. Long enough for three or four bosses on a run that lives. */
 const CAP = 2400;
 
-/** Minute after which a run counts as "late" for the hit-rate column. */
-const LATE_AFTER = 20 * 60;
+/**
+ * Minute after which a run counts as "late" for the hit-rate column.
+ *
+ * Twenty when this stand was written, because a bot left alone then reached
+ * minute ninety and one seed in five saw minute forty-six. It reached zero
+ * seeds some time ago and nobody noticed, because this stand is not in
+ * `npm test` — which is the failure mode a guard is supposed to prevent and did
+ * not, since a red stand nobody runs is the same as no stand.
+ *
+ * Ten now, and set from the measurement rather than from a wish: runs end
+ * between minute seven and minute fourteen, so six seeds of eight pass this and
+ * two do not. That is a column with something in it and a guard with room, and
+ * both of those were the point.
+ *
+ * The forty-minute cap above stays. It costs nothing while runs end at fourteen
+ * — the loop stops at the last death — and it is the thing that would notice
+ * the game getting long again.
+ */
+const LATE_AFTER = 10 * 60;
 
 interface Sample {
   hits: number;
@@ -93,9 +119,15 @@ it('plays a long run on every seed', () => {
   );
   console.log('\n' + rows.join('\n') + '\n');
 
-  // Guard rails, and deliberately loose ones: this stand exists to be read, not
-  // to gate a commit. A bot that never reaches the late game measures nothing,
-  // and one that never dies anywhere measures nothing either.
-  expect(reachedLate).toBeGreaterThan(0);
-  expect(ended).toBeGreaterThan(0);
+  // Guard rails: this stand exists to be read, and a stand that cannot measure
+  // has to say so rather than print an empty column.
+  //
+  // Three rather than one, which is the lesson of how this last went red. The
+  // README said a year of this ago that the guard was down to a single seed and
+  // that the next run-shortening change would fail it — and then the change came
+  // and it did, quietly, because one seed was never enough to average a hit rate
+  // over anyway. A threshold that only fails after the measurement is already
+  // worthless is a threshold set too low.
+  expect(reachedLate, 'nobody reaches the late game; this stand measures nothing').toBeGreaterThanOrEqual(3);
+  expect(ended, 'nobody dies; this stand measures nothing either').toBeGreaterThan(0);
 });
