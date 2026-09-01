@@ -709,7 +709,9 @@
         list-style: none;
         margin: 14px auto;
         padding: 0;
-        width: 260px;
+        /* The chat's width, because they sit under each other in the waiting
+           room and two panels a few pixels apart read as a mistake. */
+        width: 320px;
         text-align: left;
       }
 
@@ -731,6 +733,24 @@
       .roster .tag {
         color: var(--muted);
         font-size: 11px;
+      }
+
+      /* What that seat is bringing, under its number and in the weapon's own
+         colour — the same one its card and its projectiles use, so a team can
+         be read without reading. */
+      .roster .brings {
+        display: block;
+        margin-top: 2px;
+        font-size: 11px;
+      }
+
+      .brought {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .brought-name {
+        font-size: 13px;
       }
 
       .hint--warn {
@@ -1592,6 +1612,15 @@
             </form>
           </div>
           <p class="hint keys-only" id="chat-hint"></p>
+
+          <!-- What this player brings. Filled by LobbyView; the button borrows
+               the weapon cards from the solo half of the screen rather than
+               keeping a second set of them here. -->
+          <div class="code-show" id="room-weapon-line">
+            <span class="brought" data-i18n="room.weapon">You bring</span>
+            <span class="brought-name" id="room-weapon"></span>
+            <button class="action action--quiet" type="button" id="room-change"></button>
+          </div>
 
           <button class="action" type="button" id="room-begin"></button>
           <p class="hint" id="room-begin-hint"></p>

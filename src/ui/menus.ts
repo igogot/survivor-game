@@ -21,6 +21,16 @@ import type { World } from '../world/world';
 /** Which panel of the opening screen is up. */
 type StartStep = 'mode' | 'weapons' | 'party';
 
+/**
+ * What taking a weapon card means at this moment.
+ *
+ * The panel is the same one either way — one set of cards for the whole screen,
+ * painted once — but the answer goes to two different places. On the solo path
+ * it starts the run. On the party path it is a message to the room, and the
+ * screen goes back to where the player left it.
+ */
+type Picking = 'solo' | 'party';
+
 /** Side of the figure painted onto a card, matching its atlas frame. */
 const STARTER_ART_SIZE = 64;
 
@@ -52,6 +62,7 @@ export class StartScreen {
   private readonly rules = requireElement('help-start');
   private readonly lobby: LobbyView;
   private current: StartStep = 'mode';
+  private picking: Picking = 'solo';
 
   /**
    * Built once, not on every show.
@@ -64,13 +75,32 @@ export class StartScreen {
     private readonly onStart: (weaponId: string) => void,
     private readonly paint: SpritePainter,
     onTeamStart: (start: LobbyStart) => void,
+    starter: string,
   ) {
     this.build();
-    this.lobby = new LobbyView(() => this.step('mode'), onTeamStart);
+    this.lobby = new LobbyView(
+      () => this.step('mode'),
+      onTeamStart,
+      // The waiting room asking for the cards. It does not own them, so it asks
+      // the screen that does; `pick` below knows the answer has to go back.
+      () => this.step('weapons'),
+      starter,
+    );
 
-    requireElement('mode-solo').addEventListener('click', () => this.step('weapons'));
-    requireElement('mode-party').addEventListener('click', () => this.step('party'));
-    requireElement('weapons-back').addEventListener('click', () => this.step('mode'));
+    requireElement('mode-solo').addEventListener('click', () => {
+      this.picking = 'solo';
+      this.step('weapons');
+    });
+    requireElement('mode-party').addEventListener('click', () => {
+      this.picking = 'party';
+      this.step('party', true);
+    });
+    // Back out of the cards to wherever they were opened from, which is not
+    // always the mode choice: a player who stepped out of the waiting room to
+    // change weapons has a team waiting for them.
+    requireElement('weapons-back').addEventListener('click', () => {
+      this.step(this.picking === 'party' ? 'party' : 'mode');
+    });
   }
 
   /**
@@ -88,8 +118,13 @@ export class StartScreen {
    * mode is: the board is a solo table, and the rules a player wants are the
    * rules for the way they are about to play. So they arrive together, the
    * moment the question is answered.
+   *
+   * `fresh` separates entering multiplayer from returning to it. Entering opens
+   * the flow at create-or-join; returning — from the weapon cards — has to land
+   * on whichever panel the player left, because they are still in the room they
+   * left it from.
    */
-  private step(step: StartStep): void {
+  private step(step: StartStep, fresh = false): void {
     this.current = step;
     this.modePanel.hidden = step !== 'mode';
     this.weaponsPanel.hidden = step !== 'weapons';
@@ -98,11 +133,30 @@ export class StartScreen {
     this.extras.hidden = !answered;
     this.rules.hidden = !answered;
 
-    if (step === 'party') {
+    if (step !== 'party') {
+      this.lobby.hide();
+    } else if (fresh) {
       this.lobby.open();
     } else {
-      this.lobby.hide();
+      this.lobby.resume();
     }
+  }
+
+  /**
+   * Takes a weapon, whatever that means where the player is standing.
+   *
+   * The one door for both the cards and the digit keys, so the keyboard cannot
+   * do something the mouse does not. It used to be `onStart` directly, and that
+   * would now start a solo run from inside a waiting room.
+   */
+  pick(weaponId: string): void {
+    if (this.picking === 'party') {
+      this.lobby.choose(weaponId);
+      this.step('party');
+      return;
+    }
+
+    this.onStart(weaponId);
   }
 
   /**
@@ -122,7 +176,7 @@ export class StartScreen {
     const choices = starterChoices();
 
     for (const choice of choices) {
-      this.cards.append(starterCard(choice, this.onStart, this.paint));
+      this.cards.append(starterCard(choice, (id) => this.pick(id), this.paint));
     }
 
     this.keys.replaceChildren(...keyHint(choices));
@@ -147,6 +201,7 @@ export class StartScreen {
 
   /** Always opens on the mode choice: a restart is a chance to play differently. */
   show(): void {
+    this.picking = 'solo';
     this.step('mode');
     this.root.hidden = false;
   }
@@ -165,7 +220,7 @@ export class StartScreen {
  */
 function starterCard(
   choice: StarterChoice,
-  onStart: (weaponId: string) => void,
+  onPick: (weaponId: string) => void,
   paint: SpritePainter,
 ): HTMLElement {
   const card = document.createElement('button');
@@ -201,7 +256,7 @@ function starterCard(
   detail.textContent = choice.detail;
 
   card.append(top, art, detail);
-  card.addEventListener('click', () => onStart(choice.id));
+  card.addEventListener('click', () => onPick(choice.id));
   return card;
 }
 

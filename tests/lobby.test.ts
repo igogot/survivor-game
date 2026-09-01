@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CODE_ALPHABET, CODE_LENGTH, isCode, makeCode, normaliseCode } from '../src/net/code';
 import { CHAT_HISTORY, Lobby, MAX_PARTY, MAX_SAID } from '../src/net/lobby';
-import type { LobbyMessage } from '../src/net/lobby';
+import type { LobbyMessage, LobbyStart } from '../src/net/lobby';
 
 /**
  * The waiting room, driven the way two browser windows would drive it.
@@ -22,7 +22,10 @@ function counter(start = 0): () => number {
 }
 
 /** A room everyone shouts into, and a way to add another person to it. */
-function room(): { join: (seed?: number) => Lobby; sent: LobbyMessage[] } {
+function room(): {
+  join: (seed?: number, starter?: string) => Lobby;
+  sent: LobbyMessage[];
+} {
   const members: Lobby[] = [];
   const sent: LobbyMessage[] = [];
 
@@ -34,8 +37,8 @@ function room(): { join: (seed?: number) => Lobby; sent: LobbyMessage[] } {
 
   return {
     sent,
-    join(seed = members.length + 1) {
-      const lobby = new Lobby(send, counter(seed));
+    join(seed = members.length + 1, starter = 'bolt') {
+      const lobby = new Lobby(send, counter(seed), starter);
       members.push(lobby);
       return lobby;
     },
@@ -242,6 +245,190 @@ describe('a waiting room', () => {
     expect(first.state().members).toEqual(host.state().members);
     expect(second.state().members).toEqual(host.state().members);
     expect(host.state().members[0]).toBe(host.self);
+  });
+});
+
+/**
+ * What each player brings.
+ *
+ * A party run is built from one weapon id per seat, and those ids have to reach
+ * the machine doing the building. So the choice is a fact about the room like
+ * the roster is, kept by the host and republished — not something each screen
+ * decides for itself, which would give four machines four different worlds.
+ */
+describe('what each player brings', () => {
+  it('arrives with the knock', () => {
+    const shared = room();
+    const host = shared.join(1, 'orbit');
+    const guest = shared.join(2, 'nova');
+
+    guest.join(host.host());
+
+    expect(host.state().starters).toEqual(['orbit', 'nova']);
+    expect(guest.state().starters).toEqual(['orbit', 'nova']);
+  });
+
+  /**
+   * The waiting room is where a team looks at what everybody picked and argues
+   * about it, so changing your mind there has to work — and has to reach the
+   * host, because the host's list is the one the world is built from.
+   */
+  it('can be changed from the waiting room', () => {
+    const shared = room();
+    const host = shared.join(1);
+    const guest = shared.join(2);
+
+    guest.join(host.host());
+    guest.choose('harpoon');
+
+    expect(host.state().starters).toEqual(['bolt', 'harpoon']);
+    expect(guest.state().starters).toEqual(['bolt', 'harpoon']);
+  });
+
+  it('can be changed by the host, who has nobody to ask', () => {
+    const shared = room();
+    const host = shared.join(1);
+    const guest = shared.join(2);
+
+    guest.join(host.host());
+    host.choose('ember');
+
+    expect(guest.state().starters).toEqual(['ember', 'bolt']);
+  });
+
+  /** A second hello is a change of weapon, not a second seat. */
+  it('does not seat somebody twice for changing their mind', () => {
+    const shared = room();
+    const host = shared.join(1);
+    const guest = shared.join(2);
+
+    guest.join(host.host());
+    guest.choose('nova');
+    guest.choose('spear');
+
+    expect(host.state().members).toEqual([host.self, guest.self]);
+    expect(host.state().starters).toEqual(['bolt', 'spear']);
+  });
+
+  /**
+   * And it does not move anybody. A roster that reordered itself every time
+   * somebody browsed the cards would renumber the whole team mid-sentence.
+   */
+  it('leaves everybody in the seat they took', () => {
+    const shared = room();
+    const host = shared.join(1);
+    const first = shared.join(2);
+    const second = shared.join(3);
+
+    const code = host.host();
+    first.join(code);
+    second.join(code);
+    first.choose('nova');
+
+    expect(host.state().members).toEqual([host.self, first.self, second.self]);
+    expect(host.state().starters).toEqual(['bolt', 'nova', 'bolt']);
+  });
+
+  it('is remembered from before there was a room', () => {
+    const shared = room();
+    const host = shared.join(1);
+
+    host.choose('orbit');
+    host.host();
+
+    expect(host.state().starters).toEqual(['orbit']);
+    expect(host.state().starter).toBe('orbit');
+  });
+
+  /** Leaving takes a weapon off the list with the player holding it. */
+  it('goes when its owner does', () => {
+    const shared = room();
+    const host = shared.join(1);
+    const first = shared.join(2);
+    const second = shared.join(3);
+
+    const code = host.host();
+    first.join(code);
+    second.join(code);
+    first.choose('nova');
+    second.choose('spear');
+    first.leave();
+
+    expect(host.state().members).toEqual([host.self, second.self]);
+    expect(host.state().starters).toEqual(['bolt', 'spear']);
+  });
+});
+
+/**
+ * The moment the room stops being a room.
+ *
+ * Everything a machine needs to build the same world as everybody else travels
+ * in one message, because a world assembled from two sources is a world two
+ * machines can disagree about.
+ */
+describe('turning the room into a run', () => {
+  it('hands everybody the same seed, roster and weapons', () => {
+    const shared = room();
+    const host = shared.join(1);
+    const guest = shared.join(2);
+
+    const starts: LobbyStart[] = [];
+    host.onStart = (start) => starts.push(start);
+    guest.onStart = (start) => starts.push(start);
+
+    guest.join(host.host());
+    guest.choose('harpoon');
+    host.begin();
+
+    expect(starts).toHaveLength(2);
+
+    // Picked out by who they are for rather than by arrival order. The host
+    // tells the room before it tells itself, so the guest's start lands first —
+    // which is an implementation detail and not a thing to hold a test to.
+    const forHost = starts.find((start) => start.hosting);
+    const forGuest = starts.find((start) => !start.hosting);
+    if (forHost === undefined || forGuest === undefined) {
+      throw new Error('both ends should have started');
+    }
+
+    expect(forHost.seed).toBe(forGuest.seed);
+    expect(forHost.members).toEqual(forGuest.members);
+    expect(forHost.starters).toEqual(['bolt', 'harpoon']);
+    expect(forGuest.starters).toEqual(['bolt', 'harpoon']);
+
+    // Same list, and each machine knows which of the seats is its own.
+    expect(forHost.seat).toBe(0);
+    expect(forGuest.seat).toBe(1);
+    expect(forHost.hosting).toBe(true);
+    expect(forGuest.hosting).toBe(false);
+  });
+
+  /** A team of one is a solo run with extra steps, and there is one of those. */
+  it('refuses to start a team of one', () => {
+    const shared = room();
+    const host = shared.join(1);
+
+    let started = 0;
+    host.onStart = () => started++;
+    host.host();
+    host.begin();
+
+    expect(started).toBe(0);
+  });
+
+  it('is the host’s to press', () => {
+    const shared = room();
+    const host = shared.join(1);
+    const guest = shared.join(2);
+
+    let started = 0;
+    host.onStart = () => started++;
+    guest.onStart = () => started++;
+
+    guest.join(host.host());
+    guest.begin();
+
+    expect(started).toBe(0);
   });
 });
 

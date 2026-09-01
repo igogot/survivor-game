@@ -55,6 +55,14 @@ export type LobbyPhase = 'idle' | 'hosting' | 'joining' | 'joined' | 'error';
 export interface LobbyStart {
   readonly seed: number;
   readonly members: readonly string[];
+  /**
+   * What each of them is bringing, in the same order.
+   *
+   * `World` takes exactly this — one weapon id per player — so a party run is
+   * built the way a solo run is, and every machine builds the same one because
+   * the list travels with the seed rather than being asked for afterwards.
+   */
+  readonly starters: readonly string[];
   readonly seat: number;
   readonly hosting: boolean;
   /** The room, because signalling is addressed within one. */
@@ -67,8 +75,22 @@ export interface LobbyStart {
 export type LobbyError = 'notFound' | 'full' | 'closed';
 
 export type LobbyMessage =
-  | { readonly kind: 'hello'; readonly code: string; readonly from: string }
-  | { readonly kind: 'roster'; readonly code: string; readonly members: readonly string[] }
+  /**
+   * A knock, and afterwards a change of mind.
+   *
+   * The same message does both because it carries the same fact — who I am and
+   * what I am bringing — and a second message for the second case would be a
+   * second thing to keep in step with the first. A `hello` from somebody the
+   * host already has a seat for is not a new arrival; it is that player saying
+   * they have swapped weapons.
+   */
+  | { readonly kind: 'hello'; readonly code: string; readonly from: string; readonly starter: string }
+  | {
+      readonly kind: 'roster';
+      readonly code: string;
+      readonly members: readonly string[];
+      readonly starters: readonly string[];
+    }
   | { readonly kind: 'full'; readonly code: string; readonly to: string }
   | { readonly kind: 'bye'; readonly code: string; readonly from: string }
   | { readonly kind: 'closed'; readonly code: string }
@@ -78,6 +100,7 @@ export type LobbyMessage =
       readonly code: string;
       readonly seed: number;
       readonly members: readonly string[];
+      readonly starters: readonly string[];
     }
   /*
    * Two browsers introducing themselves.
@@ -143,6 +166,16 @@ export interface LobbyState {
   readonly code: string;
   /** Everyone in the room, host first. Empty until a roster arrives. */
   readonly members: readonly string[];
+  /** What each of them is bringing, in the same order as `members`. */
+  readonly starters: readonly string[];
+  /**
+   * This player's own choice.
+   *
+   * Held apart from the roster because it is answerable before there is a
+   * roster to hold it: somebody can pick a weapon, then create a team, and the
+   * choice has to survive the gap.
+   */
+  readonly starter: string;
   readonly self: string;
   readonly hosting: boolean;
   readonly error: LobbyError | null;
@@ -153,7 +186,21 @@ export interface LobbyState {
 export class Lobby {
   private phase: LobbyPhase = 'idle';
   private code = '';
+  /**
+   * The roster, as two arrays rather than one array of pairs.
+   *
+   * `members[i]` and `starters[i]` are one person. They are only ever written
+   * together, by the four methods below, and on a guest they are only ever
+   * copied from what the host sent — so there is one writer and no chance of
+   * the two drifting apart.
+   *
+   * Keeping the ids a plain `string[]` is the reason for the shape. It is what
+   * `PeerMesh`, `HostSession` and the seat lookup in `main.ts` all take, and
+   * wrapping each member in an object to save one array here would have
+   * rippled through every one of them for no gain.
+   */
   private members: string[] = [];
+  private starters: string[] = [];
   private hosting = false;
   private error: LobbyError | null = null;
   private chat: ChatLine[] = [];
@@ -174,9 +221,19 @@ export class Lobby {
    */
   onStart: ((start: LobbyStart) => void) | null = null;
 
+  /**
+   * `starter` is what this player opens with until they say otherwise.
+   *
+   * Handed in rather than imported so this file keeps knowing nothing about
+   * what a weapon is. To the lobby a starter is a string it carries from one
+   * machine to another; the only thing that has to agree about its meaning is
+   * `World`, which resolves an id it does not recognise to the bolt rather than
+   * failing — so a garbled one costs a player their choice and nothing else.
+   */
   constructor(
     private readonly send: (message: LobbyMessage) => void,
     private readonly random: () => number,
+    private starter: string,
   ) {
     this.self = makeMemberId(random);
   }
@@ -194,8 +251,14 @@ export class Lobby {
     if (this.phase !== 'hosting' || this.members.length < 2) return;
 
     const seed = Math.floor(this.random() * 0xffffffff);
-    this.send({ kind: 'begin', code: this.code, seed, members: this.members });
-    this.start(seed, this.members);
+    this.send({
+      kind: 'begin',
+      code: this.code,
+      seed,
+      members: this.members,
+      starters: this.starters,
+    });
+    this.start(seed, this.members, this.starters);
   }
 
   state(): LobbyState {
@@ -203,6 +266,8 @@ export class Lobby {
       phase: this.phase,
       code: this.code,
       members: this.members,
+      starters: this.starters,
+      starter: this.starter,
       self: this.self,
       hosting: this.hosting,
       error: this.error,
@@ -214,6 +279,7 @@ export class Lobby {
   host(): string {
     this.code = makeCode(this.random);
     this.members = [this.self];
+    this.starters = [this.starter];
     this.hosting = true;
     this.error = null;
     this.chat = [];
@@ -231,11 +297,40 @@ export class Lobby {
   join(code: string): void {
     this.code = code;
     this.members = [];
+    this.starters = [];
     this.hosting = false;
     this.error = null;
     this.chat = [];
     this.phase = 'joining';
-    this.send({ kind: 'hello', code, from: this.self });
+    this.send({ kind: 'hello', code, from: this.self, starter: this.starter });
+  }
+
+  /**
+   * Picks what this player brings, and tells the room.
+   *
+   * Kept here rather than in the view because the choice has to survive being
+   * sent: the host's copy of the roster is what the world is built from, and
+   * the only way a guest's weapon reaches that copy is a message. A player who
+   * changes their mind in the waiting room says so the same way they said it
+   * when they arrived — see `hello`.
+   *
+   * Answerable at any point, including before there is a room. Somebody who
+   * picks a weapon and then creates a team creates it holding that weapon.
+   */
+  choose(starter: string): void {
+    if (starter === this.starter) return;
+    this.starter = starter;
+
+    if (this.hosting) {
+      // The host is not a message to itself. It edits its own seat and
+      // republishes, which is the same thing `admit` does for everybody else.
+      this.starters = this.starters.map((had, seat) =>
+        this.members[seat] === this.self ? starter : had,
+      );
+      this.publish();
+    } else if (this.phase === 'joined' || this.phase === 'joining') {
+      this.send({ kind: 'hello', code: this.code, from: this.self, starter });
+    }
   }
 
   /** Nobody answered. Only means anything while a knock is outstanding. */
@@ -266,6 +361,7 @@ export class Lobby {
     this.phase = 'idle';
     this.code = '';
     this.members = [];
+    this.starters = [];
     this.hosting = false;
     this.error = null;
     this.chat = [];
@@ -305,10 +401,10 @@ export class Lobby {
 
     switch (message.kind) {
       case 'hello':
-        this.admit(message.from);
+        this.admit(message.from, message.starter);
         break;
       case 'roster':
-        this.adopt(message.members);
+        this.adopt(message.members, message.starters);
         break;
       case 'full':
         if (message.to === this.self && this.phase === 'joining') this.fail('full');
@@ -323,7 +419,7 @@ export class Lobby {
         // Only from a room this lobby is a guest in, and only for somebody it
         // has a seat for. A host ignores it: it already started itself.
         if (!this.hosting && message.members.includes(this.self)) {
-          this.start(message.seed, message.members);
+          this.start(message.seed, message.members, message.starters);
         }
         break;
       // Signalling shares this channel because it needs the same reach and the
@@ -353,25 +449,33 @@ export class Lobby {
     }
   }
 
-  private admit(from: string): void {
+  private admit(from: string, starter: string): void {
     if (!this.hosting || from === this.self) return;
 
-    if (!this.members.includes(from)) {
+    const seat = this.members.indexOf(from);
+    if (seat === -1) {
       if (this.members.length >= MAX_PARTY) {
         this.send({ kind: 'full', code: this.code, to: from });
         return;
       }
       this.members = [...this.members, from];
+      this.starters = [...this.starters, starter];
+    } else {
+      // Somebody already in the room, so this is a change of weapon rather than
+      // an arrival. Their seat does not move: a roster that reordered itself
+      // every time somebody browsed the cards would renumber the whole team.
+      this.starters = this.starters.map((had, index) => (index === seat ? starter : had));
     }
 
     // Answered even when they were already on the list: a guest re-knocking is
     // a guest who did not hear the first answer.
-    this.send({ kind: 'roster', code: this.code, members: this.members });
+    this.publish();
   }
 
-  private adopt(members: readonly string[]): void {
+  private adopt(members: readonly string[], starters: readonly string[]): void {
     if (this.hosting || !members.includes(this.self)) return;
     this.members = [...members];
+    this.starters = [...starters];
     this.phase = 'joined';
     this.error = null;
   }
@@ -379,17 +483,29 @@ export class Lobby {
   private dismiss(from: string): void {
     if (!this.hosting) return;
 
-    const without = this.members.filter((member) => member !== from);
-    if (without.length === this.members.length) return;
+    const seat = this.members.indexOf(from);
+    if (seat === -1) return;
 
-    this.members = without;
-    this.send({ kind: 'roster', code: this.code, members: this.members });
+    this.members = this.members.filter((_, index) => index !== seat);
+    this.starters = this.starters.filter((_, index) => index !== seat);
+    this.publish();
   }
 
-  private start(seed: number, members: readonly string[]): void {
+  /** The roster as the host has it, which is the only copy that decides. */
+  private publish(): void {
+    this.send({
+      kind: 'roster',
+      code: this.code,
+      members: this.members,
+      starters: this.starters,
+    });
+  }
+
+  private start(seed: number, members: readonly string[], starters: readonly string[]): void {
     this.onStart?.({
       seed,
       members,
+      starters,
       seat: members.indexOf(this.self),
       hosting: this.hosting,
       code: this.code,
@@ -409,6 +525,7 @@ export class Lobby {
     this.phase = 'error';
     this.error = error;
     this.members = [];
+    this.starters = [];
     this.hosting = false;
     this.chat = [];
   }
