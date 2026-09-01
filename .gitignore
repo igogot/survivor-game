@@ -14,3 +14,17 @@ public/api/config.php
 # Generated from the game's constants by scripts/emit-limits.ts on every build.
 # Committing it would mean two sources of truth for the same numbers.
 public/api/limits.json
+
+# Git worktrees, which more than one session keeps inside the checkout.
+#
+# Not a preference — a repair. `git add -A` in the main checkout sweeps a nested
+# repository up as a submodule gitlink, and a gitlink with no .gitmodules entry
+# is a phantom: a fresh clone gets an empty directory it cannot explain, and
+# `git submodule update` fails outright with "No url found for submodule path".
+# That is exactly what happened to .wboss2, and it reached origin/main before
+# anybody noticed.
+#
+# Ignoring the pattern is the cheap half of the fix. The other half is keeping
+# worktrees outside the repository in the first place, which is the better
+# habit and the one this note exists to encourage.
+.w*/
