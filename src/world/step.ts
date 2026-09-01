@@ -1,6 +1,7 @@
 import { chestSystem } from '../systems/chests';
 import { contactSystem } from '../systems/contact';
 import { effectSystem } from '../systems/effects';
+import { bossAbilitySystem } from '../systems/bossAbility';
 import { enemyAttackSystem } from '../systems/enemyAttack';
 import { movementSystem, separationSystem, steeringSystem } from '../systems/movement';
 import { pickupSystem } from '../systems/pickup';
@@ -59,6 +60,7 @@ export function stepWorld(world: World, dt: number): void {
   separationSystem(world, dt);
   weaponSystem(world, dt);
   enemyAttackSystem(world, dt);
+  bossAbilitySystem(world, dt);
   projectileSystem(world, dt);
   contactSystem(world);
   pickupSystem(world, dt);

@@ -27,6 +27,21 @@ export const EN = {
   'hud.byline': 'by igogot',
   'hud.bossName': "THE HORDE'S END",
   'hud.bossWarning': 'BOSS INCOMING',
+  /*
+   * One name per boss ability. The bar says which of the ten is in front of
+   * you, because a trick the player cannot name is a trick they cannot learn —
+   * and the whole point of ten different bosses is that they are learnable.
+   */
+  'boss.charge': 'THE CHARGER',
+  'boss.summon': 'THE CALLER',
+  'boss.volley': 'THE THROWER',
+  'boss.burst': 'THE SCATTERER',
+  'boss.quake': 'THE BREAKER',
+  'boss.enrage': 'THE CORNERED',
+  'boss.leech': 'THE FEEDER',
+  'boss.blink': 'THE STALKER',
+  'boss.ward': 'THE WARDED',
+  'boss.thorns': 'THE MIRROR',
   'hud.pauseLabel': 'Pause',
 
   'levelup.title': 'Level Up',

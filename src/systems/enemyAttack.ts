@@ -27,11 +27,29 @@ export function enemyAttackSystem(world: World, dt: number): void {
     if (def?.ranged === undefined) continue;
 
     enemy.attackCooldown = def.ranged.cooldown;
-    throwHex(world, enemy, def.ranged);
+    hurlHex(world, enemy, def.ranged);
   }
 }
 
-type RangedDef = NonNullable<import('../data/enemies').EnemyDef['ranged']>;
+/**
+ * One thrown hex: how fast, how big, how hard, how long it lives — and
+ * optionally where.
+ *
+ * The caster passes its own `ranged` definition, which has exactly these
+ * fields and neither of the angles. A boss passes numbers of its own and uses
+ * the angles: `spread` turns the aimed shot by that much, and `absolute`
+ * ignores aiming altogether and throws in the given direction.
+ */
+export interface HexShot {
+  readonly projectileSpeed: number;
+  readonly projectileRadius: number;
+  readonly damage: number;
+  readonly life: number;
+  /** Radians added to the aimed direction. */
+  readonly spread?: number;
+  /** Radians from the boss, aimed at nobody. Overrides `spread`. */
+  readonly absolute?: number;
+}
 
 /**
  * Aims where its target is going, not where they are.
@@ -51,36 +69,42 @@ type RangedDef = NonNullable<import('../data/enemies').EnemyDef['ranged']>;
  * Two passes land within a few pixels at these speeds, and the intent is a
  * plausible guess by something throwing a bottle, not a firing solution.
  */
-function throwHex(world: World, enemy: Enemy, ranged: RangedDef): void {
-  const player = nearestPlayer(world, enemy.x, enemy.y);
-  if (player === null) return;
+export function hurlHex(world: World, enemy: Enemy, shot: HexShot): void {
+  let angle: number;
 
-  const speed = player.stats.moveSpeed;
+  if (shot.absolute !== undefined) {
+    angle = shot.absolute;
+  } else {
+    const player = nearestPlayer(world, enemy.x, enemy.y);
+    if (player === null) return;
 
-  let aimX = player.x;
-  let aimY = player.y;
+    const speed = player.stats.moveSpeed;
+    let aimX = player.x;
+    let aimY = player.y;
 
-  for (let pass = 0; pass < 2; pass++) {
-    const flight = Math.hypot(aimX - enemy.x, aimY - enemy.y) / ranged.projectileSpeed;
-    aimX = player.x + player.headingX * speed * flight;
-    aimY = player.y + player.headingY * speed * flight;
+    for (let pass = 0; pass < 2; pass++) {
+      const flight = Math.hypot(aimX - enemy.x, aimY - enemy.y) / shot.projectileSpeed;
+      aimX = player.x + player.headingX * speed * flight;
+      aimY = player.y + player.headingY * speed * flight;
+    }
+
+    const dx = aimX - enemy.x;
+    const dy = aimY - enemy.y;
+    if (Math.hypot(dx, dy) < 0.001) return;
+
+    angle = Math.atan2(dy, dx) + (shot.spread ?? 0);
   }
-
-  const dx = aimX - enemy.x;
-  const dy = aimY - enemy.y;
-  const distance = Math.hypot(dx, dy);
-  if (distance < 0.001) return;
 
   const projectile = spawnProjectile(world);
   projectile.x = enemy.x;
   projectile.y = enemy.y;
   projectile.px = projectile.x;
   projectile.py = projectile.y;
-  projectile.vx = (dx / distance) * ranged.projectileSpeed;
-  projectile.vy = (dy / distance) * ranged.projectileSpeed;
-  projectile.damage = ranged.damage;
-  projectile.radius = ranged.projectileRadius;
-  projectile.life = ranged.life;
+  projectile.vx = Math.cos(angle) * shot.projectileSpeed;
+  projectile.vy = Math.sin(angle) * shot.projectileSpeed;
+  projectile.damage = shot.damage;
+  projectile.radius = shot.projectileRadius;
+  projectile.life = shot.life;
   projectile.pierce = 0;
   projectile.lastHitId = 0;
   projectile.color = enemy.color;

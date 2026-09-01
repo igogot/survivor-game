@@ -179,6 +179,20 @@ export interface Enemy {
    */
   hitTag: number;
   boss: boolean;
+  /**
+   * Which trick this boss has, as a `BossAbilityId`, or `''` for everything
+   * that is not a boss.
+   *
+   * A string rather than a reference, for the same reason `defId` is one: the
+   * entity comes out of a pool and carries numbers, and the definition is
+   * looked up when somebody needs it.
+   */
+  ability: string;
+  /**
+   * Seconds the current effect has left — a charge still running, a ward still
+   * up. Zero when nothing is in progress, which is most of the time.
+   */
+  abilityTimer: number;
 }
 
 export interface Projectile {
