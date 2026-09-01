@@ -1,6 +1,8 @@
 import { CONFIG } from '../config';
 import { weaponById } from '../data/weapons';
 import { t } from '../i18n';
+import { xpForNextLevel } from '../systems/progression';
+import { isAlive } from '../world/party';
 import { edgeMark } from './offscreen';
 import type { SpritePainter } from './starters';
 import type { Enemy, Player } from '../world/types';
@@ -57,6 +59,7 @@ export class Hud {
   private readonly bossFill = requireElement('boss-fill');
   private readonly warning = requireElement('warning');
   private readonly chestMarker = requireElement('chest-marker');
+  private readonly downed = requireElement('downed');
   private readonly chestArrow = requireElement('chest-arrow');
 
   /** Exponential moving average — a raw per-frame value is unreadable. */
@@ -85,22 +88,32 @@ export class Hud {
     paint('chest', icon);
   }
 
-  update(world: World): void {
+  /**
+   * `view` is whose eyes this screen is using and `self` is who is sitting at
+   * it. They are the same player until that player dies, and after that the
+   * bars belong to whoever is being watched while the notices still belong to
+   * the person watching — which is the whole difference between spectating and
+   * having been replaced.
+   */
+  update(world: World, view: Player, self: Player = view): void {
     const now = performance.now();
     const elapsed = this.lastFrameTime > 0 ? (now - this.lastFrameTime) / 1000 : 0;
     this.lastFrameTime = now;
     if (elapsed > 0) this.smoothedFps += (1 / elapsed - this.smoothedFps) * 0.05;
 
-    const player = world.player;
+    const player = view;
 
-    this.level.textContent = `${t('hud.level')} ${player.level}`;
+    // The party's level, not the viewer's — there is one bar and one level.
+    this.level.textContent = `${t('hud.level')} ${world.level}`;
     // Clamped: a tab returning from the background must not teleport the drain.
     this.updateHealth(player, Math.min(elapsed, 0.1));
-    this.xpFill.style.width = `${percent(player.xp, player.xpToNext)}%`;
+    // One bar for the party, so it is read off the run and not off the
+    // viewer — see `World.level`.
+    this.xpFill.style.width = `${percent(world.xp, xpForNextLevel(world))}%`;
 
     // Unclamped: the run has no end for it to stop at.
     this.timer.textContent = formatTime(world.time);
-    this.weapons.textContent = describeWeapons(world);
+    this.weapons.textContent = describeWeapons(view);
     this.kills.textContent = `${t('hud.kills')} ${world.kills}`;
 
     // Hidden until there is one, otherwise it is a zero the player carries for
@@ -115,18 +128,61 @@ export class Hud {
     this.fps.textContent = `${Math.round(this.smoothedFps)} fps`;
 
     this.updateBoss(world);
-    this.updateChest(world);
+    this.updateChest(world, view);
+    this.updateDowned(world, self);
+  }
+
+  /**
+   * Who is down, and for how long.
+   *
+   * One line per fallen player rather than a banner that flashes once: it is
+   * true for the whole minute, and somebody who looked away for ten seconds
+   * should not have missed the only time the game said it. The viewer's own
+   * death gets a second line, because being dead comes with a control nothing
+   * else on the screen has.
+   */
+  private updateDowned(world: World, self: Player): void {
+    const lines: HTMLElement[] = [];
+
+    for (let i = 0; i < world.players.length; i++) {
+      const player = world.players[i];
+      if (isAlive(player)) continue;
+
+      const line = document.createElement('div');
+      line.textContent = t('hud.down', {
+        who: t('hud.player', { n: i + 1 }),
+        clock: formatTime(Math.max(0, player.respawnAt - world.time)),
+      });
+      lines.push(line);
+    }
+
+    if (!isAlive(self)) {
+      const watched = world.players[self.watching];
+      if (watched !== undefined) {
+        const line = document.createElement('div');
+        line.className = 'watching';
+        line.textContent = t('hud.watching', {
+          who: t('hud.player', { n: self.watching + 1 }),
+        });
+        lines.push(line);
+      }
+    }
+
+    this.downed.replaceChildren(...lines);
   }
 
   /**
    * Points at the chest for as long as there is one.
    *
    * Hidden while the chest is on screen, because then the chest is the marker.
-   * The camera is centred on the player and never rotates, so the direction on
+   * The camera is centred on the viewer and never rotates, so the direction on
    * screen is the direction in the world and this needs nothing from the
    * renderer — just the two positions and the size of the window.
+   *
+   * Drawn from the viewer's own position: with a party the chest is one place,
+   * but which way it lies is a different answer for each of them.
    */
-  private updateChest(world: World): void {
+  private updateChest(world: World, view: Player): void {
     const chest = world.chest;
     if (chest === null) {
       this.chestMarker.hidden = true;
@@ -139,7 +195,7 @@ export class Hud {
     const reach = (half: number, inset: number): number =>
       Math.max(MARKER_MIN_REACH, half - inset);
 
-    const mark = edgeMark((chest.x - world.player.x) * zoom, (chest.y - world.player.y) * zoom, {
+    const mark = edgeMark((chest.x - view.x) * zoom, (chest.y - view.y) * zoom, {
       left: reach(halfWidth, MARKER_INSET),
       right: reach(halfWidth, MARKER_INSET),
       top: reach(halfHeight, MARKER_TOP_INSET),
@@ -219,10 +275,10 @@ function findBoss(world: World): Enemy | null {
 }
 
 /** Compact loadout readout: `bolt · orbit 3`. Level is omitted at level 1. */
-function describeWeapons(world: World): string {
+function describeWeapons(player: Player): string {
   const parts: string[] = [];
 
-  for (const state of world.weapons) {
+  for (const state of player.weapons) {
     const def = weaponById(state.defId);
     if (def === undefined) continue;
     parts.push(state.level > 1 ? `${def.id} ${state.level}` : def.id);

@@ -13,8 +13,8 @@ const DT = 1 / CONFIG.tickRate;
  * empty.
  */
 function walk(world: World, keyX = 0, keyY = 0): void {
-  world.intentX = keyX;
-  world.intentY = keyY;
+  world.players[0].intentX = keyX;
+  world.players[0].intentY = keyY;
   steeringSystem(world, DT);
   movementSystem(world, DT);
 }
@@ -81,47 +81,47 @@ describe('viewToWorld', () => {
 describe('steeringSystem', () => {
   it('walks to the ordered point, lands on it exactly and drops the order', () => {
     const world = new World(1);
-    world.moveTarget = { x: 200, y: -150 };
+    world.players[0].moveTarget = { x: 200, y: -150 };
 
     // Long enough to cover the distance several times over; the order must be
     // spent well before the loop runs out.
     for (let i = 0; i < 200; i++) {
-      if (world.moveTarget === null) break;
+      if (world.players[0].moveTarget === null) break;
       walk(world);
     }
 
-    expect(world.moveTarget).toBeNull();
-    expect(world.player.x).toBeCloseTo(200);
-    expect(world.player.y).toBeCloseTo(-150);
+    expect(world.players[0].moveTarget).toBeNull();
+    expect(world.players[0].x).toBeCloseTo(200);
+    expect(world.players[0].y).toBeCloseTo(-150);
   });
 
   it('stays put once it has arrived instead of vibrating on the spot', () => {
     const world = new World(1);
-    world.moveTarget = { x: 40, y: 0 };
+    world.players[0].moveTarget = { x: 40, y: 0 };
 
     for (let i = 0; i < 60; i++) walk(world);
-    const settled = { x: world.player.x, y: world.player.y };
+    const settled = { x: world.players[0].x, y: world.players[0].y };
 
     for (let i = 0; i < 60; i++) walk(world);
 
-    expect(world.player.x).toBe(settled.x);
-    expect(world.player.y).toBe(settled.y);
-    expect(world.intentX).toBe(0);
-    expect(world.intentY).toBe(0);
+    expect(world.players[0].x).toBe(settled.x);
+    expect(world.players[0].y).toBe(settled.y);
+    expect(world.players[0].intentX).toBe(0);
+    expect(world.players[0].intentY).toBe(0);
   });
 
   it('gives the keyboard the wheel back and throws the order away', () => {
     const world = new World(1);
-    world.moveTarget = { x: 0, y: 500 };
+    world.players[0].moveTarget = { x: 0, y: 500 };
 
     walk(world);
-    expect(world.moveTarget).not.toBeNull();
+    expect(world.players[0].moveTarget).not.toBeNull();
 
     // A hand back on the keys, pushing the other way.
     walk(world, -1, 0);
 
-    expect(world.moveTarget).toBeNull();
-    expect(world.player.x).toBeLessThan(0);
+    expect(world.players[0].moveTarget).toBeNull();
+    expect(world.players[0].x).toBeLessThan(0);
   });
 
   it('leaves a world nobody ordered anywhere completely alone', () => {
@@ -129,9 +129,9 @@ describe('steeringSystem', () => {
 
     walk(world, 1, 0);
 
-    expect(world.moveTarget).toBeNull();
-    expect(world.player.x).toBeCloseTo(CONFIG.player.moveSpeed * DT);
-    expect(world.player.y).toBe(0);
+    expect(world.players[0].moveTarget).toBeNull();
+    expect(world.players[0].x).toBeCloseTo(CONFIG.player.moveSpeed * DT);
+    expect(world.players[0].y).toBe(0);
   });
 });
 

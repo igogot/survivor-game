@@ -1,5 +1,6 @@
 import { approach } from '../core/steering';
 import { MAX_ENEMY_RADIUS } from '../data/enemies';
+import { isAlive, nearestPlayer } from '../world/party';
 import { BROADPHASE_PAD } from './shared';
 import type { World } from '../world/world';
 
@@ -20,38 +21,59 @@ const HEADING_TAU = 0.6;
  * `World` alone, with no browser in the room.
  */
 export function steeringSystem(world: World, dt: number): void {
-  const target = world.moveTarget;
-  if (target === null) return;
+  const players = world.players;
 
-  if (world.intentX !== 0 || world.intentY !== 0) {
-    world.moveTarget = null;
-    return;
+  for (let i = 0; i < players.length; i++) {
+    const player = players[i];
+    if (!isAlive(player)) continue;
+
+    const target = player.moveTarget;
+    if (target === null) continue;
+
+    if (player.intentX !== 0 || player.intentY !== 0) {
+      player.moveTarget = null;
+      continue;
+    }
+
+    const walk = approach(player.x, player.y, target.x, target.y, player.stats.moveSpeed * dt);
+
+    player.intentX = walk.x;
+    player.intentY = walk.y;
+    if (walk.arrived) player.moveTarget = null;
   }
-
-  const player = world.player;
-  const walk = approach(player.x, player.y, target.x, target.y, player.stats.moveSpeed * dt);
-
-  world.intentX = walk.x;
-  world.intentY = walk.y;
-  if (walk.arrived) world.moveTarget = null;
 }
 
-/** Moves the player by this tick's intent and steers every enemy toward them. */
+/**
+ * Moves every player by their own intent, then steers each enemy toward
+ * whichever of them is closest.
+ *
+ * The players move first and all of them move before any enemy does, so no
+ * enemy chases a stale position while another chases a fresh one — the horde
+ * sees one frame of the world, not a half-updated one.
+ */
 export function movementSystem(world: World, dt: number): void {
-  const player = world.player;
-
-  player.px = player.x;
-  player.py = player.y;
-  player.x += world.intentX * player.stats.moveSpeed * dt;
-  player.y += world.intentY * player.stats.moveSpeed * dt;
-
-  if (player.invuln > 0) player.invuln -= dt;
-
   // Exponential average rather than the raw intent: framed in seconds, so it
   // behaves the same whatever the tick rate is set to.
   const smoothing = 1 - Math.exp(-dt / HEADING_TAU);
-  world.headingX += (world.intentX - world.headingX) * smoothing;
-  world.headingY += (world.intentY - world.headingY) * smoothing;
+  const players = world.players;
+
+  for (let i = 0; i < players.length; i++) {
+    const player = players[i];
+    // A body does not walk. Without this the corpse of a downed player slides
+    // around under whatever the keyboard is still saying, which is what it did
+    // until somebody asked what death looks like.
+    if (!isAlive(player)) continue;
+
+    player.px = player.x;
+    player.py = player.y;
+    player.x += player.intentX * player.stats.moveSpeed * dt;
+    player.y += player.intentY * player.stats.moveSpeed * dt;
+
+    if (player.invuln > 0) player.invuln -= dt;
+
+    player.headingX += (player.intentX - player.headingX) * smoothing;
+    player.headingY += (player.intentY - player.headingY) * smoothing;
+  }
 
   const enemies = world.enemies;
   for (let i = 0; i < enemies.length; i++) {
@@ -59,8 +81,12 @@ export function movementSystem(world: World, dt: number): void {
     enemy.px = enemy.x;
     enemy.py = enemy.y;
 
-    const dx = player.x - enemy.x;
-    const dy = player.y - enemy.y;
+    // Re-asked every tick rather than remembered, so an enemy switches to
+    // whoever walked past it. Whether that is the right rule is exactly what
+    // the four-player stand has to answer — see `nearestPlayer`.
+    const target = nearestPlayer(world, enemy.x, enemy.y);
+    const dx = target === null ? 0 : target.x - enemy.x;
+    const dy = target === null ? 0 : target.y - enemy.y;
     const distance = Math.hypot(dx, dy);
     if (distance > 0.001) {
       // A ranged enemy closes to its standoff and stops. Walking the last four

@@ -44,14 +44,25 @@ export function projectileSystem(world: World, dt: number): void {
     let spent = projectile.life <= 0;
 
     if (!spent && projectile.hostile) {
-      // One target, so no broad-phase: the horde's shots look for the player
-      // and nothing else. They deliberately go through the same
-      // invulnerability window as a body — see `damagePlayer`.
-      const player = world.player;
+      // Still no broad-phase: the horde's shots look for players and there are
+      // at most four of them, which is cheaper to walk than a grid query would
+      // be to make. They deliberately go through the same invulnerability
+      // window as a body — see `damagePlayer`.
+      //
+      // A hex is spent on the first player it touches, aimed or not. It was
+      // thrown at somebody in particular, but a bottle does not check who it
+      // hit on the way.
       const reach = projectile.radius + CONFIG.player.radius;
-      if (dist2(projectile.x, projectile.y, player.x, player.y) <= reach * reach) {
-        damagePlayer(world, projectile.damage);
+      const players = world.players;
+
+      for (let c = 0; c < players.length; c++) {
+        const player = players[c];
+        if (player.hp <= 0) continue;
+        if (dist2(projectile.x, projectile.y, player.x, player.y) > reach * reach) continue;
+
+        damagePlayer(world, player, projectile.damage);
         spent = true;
+        break;
       }
     } else if (!spent) {
       grid.query(projectile.x, projectile.y, projectile.radius + queryPad, scratch);

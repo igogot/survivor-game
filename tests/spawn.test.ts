@@ -16,7 +16,7 @@ function spawnFor(world: World, seconds: number): void {
 /** Signed angle of an enemy as seen from the player, in [-PI, PI]. */
 function bearing(world: World, index: number): number {
   const enemy = world.enemies[index];
-  return Math.atan2(enemy.y - world.player.y, enemy.x - world.player.x);
+  return Math.atan2(enemy.y - world.players[0].y, enemy.x - world.players[0].x);
 }
 
 describe('waveIntensity', () => {
@@ -48,8 +48,8 @@ describe('waveIntensity', () => {
 describe('spawn placement', () => {
   it('puts most of the horde in the player path', () => {
     const world = new World(1);
-    world.headingX = 1;
-    world.headingY = 0;
+    world.players[0].headingX = 1;
+    world.players[0].headingY = 0;
 
     spawnFor(world, 40);
     expect(world.enemies.length).toBeGreaterThan(40);

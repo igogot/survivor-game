@@ -1,6 +1,7 @@
 import { formatTime, requireElement } from './hud';
 import { describeOffer, describeSpoil } from './offers';
 import { renderHelp } from './help';
+import { LobbyView } from './lobby';
 import {
   plural,
   spoilDescription,
@@ -15,6 +16,9 @@ import type { SpritePainter, StarterChoice } from './starters';
 import type { SpoilDef } from '../data/spoils';
 import type { UpgradeDef } from '../data/upgrades';
 import type { World } from '../world/world';
+
+/** Which panel of the opening screen is up. */
+type StartStep = 'mode' | 'weapons' | 'party';
 
 /** Side of the figure painted onto a card, matching its atlas frame. */
 const STARTER_ART_SIZE = 64;
@@ -39,6 +43,10 @@ export class StartScreen {
   private readonly root = requireElement('start');
   private readonly cards = requireElement('start-weapons');
   private readonly keys = requireElement('start-keys');
+  private readonly modePanel = requireElement('step-mode');
+  private readonly weaponsPanel = requireElement('step-weapons');
+  private readonly lobby: LobbyView;
+  private current: StartStep = 'mode';
 
   /**
    * Built once, not on every show.
@@ -52,6 +60,31 @@ export class StartScreen {
     private readonly paint: SpritePainter,
   ) {
     this.build();
+    this.lobby = new LobbyView(() => this.step('mode'));
+
+    requireElement('mode-solo').addEventListener('click', () => this.step('weapons'));
+    requireElement('mode-party').addEventListener('click', () => this.step('party'));
+    requireElement('weapons-back').addEventListener('click', () => this.step('mode'));
+  }
+
+  /**
+   * Which panel of the opening screen is up.
+   *
+   * The screen is a small flow now rather than one page: pick a mode, then
+   * either a weapon or a team. It is written as one overlay with panels rather
+   * than several overlays because everything around the panels — the frame, the
+   * language switch, the rules — belongs to all of them.
+   */
+  private step(step: StartStep): void {
+    this.current = step;
+    this.modePanel.hidden = step !== 'mode';
+    this.weaponsPanel.hidden = step !== 'weapons';
+
+    if (step === 'party') {
+      this.lobby.open();
+    } else {
+      this.lobby.hide();
+    }
   }
 
   /**
@@ -64,6 +97,7 @@ export class StartScreen {
   relabel(): void {
     this.cards.replaceChildren();
     this.build();
+    this.lobby.relabel();
   }
 
   private build(): void {
@@ -76,7 +110,21 @@ export class StartScreen {
     this.keys.replaceChildren(...keyHint(choices));
   }
 
+  /**
+   * Whether the keys that pick a weapon should do anything.
+   *
+   * The opening screen binds digits and Enter to "take that weapon", and those
+   * belong to exactly one of its panels. Left ungated they fire on the mode
+   * choice and inside the waiting room, where Enter means something else
+   * entirely — pressing it to talk to your team would start a solo run instead.
+   */
+  awaitingWeapon(): boolean {
+    return this.current === 'weapons';
+  }
+
+  /** Always opens on the mode choice: a restart is a chance to play differently. */
   show(): void {
+    this.step('mode');
     this.root.hidden = false;
   }
 
@@ -155,7 +203,7 @@ function keyHint(choices: readonly StarterChoice[]): readonly Node[] {
 }
 
 /**
- * The three lines that mix a sentence with keycaps.
+ * The lines that mix a sentence with keycaps.
  *
  * They cannot be plain `data-i18n` text, because the caps sit inside the
  * sentence and land in a different place in each language. `textNodes` splits
@@ -172,6 +220,7 @@ export function renderKeyLines(offers: number): void {
     r: [keycap('R')],
   });
   fillLine('result-hint', 'result.hint', { r: [keycap('R')] });
+  fillLine('chat-hint', 'room.chatHint', { keys: [keycap('Enter')] });
 }
 
 function fillLine(
@@ -431,7 +480,7 @@ export class ResultScreen {
 
     this.time.textContent = formatTime(world.time);
     this.kills.textContent = String(world.kills);
-    this.level.textContent = String(world.player.level);
+    this.level.textContent = String(world.level);
     this.bosses.textContent = String(world.bossesKilled);
 
     this.root.hidden = false;

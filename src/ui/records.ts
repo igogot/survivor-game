@@ -27,9 +27,11 @@ export function scoreOfRun(world: World, name: string): Score {
     // result screen showed.
     timeMs: Math.round(world.time * 1000),
     kills: world.kills,
-    level: world.player.level,
+    // The party's level and the first player's weapon: the board is a solo
+    // table, and a solo run has exactly one of each.
+    level: world.level,
     bosses: world.bossesKilled,
-    weapon: world.starterId,
+    weapon: world.players[0].starterId,
     seed: world.seed,
   };
 }

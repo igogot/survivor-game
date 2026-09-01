@@ -16,7 +16,7 @@ import { EMBER_FRAMES } from './atlas';
 import { GRID_TEXTURE_SIZE, createTextures } from './textures';
 import type { TextureSet } from './textures';
 import type { SpriteName } from '../data/sprites';
-import type { MoveTarget } from '../world/types';
+import type { MoveTarget, Player } from '../world/types';
 import type { World } from '../world/world';
 
 const GEM_SIZE = 11;
@@ -88,13 +88,14 @@ export class GameRenderer {
   private readonly enemyLayer = new Container();
   private readonly flashLayer = new Container();
   private readonly effectLayer = new Container();
+  private readonly playerLayer = new Container();
   private readonly orbLayer = new Container();
   private readonly spearLayer = new Container();
   private readonly projectileLayer = new Container();
 
-  private playerSprite!: Sprite;
   private markerSprite!: Sprite;
   private chestSprite!: Sprite;
+  private readonly playerSprites: Sprite[] = [];
   private readonly enemySprites: Sprite[] = [];
   private readonly flashSprites: Sprite[] = [];
   private readonly projectileSprites: Sprite[] = [];
@@ -125,12 +126,6 @@ export class GameRenderer {
       width: this.app.screen.width,
       height: this.app.screen.height,
     });
-
-    // The frame is chosen per draw from the world, because which figure the
-    // player is depends on the weapon the run opened with and a restart can
-    // change it.
-    this.playerSprite = new Sprite(this.textures.sprites.playerBolt);
-    this.playerSprite.anchor.set(0.5);
 
     this.markerSprite = new Sprite(this.textures.sprites.ring);
     this.markerSprite.anchor.set(0.5);
@@ -169,7 +164,7 @@ export class GameRenderer {
       this.enemyLayer,
       this.flashLayer,
       this.effectLayer,
-      this.playerSprite,
+      this.playerLayer,
       this.orbLayer,
       this.spearLayer,
       this.projectileLayer,
@@ -177,18 +172,28 @@ export class GameRenderer {
     this.app.stage.addChild(this.background, this.camera);
   }
 
-  /** `alpha` is the fraction of a tick left in the accumulator. */
-  draw(world: World, alpha: number): void {
+  /**
+   * Draws the world through one player's eyes.
+   *
+   * `view` is whose screen this is: the camera follows them and the move marker
+   * is theirs, while every player in the world is drawn. The renderer is told
+   * rather than asking, because "which player am I" is a fact about the client
+   * and not about the world — the same world object is what a host would send
+   * to three other people, each of whom would draw it through a different one.
+   *
+   * `alpha` is the fraction of a tick left in the accumulator.
+   */
+  draw(world: World, view: Player, alpha: number): void {
     const screen = this.app.screen;
     this.background.width = screen.width;
     this.background.height = screen.height;
 
-    const playerX = lerp(world.player.px, world.player.x, alpha);
-    const playerY = lerp(world.player.py, world.player.y, alpha);
+    const viewX = lerp(view.px, view.x, alpha);
+    const viewY = lerp(view.py, view.y, alpha);
 
     const zoom = CONFIG.camera.zoom;
-    const cameraX = screen.width / 2 - playerX * zoom;
-    const cameraY = screen.height / 2 - playerY * zoom;
+    const cameraX = screen.width / 2 - viewX * zoom;
+    const cameraY = screen.height / 2 - viewY * zoom;
 
     this.camera.scale.set(zoom);
     this.camera.position.set(cameraX, cameraY);
@@ -196,18 +201,10 @@ export class GameRenderer {
     // background one draw call regardless of how far the player has travelled.
     this.background.tilePosition.set(cameraX % GRID_TEXTURE_SIZE, cameraY % GRID_TEXTURE_SIZE);
 
-    this.playerSprite.texture = this.textures.sprites[world.player.sprite];
-    // Tinted here beside the frame rather than once at startup: which figure
-    // the player is depends on the weapon the run opened with, and whether a
-    // figure wants a tint is a property of the frame it was built from.
-    this.playerSprite.tint = this.tintFor(world.player.sprite, PLAYER_COLOR);
-    fit(this.playerSprite, CONFIG.player.radius * 2);
-    this.playerSprite.position.set(playerX, playerY);
-    this.playerSprite.alpha = world.player.invuln > 0 ? 0.45 : 1;
-
     // Drawn straight from the order rather than faded out on arrival: the mark
-    // disappearing is how the player learns the order is spent.
-    const target = world.moveTarget;
+    // disappearing is how the player learns the order is spent. Only the
+    // viewer's own — somebody else's walking orders are not this screen's news.
+    const target = view.moveTarget;
     this.markerSprite.visible = target !== null;
     if (target !== null) this.markerSprite.position.set(target.x, target.y);
 
@@ -220,13 +217,42 @@ export class GameRenderer {
 
     this.drawFlames(world);
     this.drawEnemies(world, alpha);
+    this.drawPlayers(world, alpha);
     this.drawProjectiles(world, alpha);
     this.drawGems(world, alpha);
     this.drawEffects(world, alpha);
-    this.drawOrbs(world, playerX, playerY, alpha);
-    this.drawSpears(world, playerX, playerY);
+    this.drawOrbs(world, alpha);
+    this.drawSpears(world, alpha);
 
     this.app.renderer.render(this.app.stage);
+  }
+
+  /**
+   * Every player on the field, the viewer included.
+   *
+   * Pooled by index like the horde is. The frame is chosen per draw rather than
+   * once at startup, because which figure a player is depends on the weapon
+   * their run opened with, and a restart can change it.
+   */
+  private drawPlayers(world: World, alpha: number): void {
+    const players = world.players;
+    this.resize(
+      this.playerSprites,
+      this.playerLayer,
+      players.length,
+      this.textures.sprites.playerBolt,
+    );
+
+    for (let i = 0; i < players.length; i++) {
+      const player = players[i];
+      const sprite = this.playerSprites[i];
+
+      sprite.texture = this.textures.sprites[player.sprite];
+      sprite.tint = this.tintFor(player.sprite, PLAYER_COLOR);
+      fit(sprite, CONFIG.player.radius * 2);
+      sprite.position.set(lerp(player.px, player.x, alpha), lerp(player.py, player.y, alpha));
+      sprite.alpha = player.invuln > 0 ? 0.45 : 1;
+    }
   }
 
   /**
@@ -452,40 +478,50 @@ export class GameRenderer {
    * from the weapon's angle using the same helpers the damage pulse used, which
    * is what guarantees a blade hits exactly where it is drawn.
    */
-  private drawOrbs(world: World, playerX: number, playerY: number, alpha: number): void {
-    const weapons = world.weapons;
+  private drawOrbs(world: World, alpha: number): void {
+    const players = world.players;
 
     let needed = 0;
-    for (let i = 0; i < weapons.length; i++) {
-      const def = weaponById(weapons[i].defId);
-      if (def === undefined || def.kind !== 'orbit') continue;
-      needed += orbitCount(def, weapons[i]);
+    for (let p = 0; p < players.length; p++) {
+      const weapons = players[p].weapons;
+      for (let i = 0; i < weapons.length; i++) {
+        const def = weaponById(weapons[i].defId);
+        if (def === undefined || def.kind !== 'orbit') continue;
+        needed += orbitCount(def, weapons[i]);
+      }
     }
 
     this.resize(this.orbSprites, this.orbLayer, needed, this.textures.sprites.orb);
 
     let next = 0;
-    for (let i = 0; i < weapons.length; i++) {
-      const state = weapons[i];
-      const def = weaponById(state.defId);
-      if (def === undefined || def.kind !== 'orbit') continue;
+    for (let p = 0; p < players.length; p++) {
+      const player = players[p];
+      // The ring is drawn around its owner, interpolated the same way the
+      // figure inside it is — otherwise a moving player's guard trails them by
+      // a fraction of a tick.
+      const ownerX = lerp(player.px, player.x, alpha);
+      const ownerY = lerp(player.py, player.y, alpha);
+      const weapons = player.weapons;
 
-      const count = orbitCount(def, state);
-      const distance = orbitDistance(def, state);
-      const radius = orbitRadius(def, state);
-      const angle = lerp(state.pangle, state.angle, alpha);
+      for (let i = 0; i < weapons.length; i++) {
+        const state = weapons[i];
+        const def = weaponById(state.defId);
+        if (def === undefined || def.kind !== 'orbit') continue;
 
-      for (let orb = 0; orb < count; orb++) {
-        const a = angle + (orb * TAU) / count;
-        const sprite = this.orbSprites[next++];
-        sprite.position.set(
-          playerX + Math.cos(a) * distance,
-          playerY + Math.sin(a) * distance,
-        );
-        fit(sprite, radius * 2);
-        // Spinning with the ring, which is the whole read on the weapon.
-        sprite.rotation = a;
-        sprite.tint = this.tintFor('orb', def.color);
+        const count = orbitCount(def, state);
+        const distance = orbitDistance(def, state);
+        const radius = orbitRadius(def, state);
+        const angle = lerp(state.pangle, state.angle, alpha);
+
+        for (let orb = 0; orb < count; orb++) {
+          const a = angle + (orb * TAU) / count;
+          const sprite = this.orbSprites[next++];
+          sprite.position.set(ownerX + Math.cos(a) * distance, ownerY + Math.sin(a) * distance);
+          fit(sprite, radius * 2);
+          // Spinning with the ring, which is the whole read on the weapon.
+          sprite.rotation = a;
+          sprite.tint = this.tintFor('orb', def.color);
+        }
       }
     }
   }
@@ -499,44 +535,54 @@ export class GameRenderer {
    * sprite, which is why the pool stays at one per spear rather than one per
    * frame of animation.
    */
-  private drawSpears(world: World, playerX: number, playerY: number): void {
-    const weapons = world.weapons;
+  private drawSpears(world: World, alpha: number): void {
+    const players = world.players;
 
     let needed = 0;
-    for (let i = 0; i < weapons.length; i++) {
-      const def = weaponById(weapons[i].defId);
-      if (def === undefined || def.kind !== 'spear') continue;
-      if (weapons[i].swing > 0) needed++;
+    for (let p = 0; p < players.length; p++) {
+      const weapons = players[p].weapons;
+      for (let i = 0; i < weapons.length; i++) {
+        const def = weaponById(weapons[i].defId);
+        if (def === undefined || def.kind !== 'spear') continue;
+        if (weapons[i].swing > 0) needed++;
+      }
     }
 
     this.resize(this.spearSprites, this.spearLayer, needed, this.textures.sprites.spear);
 
     let next = 0;
-    for (let i = 0; i < weapons.length; i++) {
-      const state = weapons[i];
-      const def = weaponById(state.defId);
-      if (def === undefined || def.kind !== 'spear' || state.swing <= 0) continue;
+    for (let p = 0; p < players.length; p++) {
+      const player = players[p];
+      const ownerX = lerp(player.px, player.x, alpha);
+      const ownerY = lerp(player.py, player.y, alpha);
+      const weapons = player.weapons;
 
-      const length = spearLength(def, state);
-      const thickness = spearThickness(def, state);
-      const dx = Math.cos(state.angle);
-      const dy = Math.sin(state.angle);
-      const sprite = this.spearSprites[next++];
+      for (let i = 0; i < weapons.length; i++) {
+        const state = weapons[i];
+        const def = weaponById(state.defId);
+        if (def === undefined || def.kind !== 'spear' || state.swing <= 0) continue;
 
-      // Anchored in the middle like every other sprite, so the lance is placed
-      // at the midpoint of the line the damage swept.
-      sprite.position.set(playerX + (dx * length) / 2, playerY + (dy * length) / 2);
-      sprite.rotation = state.angle;
-      // Not `fit`: this is the one frame that is not scaled uniformly — it has
-      // to be exactly as long and as wide as the thrust that landed.
-      sprite.scale.set(
-        length / sprite.texture.width,
-        (thickness * 2) / sprite.texture.height,
-      );
-      sprite.tint = this.tintFor('spear', def.color);
-      // Fades over the thrust rather than blinking out, so a fast spear reads
-      // as a rhythm instead of a strobe.
-      sprite.alpha = state.swing / def.swingTime;
+        const length = spearLength(def, state);
+        const thickness = spearThickness(def, state);
+        const dx = Math.cos(state.angle);
+        const dy = Math.sin(state.angle);
+        const sprite = this.spearSprites[next++];
+
+        // Anchored in the middle like every other sprite, so the lance is placed
+        // at the midpoint of the line the damage swept.
+        sprite.position.set(ownerX + (dx * length) / 2, ownerY + (dy * length) / 2);
+        sprite.rotation = state.angle;
+        // Not `fit`: this is the one frame that is not scaled uniformly — it has
+        // to be exactly as long and as wide as the thrust that landed.
+        sprite.scale.set(
+          length / sprite.texture.width,
+          (thickness * 2) / sprite.texture.height,
+        );
+        sprite.tint = this.tintFor('spear', def.color);
+        // Fades over the thrust rather than blinking out, so a fast spear reads
+        // as a rhythm instead of a strobe.
+        sprite.alpha = state.swing / def.swingTime;
+      }
     }
   }
 

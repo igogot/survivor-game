@@ -1,11 +1,14 @@
 import { DESIGNED_UPGRADES, FALLBACK_UPGRADES, UPGRADES } from '../data/upgrades';
+import { partySize } from '../world/party';
+import { NOBODY } from '../world/world';
 import { healPlayer } from './damage';
 import { grantWeapon } from './weapons';
 import type { UpgradeDef } from '../data/upgrades';
+import type { Player } from '../world/types';
 import type { World } from '../world/world';
 
 /**
- * XP required to go from `level` to `level + 1`.
+ * XP one player would need to go from `level` to `level + 1`.
  *
  * Quadratic rather than exponential: levels should keep arriving all run, just
  * more slowly, because each one is a decision point and the run stops being fun
@@ -16,33 +19,77 @@ export function xpForLevel(level: number): number {
 }
 
 /**
- * Converts accumulated XP into levels and pauses the run when there is an
- * upgrade to pick. Multiple levels gained in one tick queue up in
- * `pendingLevels` and are offered one after another.
+ * What the shared bar costs right now: one player's worth per player filling
+ * it.
+ *
+ * Derived rather than stored, and that is the whole reason it is a function. A
+ * party of four that loses one becomes a party of three, and three people
+ * should not go on paying a four's price for a level only three of them will
+ * get. A stored target would have to be recomputed by whoever handles a death,
+ * which is exactly the sort of bookkeeping that gets forgotten once and then
+ * lies about the bar for the rest of the run.
+ *
+ * Falling below the current XP is not a problem to guard against: the bar is
+ * simply full, and `progressionSystem` hands out the level on the next tick.
+ * Somebody dying can therefore level the survivors, which is the right reading
+ * of it — the share they were carrying is gone.
+ *
+ * With one player it is `xpForLevel(level)` multiplied by one, so every solo
+ * run is exactly the run it was.
+ */
+export function xpForNextLevel(world: World): number {
+  return xpForLevel(world.level) * partySize(world);
+}
+
+/**
+ * Converts the party's accumulated XP into levels and pauses the run when
+ * somebody has an upgrade to pick.
+ *
+ * One bar, one level, and everybody standing gets it. Then at most one menu
+ * opens — the first player in the list who is owed a card — and the rest queue
+ * in their own `pendingLevels` until it is their turn. That the run freezes
+ * behind each of them is a leftover from there being only one player to freeze
+ * it for, and it is the next thing to go: with four of them, one person reading
+ * cards must not stop the other three's world.
  */
 export function progressionSystem(world: World): void {
-  const player = world.player;
+  const players = world.players;
 
-  while (player.xp >= player.xpToNext) {
-    player.xp -= player.xpToNext;
-    player.level++;
-    player.xpToNext = xpForLevel(player.level);
-    world.pendingLevels++;
+  let cost = xpForNextLevel(world);
+  while (world.xp >= cost) {
+    world.xp -= cost;
+    world.level++;
+
+    // Everyone, the downed included. They are not filling the bar — `partySize`
+    // already stopped charging the party for them — but they are coming back,
+    // and a player who spends their wait choosing what to come back as is a
+    // player still in the run. The alternative is somebody returning a minute
+    // behind the build everyone else is on.
+    for (let i = 0; i < players.length; i++) players[i].pendingLevels++;
+
+    cost = xpForNextLevel(world);
   }
 
-  if (world.pendingLevels <= 0 || world.phase !== 'playing') return;
+  if (world.phase !== 'playing') return;
 
-  const offers = rollUpgrades(world);
-  if (offers.length === 0) {
-    // Unreachable while the tail has entries — it is uncapped, so there is
-    // always something to offer. Kept as the guard against an empty menu, not
-    // as a state the game is expected to reach.
-    world.pendingLevels = 0;
+  for (let i = 0; i < players.length; i++) {
+    const player = players[i];
+    if (player.pendingLevels <= 0) continue;
+
+    const offers = rollUpgrades(world, player);
+    if (offers.length === 0) {
+      // Unreachable while the tail has entries — it is uncapped, so there is
+      // always something to offer. Kept as the guard against an empty menu, not
+      // as a state the game is expected to reach.
+      player.pendingLevels = 0;
+      continue;
+    }
+
+    world.phase = 'levelup';
+    world.choosing = i;
+    player.offered = offers;
     return;
   }
-
-  world.phase = 'levelup';
-  world.offered = offers;
 }
 
 /**
@@ -52,10 +99,10 @@ export function progressionSystem(world: World): void {
  * would put a card on the screen that changes nothing, which is worse than a
  * weak card because it looks like a choice.
  */
-export function isOfferable(world: World, upgrade: UpgradeDef): boolean {
-  if ((world.stacks.get(upgrade.id) ?? 0) >= upgrade.maxStacks) return false;
+export function isOfferable(player: Player, upgrade: UpgradeDef): boolean {
+  if ((player.stacks.get(upgrade.id) ?? 0) >= upgrade.maxStacks) return false;
   if (upgrade.kind !== 'weaponMod') return true;
-  return world.weapons.some((weapon) => weapon.defId === upgrade.weaponId);
+  return player.weapons.some((weapon) => weapon.defId === upgrade.weaponId);
 }
 
 /**
@@ -83,56 +130,61 @@ export const OFFERS_PER_LEVEL = 4;
  * designed stacks produces byte-identical offers to one rolled before the tail
  * existed. That is what keeps the balance table in the README comparable.
  */
-export function rollUpgrades(world: World, count = OFFERS_PER_LEVEL): UpgradeDef[] {
-  const available = DESIGNED_UPGRADES.filter((upgrade) => isOfferable(world, upgrade));
+export function rollUpgrades(world: World, player: Player, count = OFFERS_PER_LEVEL): UpgradeDef[] {
+  const available = DESIGNED_UPGRADES.filter((upgrade) => isOfferable(player, upgrade));
   const offers = world.rng.shuffled(available).slice(0, count);
   if (offers.length >= count) return offers;
 
-  const spare = FALLBACK_UPGRADES.filter((upgrade) => isOfferable(world, upgrade));
+  const spare = FALLBACK_UPGRADES.filter((upgrade) => isOfferable(player, upgrade));
   return offers.concat(world.rng.shuffled(spare).slice(0, count - offers.length));
 }
 
 /**
- * Applies the chosen upgrade and either offers the next queued level or resumes
- * the run.
+ * Applies the chosen upgrade to one player, and either offers them the next
+ * queued level or resumes the run.
+ *
+ * The player is named by the caller rather than looked up from `world.choosing`
+ * on purpose: this is also how a harness builds a loadout with no menu open at
+ * all, and a function that only worked mid-level-up would need a second one
+ * beside it that did the same thing.
  */
-export function applyUpgrade(world: World, id: string): void {
+export function applyUpgrade(world: World, player: Player, id: string): void {
   const def = UPGRADES.find((upgrade) => upgrade.id === id);
   if (def === undefined) return;
 
-  const stacks = world.stacks.get(id) ?? 0;
+  const stacks = player.stacks.get(id) ?? 0;
   if (stacks >= def.maxStacks) return;
-  if (!isOfferable(world, def)) return;
+  if (!isOfferable(player, def)) return;
 
-  const player = world.player;
   const maxHpBefore = player.stats.maxHp;
 
   if (def.kind === 'stat') {
     def.apply(player.stats);
   } else if (def.kind === 'weapon') {
-    grantWeapon(world, def.weaponId);
+    grantWeapon(player, def.weaponId);
   } else {
     // Guarded by isOfferable above, so the weapon is owned. Skipping rather
     // than throwing keeps a bad id from ending a run.
-    const weapon = world.weapons.find((owned) => owned.defId === def.weaponId);
+    const weapon = player.weapons.find((owned) => owned.defId === def.weaponId);
     if (weapon === undefined) return;
     def.apply(weapon);
   }
 
-  world.stacks.set(id, stacks + 1);
+  player.stacks.set(id, stacks + 1);
 
   // Max-HP upgrades heal by the amount they grant, otherwise taking one at low
   // health is a trap rather than a reward.
-  healPlayer(world, player.stats.maxHp - maxHpBefore);
+  healPlayer(player, player.stats.maxHp - maxHpBefore);
 
-  world.pendingLevels--;
+  player.pendingLevels--;
 
-  if (world.pendingLevels > 0) {
-    world.offered = rollUpgrades(world);
-    if (world.offered.length > 0) return;
-    world.pendingLevels = 0;
+  if (player.pendingLevels > 0) {
+    player.offered = rollUpgrades(world, player);
+    if (player.offered.length > 0) return;
+    player.pendingLevels = 0;
   }
 
-  world.offered = [];
+  player.offered = [];
+  world.choosing = NOBODY;
   world.phase = 'playing';
 }

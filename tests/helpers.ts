@@ -23,7 +23,7 @@ export function runHeadless(seed: number, seconds: number): World {
     if (world.phase === 'levelup') {
       // Always take the first offer; the point is to keep the run moving, not
       // to play well.
-      applyUpgrade(world, world.offered[0].id);
+      applyUpgrade(world, world.players[0], world.players[0].offered[0].id);
       continue;
     }
 
@@ -31,13 +31,13 @@ export function runHeadless(seed: number, seconds: number): World {
     // the run is a loop over a frozen simulation reporting that nothing
     // happened.
     if (world.phase === 'chest') {
-      takeSpoil(world, world.spoils[0].id);
+      takeSpoil(world, world.players[0], world.spoils[0].id);
       continue;
     }
 
     const angle = i * 0.02;
-    world.intentX = Math.cos(angle);
-    world.intentY = Math.sin(angle);
+    world.players[0].intentX = Math.cos(angle);
+    world.players[0].intentY = Math.sin(angle);
     stepWorld(world, DT);
   }
 

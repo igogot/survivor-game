@@ -45,7 +45,7 @@ it('plays a full run on every seed', () => {
         `${world.time.toFixed(0)}s`.padStart(5),
         (alive ? 'alive' : 'died').padStart(9),
         String(world.kills).padStart(8),
-        String(world.player.level).padStart(8),
+        String(world.level).padStart(8),
         String(world.bossesKilled).padStart(9),
       ].join(''),
     );

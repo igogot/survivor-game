@@ -213,9 +213,9 @@ function buildWorld(variant: Variant): World {
     swap.effectPool = new NoPool(factoryOf(world.effectPool));
   }
 
-  for (const id of BUILD) applyUpgrade(world, id);
-  world.pendingLevels = 0;
-  world.offered = [];
+  for (const id of BUILD) applyUpgrade(world, world.players[0], id);
+  world.players[0].pendingLevels = 0;
+  world.players[0].offered = [];
   world.phase = 'playing';
   world.time = RUN_TIME;
 
@@ -240,10 +240,10 @@ function topUp(world: World, count: number): void {
  * would report wonderful numbers.
  */
 function keepPlaying(world: World): void {
-  world.player.hp = world.player.stats.maxHp;
+  world.players[0].hp = world.players[0].stats.maxHp;
   if (world.phase !== 'playing') {
-    world.pendingLevels = 0;
-    world.offered = [];
+    world.players[0].pendingLevels = 0;
+    world.players[0].offered = [];
     world.phase = 'playing';
   }
 }
@@ -251,8 +251,8 @@ function keepPlaying(world: World): void {
 /** One measured unit: a full tick plus the respawn that holds the head count. */
 function tick(world: World, count: number, index: number): void {
   const angle = index * 0.02;
-  world.intentX = Math.cos(angle);
-  world.intentY = Math.sin(angle);
+  world.players[0].intentX = Math.cos(angle);
+  world.players[0].intentY = Math.sin(angle);
 
   stepWorld(world, DT);
   keepPlaying(world);
@@ -474,7 +474,7 @@ it('simulates identically whichever implementation is used', () => {
       for (let i = 0; i < 240; i++) tick(world, 300, i);
       return {
         kills: world.kills,
-        xp: world.player.xp,
+        xp: world.xp,
         gems: world.gems.length,
         enemies: world.enemies.length,
       };

@@ -40,7 +40,7 @@ const ENEMY_RADIUS = 10;
  * per-weapon upgrade is involved.
  */
 function weaponState(world: World, defId: string): WeaponState {
-  const found = world.weapons.find((weapon) => weapon.defId === defId);
+  const found = world.players[0].weapons.find((weapon) => weapon.defId === defId);
   if (found === undefined) throw new Error(`world has no weapon '${defId}'`);
   return found;
 }
@@ -71,40 +71,40 @@ function placeEnemy(world: World, x: number, y: number): Enemy {
 describe('grantWeapon', () => {
   it('unlocks a weapon once and levels it afterwards', () => {
     const world = new World(1);
-    expect(world.weapons).toHaveLength(1);
+    expect(world.players[0].weapons).toHaveLength(1);
 
-    grantWeapon(world, 'orbit');
-    expect(world.weapons).toHaveLength(2);
-    expect(world.weapons[1].level).toBe(1);
+    grantWeapon(world.players[0], 'orbit');
+    expect(world.players[0].weapons).toHaveLength(2);
+    expect(world.players[0].weapons[1].level).toBe(1);
 
-    grantWeapon(world, 'orbit');
-    expect(world.weapons).toHaveLength(2);
-    expect(world.weapons[1].level).toBe(2);
+    grantWeapon(world.players[0], 'orbit');
+    expect(world.players[0].weapons).toHaveLength(2);
+    expect(world.players[0].weapons[1].level).toBe(2);
   });
 
   it('ignores an unknown weapon id', () => {
     const world = new World(1);
-    grantWeapon(world, 'not-a-real-weapon');
-    expect(world.weapons).toHaveLength(1);
+    grantWeapon(world.players[0], 'not-a-real-weapon');
+    expect(world.players[0].weapons).toHaveLength(1);
   });
 });
 
 describe('weapon upgrades', () => {
   it('adds the weapon to the loadout when picked', () => {
     const world = new World(2);
-    world.pendingLevels = 1;
+    world.players[0].pendingLevels = 1;
 
-    applyUpgrade(world, 'nova');
+    applyUpgrade(world, world.players[0], 'nova');
 
-    expect(world.weapons.some((state) => state.defId === 'nova')).toBe(true);
-    expect(world.stacks.get('nova')).toBe(1);
+    expect(world.players[0].weapons.some((state) => state.defId === 'nova')).toBe(true);
+    expect(world.players[0].stacks.get('nova')).toBe(1);
   });
 });
 
 describe('orbit blades', () => {
   it('damages what the ring passes through and nothing else', () => {
     const world = new World(3);
-    grantWeapon(world, 'orbit');
+    grantWeapon(world.players[0], 'orbit');
 
     const onRing = placeEnemy(world, orbitDistance(ORBIT, weaponState(world, 'orbit')), 0);
     const outside = placeEnemy(world, 400, 0);
@@ -122,7 +122,7 @@ describe('orbit blades', () => {
    */
   it('deals damage in pulses, not every tick', () => {
     const world = new World(3);
-    grantWeapon(world, 'orbit');
+    grantWeapon(world.players[0], 'orbit');
 
     const enemy = placeEnemy(world, orbitDistance(ORBIT, weaponState(world, 'orbit')), 0);
     rebuildGrid(world);
@@ -152,7 +152,7 @@ describe('orbit blades', () => {
   it('cuts an enemy that has reached the player, at every level', () => {
     for (let level = 1; level <= stacksOf('orbit'); level++) {
       const world = new World(3);
-      for (let i = 0; i < level; i++) grantWeapon(world, 'orbit');
+      for (let i = 0; i < level; i++) grantWeapon(world.players[0], 'orbit');
 
       const touching = placeEnemy(world, CONFIG.player.radius + ENEMY_RADIUS, 0);
       rebuildGrid(world);
@@ -184,11 +184,11 @@ describe('orbit blades', () => {
     for (let level = 1; level <= stacksOf('orbit'); level++) {
       for (let spins = 0; spins <= stacksOf('orbit-spin'); spins++) {
         const world = new World(5);
-        for (let i = 0; i < level; i++) grantWeapon(world, 'orbit');
+        for (let i = 0; i < level; i++) grantWeapon(world.players[0], 'orbit');
 
         for (let i = 0; i < spins; i++) {
-          world.pendingLevels = 1;
-          applyUpgrade(world, 'orbit-spin');
+          world.players[0].pendingLevels = 1;
+          applyUpgrade(world, world.players[0], 'orbit-spin');
         }
 
         const state = weaponState(world, 'orbit');
@@ -208,7 +208,7 @@ describe('orbit blades', () => {
 
   function pulseDamage(level: number): number {
     const world = new World(4);
-    for (let i = 0; i < level; i++) grantWeapon(world, 'orbit');
+    for (let i = 0; i < level; i++) grantWeapon(world.players[0], 'orbit');
 
     const enemy = placeEnemy(world, orbitDistance(ORBIT, weaponState(world, 'orbit')), 0);
     rebuildGrid(world);
@@ -221,7 +221,7 @@ describe('orbit blades', () => {
 describe('shockwave', () => {
   it('clears everything inside its radius and spares what is outside', () => {
     const world = new World(5);
-    grantWeapon(world, 'nova');
+    grantWeapon(world.players[0], 'nova');
 
     const inside = [placeEnemy(world, 40, 0), placeEnemy(world, -30, 50)];
     const outside = placeEnemy(world, NOVA.radius + 60, 0);
@@ -236,8 +236,8 @@ describe('shockwave', () => {
 
   it('scales with the player damage multiplier', () => {
     const world = new World(6);
-    grantWeapon(world, 'nova');
-    world.player.stats.damageMul = 2;
+    grantWeapon(world.players[0], 'nova');
+    world.players[0].stats.damageMul = 2;
 
     const enemy = placeEnemy(world, 20, 0);
     rebuildGrid(world);
@@ -294,9 +294,9 @@ describe('lunge spear', () => {
    */
   it('points the lance at the nearest enemy, not along the heading', () => {
     const world = new World(7);
-    grantWeapon(world, 'spear');
-    world.headingX = 1;
-    world.headingY = 0;
+    grantWeapon(world.players[0], 'spear');
+    world.players[0].headingX = 1;
+    world.players[0].headingY = 0;
 
     const ahead = placeEnemy(world, 100, 0);
     const behind = placeEnemy(world, -40, 0);
@@ -315,10 +315,10 @@ describe('lunge spear', () => {
    */
   it('skewers a queue, hitting each enemy exactly once', () => {
     const world = new World(8);
-    grantWeapon(world, 'spear');
+    grantWeapon(world.players[0], 'spear');
 
     const state = weaponState(world, 'spear');
-    const damage = weaponDamage(SPEAR, state) * world.player.stats.damageMul;
+    const damage = weaponDamage(SPEAR, state) * world.players[0].stats.damageMul;
     const queue = [30, 60, 90, 120].map((x) => placeEnemy(world, x, 0));
     rebuildGrid(world);
 
@@ -336,7 +336,7 @@ describe('lunge spear', () => {
    */
   it('stops at the tip', () => {
     const world = new World(9);
-    grantWeapon(world, 'spear');
+    grantWeapon(world.players[0], 'spear');
 
     const state = weaponState(world, 'spear');
     const reach = spearLength(SPEAR, state) + spearThickness(SPEAR, state) + ENEMY_RADIUS;
@@ -360,7 +360,7 @@ describe('lunge spear', () => {
    */
   it('holds the thrust while nothing is in reach', () => {
     const world = new World(10);
-    grantWeapon(world, 'spear');
+    grantWeapon(world.players[0], 'spear');
 
     const state = weaponState(world, 'spear');
     rebuildGrid(world);
@@ -379,7 +379,7 @@ describe('lunge spear', () => {
   /** The lance is what the renderer draws; a thrust that shows nothing is a bug. */
   it('flags a thrust for the renderer and lets it expire', () => {
     const world = new World(11);
-    grantWeapon(world, 'spear');
+    grantWeapon(world.players[0], 'spear');
     placeEnemy(world, 40, 0);
     rebuildGrid(world);
 
@@ -418,7 +418,7 @@ describe('siege harpoon', () => {
    */
   it('spikes the heaviest enemy in range and not the nearest', () => {
     const world = new World(12);
-    grantWeapon(world, 'harpoon');
+    grantWeapon(world.players[0], 'harpoon');
 
     placeEnemy(world, 40, 0);
     const heavy = placeEnemy(world, 0, 200);
@@ -438,7 +438,7 @@ describe('siege harpoon', () => {
    */
   it('keeps spiking a boss it has already worn down', () => {
     const world = new World(13);
-    grantWeapon(world, 'harpoon');
+    grantWeapon(world.players[0], 'harpoon');
 
     placeEnemy(world, 40, 0);
     const worn = placeEnemy(world, 0, 200);
@@ -454,7 +454,7 @@ describe('siege harpoon', () => {
   /** Weight does not carry across the range check, or reach would be free. */
   it('ignores a heavier enemy beyond its range', () => {
     const world = new World(14);
-    grantWeapon(world, 'harpoon');
+    grantWeapon(world.players[0], 'harpoon');
 
     placeEnemy(world, 60, 0);
     const far = placeEnemy(world, 0, HARPOON.range + 40);
@@ -473,7 +473,7 @@ describe('siege harpoon', () => {
    */
   it('breaks a tie in weight toward the nearer body', () => {
     const world = new World(15);
-    grantWeapon(world, 'harpoon');
+    grantWeapon(world.players[0], 'harpoon');
 
     placeEnemy(world, 0, 300);
     placeEnemy(world, 90, 0);
@@ -492,7 +492,7 @@ describe('siege harpoon', () => {
    */
   it('sends the spike through bodies, and leaves the bolt alone', () => {
     const world = new World(17);
-    grantWeapon(world, 'harpoon');
+    grantWeapon(world.players[0], 'harpoon');
     placeEnemy(world, 100, 0);
     rebuildGrid(world);
 
@@ -513,7 +513,7 @@ describe('siege harpoon', () => {
    */
   it('draws its shot with its own frame and leaves the bolt with the bolt', () => {
     const world = new World(18);
-    grantWeapon(world, 'harpoon');
+    grantWeapon(world.players[0], 'harpoon');
     placeEnemy(world, 100, 0);
     rebuildGrid(world);
 
@@ -532,7 +532,7 @@ describe('siege harpoon', () => {
    */
   it('holds the shot while the field is empty', () => {
     const world = new World(16);
-    grantWeapon(world, 'harpoon');
+    grantWeapon(world.players[0], 'harpoon');
 
     const state = weaponState(world, 'harpoon');
     rebuildGrid(world);
@@ -552,15 +552,15 @@ describe('siege harpoon', () => {
 describe('rate upgrades', () => {
   it('turns the blade ring faster and cuts more often', () => {
     const world = new World(30);
-    grantWeapon(world, 'orbit');
+    grantWeapon(world.players[0], 'orbit');
 
     const state = weaponState(world, 'orbit');
     weaponSystem(world, DT);
     const baseSpin = state.angle;
     const basePulse = state.cooldown;
 
-    world.pendingLevels = 1;
-    applyUpgrade(world, 'orbit-spin');
+    world.players[0].pendingLevels = 1;
+    applyUpgrade(world, world.players[0], 'orbit-spin');
 
     state.angle = 0;
     state.cooldown = 0;
@@ -572,15 +572,15 @@ describe('rate upgrades', () => {
 
   it('bursts the shockwave more often without touching the others', () => {
     const world = new World(31);
-    grantWeapon(world, 'nova');
-    grantWeapon(world, 'orbit');
+    grantWeapon(world.players[0], 'nova');
+    grantWeapon(world.players[0], 'orbit');
 
     weaponSystem(world, DT);
     const baseNova = weaponState(world, 'nova').cooldown;
     const baseOrbit = weaponState(world, 'orbit').cooldown;
 
-    world.pendingLevels = 1;
-    applyUpgrade(world, 'nova-cadence');
+    world.players[0].pendingLevels = 1;
+    applyUpgrade(world, world.players[0], 'nova-cadence');
 
     weaponState(world, 'nova').cooldown = 0;
     weaponState(world, 'orbit').cooldown = 0;
@@ -592,14 +592,14 @@ describe('rate upgrades', () => {
 
   it('keeps the global attack speed multiplying on top of the weapon one', () => {
     const world = new World(32);
-    grantWeapon(world, 'nova');
+    grantWeapon(world.players[0], 'nova');
 
     weaponSystem(world, DT);
     const base = weaponState(world, 'nova').cooldown;
 
-    world.pendingLevels = 2;
-    applyUpgrade(world, 'nova-cadence');
-    applyUpgrade(world, 'haste');
+    world.players[0].pendingLevels = 2;
+    applyUpgrade(world, world.players[0], 'nova-cadence');
+    applyUpgrade(world, world.players[0], 'haste');
 
     weaponState(world, 'nova').cooldown = 0;
     weaponSystem(world, DT);

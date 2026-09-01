@@ -16,26 +16,32 @@ import type { World } from '../world/world';
  * once per tick and either applies a hit or does nothing.
  */
 export function contactSystem(world: World): void {
-  const player = world.player;
-  if (player.invuln > 0) return;
+  const { grid, enemies, scratch, players } = world;
 
-  const { grid, enemies, scratch } = world;
-  grid.query(
-    player.x,
-    player.y,
-    CONFIG.player.radius + MAX_ENEMY_RADIUS + BROADPHASE_PAD,
-    scratch,
-  );
+  // One query per player rather than one for the party: the crowd around each
+  // of them is a different crowd, and asking about a box that contains all four
+  // would walk most of the horde for every one of them.
+  for (let p = 0; p < players.length; p++) {
+    const player = players[p];
+    if (player.invuln > 0 || player.hp <= 0) continue;
 
-  let worstHit = 0;
-  for (let i = 0; i < scratch.length; i++) {
-    const enemy = enemies[scratch[i]];
-    if (enemy === undefined || enemy.hp <= 0) continue;
+    grid.query(
+      player.x,
+      player.y,
+      CONFIG.player.radius + MAX_ENEMY_RADIUS + BROADPHASE_PAD,
+      scratch,
+    );
 
-    const reach = CONFIG.player.radius + enemy.radius;
-    if (dist2(player.x, player.y, enemy.x, enemy.y) > reach * reach) continue;
-    if (enemy.damage > worstHit) worstHit = enemy.damage;
+    let worstHit = 0;
+    for (let i = 0; i < scratch.length; i++) {
+      const enemy = enemies[scratch[i]];
+      if (enemy === undefined || enemy.hp <= 0) continue;
+
+      const reach = CONFIG.player.radius + enemy.radius;
+      if (dist2(player.x, player.y, enemy.x, enemy.y) > reach * reach) continue;
+      if (enemy.damage > worstHit) worstHit = enemy.damage;
+    }
+
+    damagePlayer(world, player, worstHit);
   }
-
-  damagePlayer(world, worstHit);
 }

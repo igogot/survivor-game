@@ -18,7 +18,7 @@ if (SPLITTER === undefined || SPAWNLING === undefined || GRUNT === undefined) {
 function place(world: World, id: string): Enemy {
   const def = enemyById(id);
   if (def === undefined) throw new Error(`no enemy '${id}'`);
-  spawnEnemyAt(world, def, hordeHpScale(world), world.player.x, world.player.y);
+  spawnEnemyAt(world, def, hordeHpScale(world), world.players[0].x, world.players[0].y);
   return world.enemies[world.enemies.length - 1];
 }
 

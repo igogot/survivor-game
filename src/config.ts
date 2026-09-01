@@ -48,6 +48,19 @@ export const CONFIG = {
     moveSpeed: 175,
     /** Invulnerability window after taking a hit. */
     invulnTime: 0.5,
+    /**
+     * Seconds a downed player waits per teammate, so a pair wait a minute, a
+     * three two and a four three. See `respawnDelay`.
+     */
+    respawnPerTeammate: 60,
+    /**
+     * Grace on coming back, which is longer than a hit's.
+     *
+     * A player returns beside the one they were watching, and that player is
+     * being watched because they are alive in the middle of something. Half a
+     * second would be a respawn spent on the tick it happened.
+     */
+    respawnGrace: 2,
     /** Gems inside this radius fly toward the player. */
     pickupRadius: 75,
     /** Gems inside this radius are collected. */
@@ -122,6 +135,32 @@ export const CONFIG = {
     /** Enemies added per spawn tick, growing with this. */
     batchPerMinute: 0.3,
     hpScalePerMinute: 0.5,
+
+    /**
+     * How the party multiplier is split between arrivals and health.
+     *
+     * A party of N has to meet N times the horde, and there are exactly two
+     * places to put that: more bodies arriving, or tougher ones. They are not
+     * additive — they are two ends of one slider, and the reason is arithmetic
+     * rather than taste.
+     *
+     * In equilibrium the horde is killed as fast as it arrives. With arrivals
+     * multiplied by A and health by H, a party of N kills `N·damage / (H·hp)`
+     * bodies a second and meets `A·rate` of them, so staying in equilibrium
+     * requires `A · H = N`. Turn both up and the horde outruns the party by a
+     * factor of N and pins itself against `maxEnemies` for the rest of the run.
+     *
+     * This is the exponent that divides the two: `A = N^k`, `H = N^(1-k)`.
+     * At 0 the whole multiplier is health, at 1 the whole of it is arrivals.
+     * Which end is right is a question about *threat* rather than throughput:
+     * both ends kill the horde at the same rate, and only the arrivals end puts
+     * a solo-sized crowd around each player. The slider was measured across its
+     * whole range rather than argued about, and the honest reading is that
+     * neither end reaches threat parity — see the README. It sits at 0, so the
+     * party's multiplier is entirely health: four players meet a solo player's
+     * crowd with four times the health in it.
+     */
+    perPlayerArrivals: 0,
 
     /** Fraction of spawns placed in the player's path instead of anywhere. */
     aheadBias: 0.65,
