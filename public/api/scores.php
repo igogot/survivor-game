@@ -26,6 +26,18 @@
 
 declare(strict_types=1);
 
+/*
+ * Errors go to the log, never into the response.
+ *
+ * This host prints them by default, and the first request to a misconfigured
+ * endpoint answered with the absolute path of the file it could not find —
+ * `/var/www/uXXXXXXX/data/www/...`. That tells a stranger the account name and
+ * the layout of the disk, and it costs nothing to withhold. Reporting stays on
+ * so the host's log still receives everything.
+ */
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+
 header('Content-Type: application/json; charset=utf-8');
 // The board is public and carries no cookies or credentials, so any origin may
 // read it. The game is served from GitHub Pages and from this host, and both
@@ -42,11 +54,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+require __DIR__ . '/shared.php';
+
+/*
+ * The one file that is not in the repository.
+ *
+ * Checked rather than required blind: a bare `require` of a missing file is a
+ * fatal error, and a fatal error on a shared host is a page of PHP internals
+ * where a JSON body should be. A board that is not set up yet should say so in
+ * the language the client speaks.
+ */
+if (!is_file(__DIR__ . '/config.php')) {
+    fail(503, 'not-configured');
+}
 require __DIR__ . '/config.php';
+
 // The checks that need neither the database nor the request.
 require __DIR__ . '/validate.php';
 require __DIR__ . '/auth.php';
-require __DIR__ . '/shared.php';
 
 function readBoard(PDO $pdo, int $limit): array
 {
