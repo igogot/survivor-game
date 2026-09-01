@@ -57,6 +57,10 @@ export interface LobbyStart {
   readonly members: readonly string[];
   readonly seat: number;
   readonly hosting: boolean;
+  /** The room, because signalling is addressed within one. */
+  readonly code: string;
+  /** This machine's own id, which is how the other end will name it. */
+  readonly self: string;
 }
 
 /** Why a join did not happen, in the terms a player would put it. */
@@ -74,6 +78,36 @@ export type LobbyMessage =
       readonly code: string;
       readonly seed: number;
       readonly members: readonly string[];
+    }
+  /*
+   * Two browsers introducing themselves.
+   *
+   * These ride the lobby's channel and are none of the lobby's business — see
+   * the note on `receive`. They are addressed, which nothing else here is: an
+   * offer is for one person, and a room of four would otherwise have everybody
+   * answering everybody.
+   */
+  | {
+      readonly kind: 'offer';
+      readonly code: string;
+      readonly from: string;
+      readonly to: string;
+      readonly sdp: string;
+    }
+  | {
+      readonly kind: 'answer';
+      readonly code: string;
+      readonly from: string;
+      readonly to: string;
+      readonly sdp: string;
+    }
+  | {
+      readonly kind: 'ice';
+      readonly code: string;
+      readonly from: string;
+      readonly to: string;
+      readonly candidate: string;
+      readonly mid: string | null;
     };
 
 /**
@@ -88,6 +122,19 @@ export interface ChatLine {
   readonly seat: number;
   readonly text: string;
   readonly mine: boolean;
+}
+
+/**
+ * The three that are an introduction rather than a room.
+ *
+ * Named as their own type so `webrtc.ts` can take one and know what it has:
+ * narrowing the whole union again inside every branch there would be the same
+ * check written twice with two chances to disagree.
+ */
+export type SignalMessage = Extract<LobbyMessage, { kind: 'offer' | 'answer' | 'ice' }>;
+
+export function isSignal(message: LobbyMessage): message is SignalMessage {
+  return message.kind === 'offer' || message.kind === 'answer' || message.kind === 'ice';
 }
 
 export interface LobbyState {
@@ -279,6 +326,15 @@ export class Lobby {
           this.start(message.seed, message.members);
         }
         break;
+      // Signalling shares this channel because it needs the same reach and the
+      // same room, and it would be a second delivery mechanism for no gain. The
+      // lobby has nothing to say about it: who is connecting to whom is
+      // `webrtc.ts`'s business, and a state machine that also tracked peer
+      // connections would be two features wearing one name.
+      case 'offer':
+      case 'answer':
+      case 'ice':
+        break;
       case 'chat':
         // Only from somebody sitting in this room, and never the echo of one's
         // own words. A line from a stranger who happens to know the code is the
@@ -336,6 +392,8 @@ export class Lobby {
       members,
       seat: members.indexOf(this.self),
       hosting: this.hosting,
+      code: this.code,
+      self: this.self,
     });
   }
 

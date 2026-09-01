@@ -12,7 +12,8 @@ import { takeSpoil } from './systems/chests';
 import { mountLanguageSwitch } from './ui/language';
 import { HttpAccounts } from './net/accounts';
 import { HttpLeaderboard } from './net/leaderboard';
-import { Hud } from './ui/hud';
+import { Hud, requireElement } from './ui/hud';
+import { t } from './i18n';
 import { AccountScreen } from './ui/account';
 import { RecordsScreen, SubmitStrip } from './ui/records';
 import {
@@ -30,7 +31,11 @@ import { canPause, pauseRun, resumeRun } from './world/pause';
 import { stepWorld } from './world/step';
 import { World } from './world/world';
 import { GuestSession, HostSession } from './net/session';
-import { openGameChannel } from './net/channel';
+import { dedupe, nonce, openGameChannel } from './net/channel';
+import type { Envelope } from './net/mailbox';
+import { PeerMesh } from './net/webrtc';
+import { shouldSwapHost } from './net/diagnosis';
+import type { NetMessage } from './net/session';
 import { STARTER_WEAPON_ID } from './data/weapons';
 import type { Session } from './net/session';
 import type { LobbyStart } from './net/lobby';
@@ -96,6 +101,12 @@ async function main(): Promise<void> {
   // result screen. Put on the page by `relabel` below, once there is a world
   // for it to sync the overlays against.
 
+  const linkPanel = requireElement('link');
+  /** The roster, in seat order, so a link can be named as a player number. */
+  let roster: readonly string[] = [];
+  let hostingRun = false;
+  const memberSeat = (member: string): number => roster.indexOf(member);
+
   const pauseButton = document.getElementById('pause-button');
   pauseButton?.addEventListener('click', togglePause);
 
@@ -128,6 +139,19 @@ async function main(): Promise<void> {
    * is what keeps every measured table in the README about the same code.
    */
   let net: Session | null = null;
+
+  /** The peer connections this machine holds, or null outside a team run. */
+  let mesh: PeerMesh | null = null;
+
+  /**
+   * Everything arriving from anybody, heard once.
+   *
+   * Both transports carry every message, so a second window on this machine
+   * hears each of them twice. Most of what a session does is idempotent and
+   * would not care — but spending a level is not, and a duplicated pick would
+   * take two cards for one level.
+   */
+  const deliver = dedupe<NetMessage>((message) => net?.receive(world, message));
 
   /**
    * The player at this keyboard.
@@ -238,12 +262,42 @@ async function main(): Promise<void> {
   function startTeamRun(start: LobbyStart): void {
     picking = false;
     placedAs = undefined;
+    roster = start.members;
+    hostingRun = start.hosting;
     world = new World(start.seed, start.members.map(() => STARTER_WEAPON_ID));
 
-    const channel = openGameChannel((message) => net?.receive(world, message));
+    // Two ways to reach the others, and both are used. The local one carries a
+    // second window on this machine and costs nothing; the peer connections
+    // carry another house. A message arriving twice is dropped by its nonce.
+    const local = openGameChannel<Envelope<NetMessage>>((message) => deliver(message));
+    mesh?.close();
+    mesh = new PeerMesh(
+      start.self,
+      start.code,
+      (message) => startScreen.signalling.signal(message),
+      (message) => deliver(message),
+      showLinks,
+    );
+    startScreen.signalling.onSignal = (message) => mesh?.receive(message);
+
+    // The host calls; a guest waits to be called. Whoever makes the offer also
+    // makes the data channel, and two of those is one too many.
+    if (start.hosting) {
+      for (const member of start.members) mesh.invite(member);
+    }
+
+    const channel = {
+      send: (message: NetMessage) => {
+        const wrapped: Envelope<NetMessage> = { n: nonce(), m: message };
+        local.send(wrapped);
+        mesh?.broadcast(wrapped);
+      },
+    };
+
     net = start.hosting
       ? new HostSession(channel, start.members)
       : new GuestSession(channel, start.members[start.seat], start.seat);
+    showLinks();
 
     input.clearPressed();
     touch.reset();
@@ -480,6 +534,8 @@ async function main(): Promise<void> {
    * seed with this weapon rather than silently ignoring one of the two.
    */
   function startRun(weaponId: string): void {
+    mesh?.close();
+    mesh = null;
     net = null;
     picking = false;
     placedAs = undefined;
@@ -505,6 +561,47 @@ async function main(): Promise<void> {
   function autoPause(): void {
     if (!canPause(world)) return;
     pauseGame();
+  }
+
+  /**
+   * Says what the peer-to-peer layer is doing, and only when it has something
+   * to say.
+   *
+   * WebRTC fails silently, and silence in a waiting room is indistinguishable
+   * from a broken game. It cannot always be fixed — two machines behind
+   * symmetric NAT genuinely cannot reach each other without a relay this
+   * project does not run — but a player who is told *why* can do something
+   * about it, and one who is not decides the game is broken.
+   */
+  function showLinks(): void {
+    const reports = mesh?.report() ?? [];
+    const lines: HTMLElement[] = [];
+
+    for (const link of reports) {
+      if (link.state === 'open') continue;
+
+      const line = document.createElement('div');
+      const who = t('hud.player', { n: 1 + Math.max(0, memberSeat(link.member)) });
+
+      if (link.state === 'connecting') line.textContent = t('link.connecting');
+      else if (link.diagnosis !== null) line.textContent = t(`link.${link.diagnosis}`, { who });
+      lines.push(line);
+
+      if (link.diagnosis !== null) {
+        const advice = document.createElement('div');
+        advice.className = 'advice';
+        advice.textContent = shouldSwapHost(
+          { everConnected: false, sawPublicAddress: true, heardFromPeer: true, hosting: hostingRun },
+          link.diagnosis,
+        )
+          ? t('link.swapHost')
+          : t('link.tryAgain');
+        lines.push(advice);
+      }
+    }
+
+    linkPanel.replaceChildren(...lines);
+    linkPanel.hidden = lines.length === 0;
   }
 
   function draw(alpha: number): void {

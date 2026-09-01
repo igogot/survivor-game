@@ -1,7 +1,6 @@
 import { openMailbox } from './mailbox';
 import type { Envelope } from './mailbox';
 import type { LobbyMessage } from './lobby';
-import type { NetMessage } from './session';
 
 /**
  * How a lobby's messages travel, and the one place that knows they travel at
@@ -53,9 +52,7 @@ const SEEN_LIMIT = 512;
  * checking is that a duplicate is dropped and a genuine repeat of the same
  * *content* is not, and neither needs a `BroadcastChannel` to demonstrate.
  */
-export function dedupe(
-  onMessage: (message: LobbyMessage) => void,
-): (envelope: Envelope) => void {
+export function dedupe<T>(onMessage: (message: T) => void): (envelope: Envelope<T>) => void {
   const seen = new Set<string>();
 
   return (envelope) => {
@@ -118,7 +115,7 @@ const GAME_CHANNEL = 'survivor-game';
  */
 export function openLobbyChannel(onMessage: (message: LobbyMessage) => void): LobbyChannel {
   const deliver = dedupe(onMessage);
-  const local = open<Envelope>(LOBBY_CHANNEL, deliver);
+  const local = open<Envelope<LobbyMessage>>(LOBBY_CHANNEL, deliver);
   const mail = openMailbox(deliver);
 
   return {
@@ -132,11 +129,15 @@ export function openLobbyChannel(onMessage: (message: LobbyMessage) => void): Lo
   };
 }
 
-/** The same, for the messages a run is made of. */
-export function openGameChannel(onMessage: (message: NetMessage) => void): {
-  send(message: NetMessage): void;
-} {
-  return open(GAME_CHANNEL, onMessage);
+/**
+ * The same, for the messages a run is made of.
+ *
+ * Generic in what it carries because a run's messages travel wrapped: two
+ * transports deliver each one, and the wrapper is what lets the far end tell a
+ * second delivery from a second message. See `dedupe`.
+ */
+export function openGameChannel<T>(onMessage: (message: T) => void): { send(message: T): void } {
+  return open<T>(GAME_CHANNEL, onMessage);
 }
 
 function open<T>(name: string, onMessage: (message: T) => void): { send(message: T): void } {

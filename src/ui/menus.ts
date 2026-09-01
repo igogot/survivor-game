@@ -124,6 +124,11 @@ export class StartScreen {
     return this.current === 'weapons';
   }
 
+  /** The channel a run's introductions travel on. See `LobbyView.onSignal`. */
+  get signalling(): LobbyView {
+    return this.lobby;
+  }
+
   /** Always opens on the mode choice: a restart is a chance to play differently. */
   show(): void {
     this.step('mode');

@@ -4,7 +4,7 @@ import { Lobby, MAX_PARTY } from '../net/lobby';
 import { openLobbyChannel } from '../net/channel';
 import { requireElement } from './hud';
 import type { LobbyChannel } from '../net/channel';
-import type { LobbyError, LobbyStart, LobbyState } from '../net/lobby';
+import type { LobbyError, LobbyMessage, LobbyStart, LobbyState } from '../net/lobby';
 
 /**
  * The multiplayer half of the opening screen.
@@ -59,6 +59,20 @@ export class LobbyView {
   private readonly channel: LobbyChannel;
   private readonly lobby: Lobby;
 
+  /**
+   * Where signalling goes once a run has started.
+   *
+   * Set by whoever is doing the connecting rather than known here: this class
+   * owns the channel, and the peer connections own what the three addressed
+   * messages on it mean.
+   */
+  onSignal: ((message: LobbyMessage) => void) | null = null;
+
+  /** Sending on the same channel, for the same reason. */
+  signal(message: LobbyMessage): void {
+    this.channel.send(message);
+  }
+
   private step: LobbyStep = 'party';
   private knock: ReturnType<typeof setTimeout> | null = null;
   /** Lines already on screen, so an arriving one can open a shut panel. */
@@ -75,6 +89,9 @@ export class LobbyView {
     onStart: (start: LobbyStart) => void,
   ) {
     this.channel = openLobbyChannel((message) => {
+      // Signalling shares this channel and belongs to whoever is connecting;
+      // the lobby has nothing to say about it. See `LobbyMessage`.
+      this.onSignal?.(message);
       this.lobby.receive(message);
       this.afterChange();
     });

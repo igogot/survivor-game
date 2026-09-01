@@ -45,9 +45,9 @@ const TIMEOUT_MS = 6000;
  * had". The lobby's own messages have no identity and should not grow one for
  * a problem that belongs down here.
  */
-export interface Envelope {
+export interface Envelope<T = LobbyMessage> {
   readonly n: string;
-  readonly m: LobbyMessage;
+  readonly m: T;
 }
 
 export interface Mailbox {

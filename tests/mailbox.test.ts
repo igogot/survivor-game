@@ -131,7 +131,7 @@ describe('hearing a message once', () => {
    */
   it('drops the second delivery of the same message', () => {
     const heard: LobbyMessage[] = [];
-    const deliver = dedupe((message) => heard.push(message));
+    const deliver = dedupe<LobbyMessage>((message) => heard.push(message));
 
     const envelope = wrapped(HELLO);
     deliver(envelope);
@@ -147,7 +147,7 @@ describe('hearing a message once', () => {
    */
   it('keeps a genuine repeat of the same words', () => {
     const heard: LobbyMessage[] = [];
-    const deliver = dedupe((message) => heard.push(message));
+    const deliver = dedupe<LobbyMessage>((message) => heard.push(message));
 
     deliver(wrapped(HELLO));
     deliver(wrapped(HELLO));
