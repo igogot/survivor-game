@@ -1,7 +1,7 @@
 import { CONFIG } from '../config';
 import { TAU } from '../core/math';
 import { BOSS, ENEMIES } from '../data/enemies';
-import { partyAnchor } from '../world/party';
+import { partyAnchor, partySize } from '../world/party';
 import type { EnemyDef } from '../data/enemies';
 import type { PartyAnchor } from '../world/party';
 import type { World } from '../world/world';
@@ -78,23 +78,40 @@ export function bodyCost(world: World): number {
 /**
  * The HP multiplier every ordinary enemy spawned right now carries.
  *
- * A pure function of elapsed time, so anything that puts an enemy into the
- * world outside the spawner — a splitter coming apart, a test — gets exactly
- * what the spawner would have given it, without having to remember the formula.
+ * A pure function of elapsed time and party size, so anything that puts an
+ * enemy into the world outside the spawner — a splitter coming apart, a test —
+ * gets exactly what the spawner would have given it, without having to remember
+ * the formula.
+ *
+ * Party size multiplies it flat: two players meet enemies with twice the
+ * health, three meet three times. Two players are roughly twice the damage, so
+ * this is what keeps a body worth about the same number of seconds however many
+ * people are shooting at it — without it a party deletes the horde on contact
+ * and the whole difficulty curve happens to somebody else.
+ *
+ * Baked in at spawn rather than recomputed, so a body keeps the health it was
+ * born with. A party that loses somebody faces a lighter horde from that moment
+ * on and not retroactively, which is both the cheaper thing to implement and
+ * the more defensible one: the bodies already on the field were made by a
+ * bigger party.
  */
 export function hordeHpScale(world: World): number {
-  return 1 + (world.time / 60) * CONFIG.spawn.hpScalePerMinute;
+  return (1 + (world.time / 60) * CONFIG.spawn.hpScalePerMinute) * partySize(world);
 }
 
 /**
  * How much HP the boss due now carries over the first one.
  *
- * Counts bosses rather than minutes on purpose — see `CONFIG.boss`. Exported so
- * a test can assert the second duel is harder than the first without knowing
- * the arithmetic.
+ * Counts bosses rather than minutes on purpose — see `CONFIG.boss` — and then
+ * takes the same flat party multiplier the horde does. A duel is the one fight
+ * the game asks a party to actually win, so it is the last place a bar should
+ * melt because there are four people in front of it.
+ *
+ * Exported so a test can assert the second duel is harder than the first
+ * without knowing the arithmetic.
  */
 export function bossHpScale(world: World): number {
-  return 1 + world.bossesKilled * CONFIG.boss.hpScalePerBoss;
+  return (1 + world.bossesKilled * CONFIG.boss.hpScalePerBoss) * partySize(world);
 }
 
 /**

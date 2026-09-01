@@ -22,6 +22,31 @@ export function anyAlive(world: World): boolean {
 }
 
 /**
+ * How many players the game is currently being played by.
+ *
+ * The party's size for every purpose that has one, and there are two: it
+ * divides the experience bar and it multiplies enemy health. Those two have to
+ * be the same number or a party gets a discount on one side of the ledger —
+ * which is why this is a function here rather than a `players.length` written
+ * out at each of them.
+ *
+ * The living, not the roster. Somebody who has fallen is neither filling the
+ * bar nor shooting at anything, so charging the survivors for them would make
+ * a death a punishment on top of a death.
+ *
+ * Never zero. A wiped party has no more ticks coming, but the HUD may still be
+ * asked to draw one last frame, and dividing by nothing there is not worth the
+ * crash.
+ */
+export function partySize(world: World): number {
+  let alive = 0;
+  for (let i = 0; i < world.players.length; i++) {
+    if (isAlive(world.players[i])) alive++;
+  }
+  return Math.max(1, alive);
+}
+
+/**
  * The living player nearest a point, or null when the party is wiped.
  *
  * Nearest rather than anything cleverer, and that is a choice worth naming: it

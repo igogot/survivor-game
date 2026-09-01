@@ -1,5 +1,5 @@
 import { DESIGNED_UPGRADES, FALLBACK_UPGRADES, UPGRADES } from '../data/upgrades';
-import { isAlive } from '../world/party';
+import { isAlive, partySize } from '../world/party';
 import { NOBODY } from '../world/world';
 import { healPlayer } from './damage';
 import { grantWeapon } from './weapons';
@@ -38,14 +38,7 @@ export function xpForLevel(level: number): number {
  * run is exactly the run it was.
  */
 export function xpForNextLevel(world: World): number {
-  let sharers = 0;
-  for (let i = 0; i < world.players.length; i++) {
-    if (isAlive(world.players[i])) sharers++;
-  }
-
-  // A wiped party has no share count and no more ticks coming; answering with
-  // one player's price keeps the HUD from dividing by nothing on the way out.
-  return xpForLevel(world.level) * Math.max(1, sharers);
+  return xpForLevel(world.level) * partySize(world);
 }
 
 /**
