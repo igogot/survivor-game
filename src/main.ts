@@ -11,7 +11,9 @@ import { getLang, initLang } from './i18n/lang';
 import { OFFERS_PER_LEVEL, applyUpgrade } from './systems/progression';
 import { takeSpoil } from './systems/chests';
 import { mountLanguageSwitch } from './ui/language';
+import { HttpLeaderboard } from './net/leaderboard';
 import { Hud } from './ui/hud';
+import { RecordsScreen, SubmitStrip } from './ui/records';
 import {
   ChestMenu,
   PauseScreen,
@@ -59,6 +61,23 @@ async function main(): Promise<void> {
   const pauseScreen = new PauseScreen(resumeGame, restart);
   const upgradeMenu = new UpgradeMenu(pickUpgrade);
   const chestMenu = new ChestMenu(pickSpoil);
+
+  /*
+   * The leaderboard is bolted to the side of the game on purpose. Nothing in
+   * the tick, the renderer or the world knows it exists, every call it makes
+   * is awaited off the game loop, and every failure it can have ends in a
+   * sentence on a screen. A run must never be worse because a shared host in
+   * another country is down.
+   */
+  const leaderboard = new HttpLeaderboard();
+  const recordsScreen = new RecordsScreen(leaderboard, closeRecords);
+  const submitStrip = new SubmitStrip(leaderboard, (name) => {
+    // Reopening the board after placing goes straight to the new row.
+    placedAs = name;
+  });
+
+  /** The name this run was put on the board under, if it was. */
+  let placedAs: string | undefined;
   const startScreen = new StartScreen(startRun, renderer.paintSprite);
 
   /** The weapons on offer, in the order their cards and their keys appear. */
@@ -70,6 +89,13 @@ async function main(): Promise<void> {
 
   const pauseButton = document.getElementById('pause-button');
   pauseButton?.addEventListener('click', togglePause);
+
+  // The button beside "Run again". A phone has no L key, and the board is the
+  // one screen a player is meant to want to look at twice.
+  document.getElementById('result-records')?.addEventListener('click', openRecords);
+  // And from the opening screen, so the board is a thing you can look at before
+  // you have anything to put on it — which is the whole reason to chase it.
+  document.getElementById('start-records')?.addEventListener('click', openRecords);
 
   /**
    * Whether a machine is driving this page.
@@ -172,6 +198,11 @@ async function main(): Promise<void> {
     const phase = world.phase;
 
     if (phase === 'paused') {
+      if (recordsScreen.isOpen) {
+        if (input.consumePressed('Escape') || input.consumePressed('KeyL')) closeRecords();
+        return;
+      }
+
       if (choosing) {
         // The same digits the level-up screen uses, because it is the same
         // gesture: read three cards, pick one, live with it.
@@ -180,6 +211,11 @@ async function main(): Promise<void> {
             startRun(starters[i].id);
             return;
           }
+        }
+
+        if (input.consumePressed('KeyL')) {
+          openRecords();
+          return;
         }
 
         // The three keys a player reaches for on a title screen, for somebody
@@ -251,8 +287,30 @@ async function main(): Promise<void> {
     }
 
     if (phase === 'dead') {
+      if (recordsScreen.isOpen) {
+        // Only a way out. Restarting from behind the board would leave it
+        // covering a run that had already begun.
+        if (input.consumePressed('Escape') || input.consumePressed('KeyL')) closeRecords();
+        return;
+      }
+
+      if (input.consumePressed('KeyL')) {
+        openRecords();
+        return;
+      }
       if (input.consumePressed('KeyR')) restart();
     }
+  }
+
+  function openRecords(): void {
+    // Deliberately not awaited: the screen shows what it already knows at once
+    // and fills in when the network answers, so opening it is never a wait.
+    void recordsScreen.show(placedAs);
+  }
+
+  function closeRecords(): void {
+    recordsScreen.hide();
+    input.clearPressed();
   }
 
   function pausePressed(): boolean {
@@ -310,6 +368,7 @@ async function main(): Promise<void> {
    */
   function startRun(weaponId: string): void {
     choosing = false;
+    placedAs = undefined;
     world = newWorld(weaponId);
     // Everything an unpause clears, for the same reason: the key or the click
     // that chose the weapon must not also be read by the run it starts.
@@ -392,9 +451,30 @@ async function main(): Promise<void> {
 
     if (world.phase === 'dead') {
       resultScreen.show(world);
+      void offerTheBoard(world);
     } else {
       resultScreen.hide();
+      submitStrip.hide();
+      recordsScreen.hide();
     }
+  }
+
+  /**
+   * Asks the board whether this run belongs on it.
+   *
+   * Fetched at the moment of death rather than kept warm during the run: the
+   * board is only ever read here and on the records screen, and a request in
+   * flight while the horde is on screen is a request that can cost a frame.
+   */
+  async function offerTheBoard(world: World): Promise<void> {
+    const finished = world;
+    const result = await leaderboard.read();
+
+    // The player may have restarted while this was in the air. Anything shown
+    // now would be about a run that is already over and gone.
+    if (world !== finished || world.phase !== 'dead') return;
+
+    await submitStrip.offer(finished, result.board, result.reachable);
   }
 
   /**
@@ -411,6 +491,7 @@ async function main(): Promise<void> {
     }
 
     choosing = true;
+    placedAs = undefined;
     world = newWorld();
     pauseRun(world);
     input.clearPressed();
@@ -432,4 +513,18 @@ function newWorld(starterId?: string): World {
   return new World(Number.isFinite(parsed) ? parsed : Date.now() >>> 0, starterId);
 }
 
-void main();
+/*
+ * Nothing catches a failure in here except this.
+ *
+ * `void main()` swallowed it: setup is async, so anything thrown after the
+ * first await became an unhandled rejection that never reached the console,
+ * and the symptom was a game that drew its opening screen and then quietly did
+ * not work. A blank message on the page is worth more than a silent one.
+ */
+main().catch((error: unknown) => {
+  console.error('Survivor failed to start', error);
+  const host = document.getElementById('app');
+  if (host !== null) {
+    host.textContent = 'Something went wrong starting the game. The console has the details.';
+  }
+});

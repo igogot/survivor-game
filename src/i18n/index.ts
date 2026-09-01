@@ -96,6 +96,13 @@ export function applyStaticText(root: ParentNode = document): void {
     const id = node.dataset.i18nLabel;
     if (id !== undefined && isStringId(id)) node.setAttribute('aria-label', t(id));
   }
+
+  // The third kind, for the one field a player types into. Same reason as the
+  // other two: the markup keeps the id and the tables keep the words.
+  for (const node of root.querySelectorAll<HTMLElement>('[data-i18n-placeholder]')) {
+    const id = node.dataset.i18nPlaceholder;
+    if (id !== undefined && isStringId(id)) node.setAttribute('placeholder', t(id));
+  }
 }
 
 function isStringId(value: string): value is StringId {

@@ -327,6 +327,14 @@
         display: none;
       }
 
+      /* The board is the one overlay opened from on top of another one — from
+         the result screen, and from the opening screen. Same z-index would put
+         it behind whichever of those comes later in the markup, which looks
+         exactly like a button that does nothing. */
+      .overlay--above {
+        z-index: 20;
+      }
+
       .panel {
         /* The containing block for the language switch in its corner. Without
            it the switch would position against the overlay, which is the whole
@@ -490,6 +498,110 @@
       .card--spoil:focus-visible {
         border-color: #ffd166;
         background: rgba(255, 209, 102, 0.12);
+      }
+
+      /* The board. A list rather than a table so it reflows on a phone without
+         a horizontal scrollbar, with the columns held by a grid. */
+      .records {
+        list-style: none;
+        margin: 0 0 12px;
+        padding: 0;
+        max-height: min(52vh, 520px);
+        overflow-y: auto;
+        text-align: left;
+        font-size: 12px;
+      }
+
+      .record {
+        display: grid;
+        grid-template-columns: 2.5em minmax(0, 1fr) 4.5em minmax(0, 8.5em) 2.5em;
+        gap: 8px;
+        align-items: baseline;
+        padding: 4px 8px;
+        border-radius: 5px;
+      }
+
+      .record:nth-child(odd) {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      /* The row the player just earned, so they can find themselves in a
+         hundred lines without reading any of the others. */
+      .record--mine {
+        background: rgba(110, 231, 160, 0.14);
+        color: var(--accent);
+      }
+
+      .record .rank {
+        color: var(--muted);
+        text-align: right;
+      }
+
+      .record .who {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .record .when {
+        text-align: right;
+      }
+
+      .record .with,
+      .record .felled {
+        color: var(--muted);
+      }
+
+      /* "Siege Harpoon" and "Orbit Blades" are two words and wrapped, which
+         made those rows taller than the rest and the whole column ragged. A
+         hundred rows only scan if every one of them is the same height. */
+      .record .with {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #submit-strip {
+        margin: 14px 0 4px;
+      }
+
+      #submit-strip[hidden] {
+        display: none;
+      }
+
+      #submit-message {
+        margin: 0 0 10px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      #submit-form {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      #submit-form[hidden] {
+        display: none;
+      }
+
+      #submit-name {
+        pointer-events: auto;
+        min-width: 0;
+        width: 180px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13px;
+      }
+
+      #submit-name:focus {
+        outline: none;
+        border-color: var(--accent);
       }
 
       .starters {
@@ -981,6 +1093,20 @@
       </div>
     </div>
 
+    <div class="overlay overlay--above" id="records" hidden>
+      <div class="panel panel--help">
+        <h2 data-i18n="board.title">Records</h2>
+        <p class="sub" data-i18n="board.sub">The hundred longest runs anybody has finished</p>
+        <ol id="records-body" class="records"></ol>
+        <p class="hint" id="records-status"></p>
+        <div class="actions">
+          <button class="action" id="records-close" type="button" data-i18n="board.back">
+            Back
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="overlay" id="start" hidden>
       <div class="panel panel--help">
         <div class="langs" role="group" aria-label="Language" data-i18n-label="lang.label">
@@ -990,6 +1116,11 @@
         <h2 data-i18n="start.title">Survivor</h2>
         <p class="sub" data-i18n="start.sub">One life, no finish line. Choose what you open with.</p>
         <div class="starters" id="start-weapons"></div>
+        <div class="actions">
+          <button class="action" id="start-records" type="button" data-i18n="board.open">
+            Records
+          </button>
+        </div>
         <!-- Filled by StartScreen from the weapons themselves. It said "1 2 3"
              here for two weapons longer than that was true, which is what a
              hint written twice always comes to. -->
@@ -1039,10 +1170,30 @@
             ><span class="label" data-i18n="result.bosses">bosses</span>
           </div>
         </div>
+        <div id="submit-strip" hidden>
+          <p id="submit-message"></p>
+          <form id="submit-form" hidden>
+            <input
+              id="submit-name"
+              type="text"
+              autocomplete="nickname"
+              spellcheck="false"
+              data-i18n-placeholder="board.namePlaceholder"
+              data-i18n-label="board.nameLabel"
+            />
+            <button class="action" id="submit-send" type="submit" data-i18n="board.send">
+              Put it on the board
+            </button>
+          </form>
+        </div>
+
         <p class="hint" id="result-hint"></p>
         <div class="actions">
           <button class="action" id="result-again" type="button" data-i18n="result.again">
             Run again
+          </button>
+          <button class="action" id="result-records" type="button" data-i18n="board.open">
+            Records
           </button>
         </div>
         <div class="help" id="help-result"></div>

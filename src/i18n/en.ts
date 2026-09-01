@@ -55,6 +55,32 @@ export const EN = {
   'result.sub.none': 'The horde does not stop. Try standing somewhere else.',
   'result.sub.one': 'One boss down. The horde kept coming anyway.',
   'result.sub.many': '{count} bosses down. The horde kept coming anyway.',
+
+  // The leaderboard. One row per name, and the only screen in the game that
+  // shows anybody else.
+  'board.title': 'Records',
+  'board.sub': 'The hundred longest runs anybody has finished',
+  'board.open': 'Records',
+  'board.back': 'Back',
+  'board.loading': 'Loading…',
+  'board.empty': 'Nobody has set a record yet. Go first.',
+  'board.unreachable': 'The leaderboard is unreachable — this run stays between us.',
+  'board.offlineStale': 'Could not refresh — showing what was last loaded',
+  'board.offlineEmpty': 'The board is unreachable from here',
+  'board.nameLabel': 'Name for the leaderboard',
+  'board.namePlaceholder': 'your name',
+  'board.send': 'Put it on the board',
+  'board.sending': 'Sending…',
+  'board.placed': '{place} on the board.',
+  'board.placedLate': 'Sent — but the board filled up first.',
+  'board.qualifies': 'That is {place} place. Put a name to it.',
+  'board.missed': 'This run does not make the board.',
+  'board.missedBy': 'Not the top {size} — the last place on it survived {time}.',
+  'board.needName': 'A name, however short.',
+  'board.failOffline': 'The board did not answer. The run still happened.',
+  'board.failRefused': 'The board did not believe that run.',
+  'board.failTooMany': 'Too many submissions from here just now. Give it a few minutes.',
+  'board.failInvalid': 'That run does not add up, so it was not sent.',
   // English needs two forms and Russian three, so the noun is a lookup rather
   // than part of the sentence. See `plural()`.
   'plural.boss.one': 'boss',

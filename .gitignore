@@ -6,3 +6,11 @@ dist-ssr/
 .vscode/*
 !.vscode/extensions.json
 *.tsbuildinfo
+
+# Database credentials. Created by hand on the host, never committed and never
+# uploaded — the deploy excludes it too, or the next push would delete it.
+public/api/config.php
+
+# Generated from the game's constants by scripts/emit-limits.ts on every build.
+# Committing it would mean two sources of truth for the same numbers.
+public/api/limits.json

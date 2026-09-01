@@ -1,0 +1,400 @@
+<?php
+/**
+ * The leaderboard, in the only language reg.ru shared hosting speaks.
+ *
+ * Two verbs and nothing else:
+ *
+ *   GET   returns the top hundred, best first.
+ *   POST  takes one run, checks it could have happened, and keeps it if it is
+ *         better than what that name already has.
+ *
+ * What this can and cannot promise is worth being plain about. The game runs
+ * in the player's browser, so every number here arrives from a machine its
+ * owner controls, and nothing short of replaying the whole simulation server
+ * side would make a submission trustworthy. What the checks below buy is that
+ * a forged score has to describe a run the game could actually have produced —
+ * which turns a number typed into a console into a piece of work. That is the
+ * honest ceiling for a client-side game, and pretending otherwise would be
+ * worse than not having a board.
+ *
+ * The bounds are not written here. They are read from limits.json, which the
+ * build generates from the game's own constants — see scripts/emit-limits.ts.
+ * A copy of those numbers in this file would be wrong the first time anybody
+ * retuned the spawn curve, and the failure would look like the board refusing
+ * an honest player.
+ */
+
+declare(strict_types=1);
+
+header('Content-Type: application/json; charset=utf-8');
+// The board is public and carries no cookies or credentials, so any origin may
+// read it. The game is served from GitHub Pages and from this host, and both
+// have to reach the same table or the board is two boards.
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+// Never let a proxy hold a copy: a board that is thirty seconds stale is a
+// board where somebody's new record has silently not appeared.
+header('Cache-Control: no-store');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
+require __DIR__ . '/config.php';
+
+/** Sends a JSON body and stops. */
+function respond(int $status, array $body): void
+{
+    http_response_code($status);
+    echo json_encode($body, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+function fail(int $status, string $reason): void
+{
+    respond($status, ['error' => $reason]);
+}
+
+/**
+ * The bounds the build wrote out of the game's constants.
+ *
+ * A missing or unreadable file is a deploy that went wrong, and the right
+ * answer is to refuse writes rather than to accept everything: an unchecked
+ * board fills with nonsense in an afternoon and cannot be cleaned up by hand.
+ */
+function limits(): array
+{
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $raw = @file_get_contents(__DIR__ . '/limits.json');
+    if ($raw === false) {
+        fail(503, 'limits-missing');
+    }
+
+    $parsed = json_decode($raw, true);
+    if (!is_array($parsed)) {
+        fail(503, 'limits-unreadable');
+    }
+
+    $cached = $parsed;
+    return $cached;
+}
+
+function db(): PDO
+{
+    static $pdo = null;
+    if ($pdo !== null) {
+        return $pdo;
+    }
+
+    try {
+        $pdo = new PDO(
+            sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_NAME),
+            DB_USER,
+            DB_PASSWORD,
+            [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]
+        );
+    } catch (PDOException $e) {
+        // The message can name the database, the user and the host. None of
+        // that belongs in a response to the internet.
+        error_log('leaderboard: ' . $e->getMessage());
+        fail(503, 'database-unavailable');
+    }
+
+    return $pdo;
+}
+
+/**
+ * The ceiling at `$x`, read off a sampled curve.
+ *
+ * Both curves are monotonic, so a value between two samples takes the higher
+ * one. That errs towards accepting, which is the direction a bound on the
+ * impossible has to err in: refusing a real run costs a player their place,
+ * while accepting a slightly generous one costs nothing anybody notices.
+ */
+function ceilingFrom(array $samples, float $x): float
+{
+    $ceiling = 0.0;
+    foreach ($samples as [$at, $value]) {
+        $ceiling = (float) $value;
+        if ($x <= (float) $at) {
+            return $ceiling;
+        }
+    }
+
+    return $ceiling;
+}
+
+/**
+ * Strips what a keyboard did not mean to send, then trims and caps.
+ *
+ * Deliberately the same rules as `cleanName` in src/core/scores.ts, including
+ * the bidi block: those characters are not typos, they reorder the glyphs
+ * around them, and one name carrying an override rewrites how its neighbours
+ * read on a public board.
+ */
+function cleanName(string $raw, int $maxLength): ?string
+{
+    $kept = '';
+    $length = mb_strlen($raw, 'UTF-8');
+
+    for ($i = 0; $i < $length; $i++) {
+        $character = mb_substr($raw, $i, 1, 'UTF-8');
+        $point = mb_ord($character, 'UTF-8');
+        if ($point === false) {
+            continue;
+        }
+        if ($point < 0x20) {
+            continue;
+        }
+        if ($point >= 0x7f && $point <= 0x9f) {
+            continue;
+        }
+        if ($point >= 0x200b && $point <= 0x200f) {
+            continue;
+        }
+        if ($point === 0x2028 || $point === 0x2029) {
+            continue;
+        }
+        if ($point >= 0x202a && $point <= 0x202e) {
+            continue;
+        }
+        if ($point >= 0x2066 && $point <= 0x2069) {
+            continue;
+        }
+        $kept .= $character;
+    }
+
+    $trimmed = trim($kept);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    return mb_substr($trimmed, 0, $maxLength, 'UTF-8');
+}
+
+/** The client's address, as far as a shared host can tell. */
+function clientFingerprint(): string
+{
+    // Not identity and not trusted — a shared host sits behind proxies that
+    // rewrite these freely. It only has to be stable enough to slow one
+    // machine down, so it is hashed and never stored raw.
+    $address = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    return hash('sha256', $address . '|' . SUBMIT_SALT);
+}
+
+function readBoard(PDO $pdo, int $limit): array
+{
+    $statement = $pdo->prepare(
+        'SELECT name, time_ms, kills, level, bosses, weapon, seed, UNIX_TIMESTAMP(created_at) AS at
+           FROM scores
+          ORDER BY time_ms DESC, bosses DESC, kills DESC
+          LIMIT :limit'
+    );
+    $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $statement->execute();
+
+    $board = [];
+    foreach ($statement->fetchAll() as $row) {
+        $board[] = [
+            'name' => (string) $row['name'],
+            'timeMs' => (int) $row['time_ms'],
+            'kills' => (int) $row['kills'],
+            'level' => (int) $row['level'],
+            'bosses' => (int) $row['bosses'],
+            'weapon' => (string) $row['weapon'],
+            'seed' => (int) $row['seed'],
+            'at' => (int) $row['at'],
+        ];
+    }
+
+    return $board;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    $limits = limits();
+    respond(200, ['board' => readBoard(db(), (int) $limits['boardSize'])]);
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    fail(405, 'method-not-allowed');
+}
+
+$body = json_decode(file_get_contents('php://input') ?: '', true);
+if (!is_array($body)) {
+    fail(400, 'malformed');
+}
+
+$limits = limits();
+$pdo = db();
+
+// Rate limit before anything expensive. One machine hammering the endpoint is
+// the failure this host actually sees, long before anybody bothers forging a
+// plausible run.
+$fingerprint = clientFingerprint();
+// The window is interpolated rather than bound: MySQL will not accept a
+// placeholder as the quantity of an INTERVAL. It is an integer constant from
+// config.php and never touches anything a request sent, so the cast is the
+// whole of what makes that safe.
+$window = (int) SUBMIT_WINDOW_MINUTES;
+$recent = $pdo->prepare(
+    "SELECT COUNT(*) FROM submissions
+      WHERE fingerprint = ? AND created_at > (NOW() - INTERVAL {$window} MINUTE)"
+);
+$recent->execute([$fingerprint]);
+if ((int) $recent->fetchColumn() >= SUBMIT_LIMIT) {
+    fail(429, 'too-many-submissions');
+}
+
+$name = is_string($body['name'] ?? null)
+    ? cleanName($body['name'], (int) $limits['maxNameLength'])
+    : null;
+if ($name === null) {
+    fail(422, 'name');
+}
+
+/** Reads an integer field, refusing anything that is not already one. */
+function whole(array $body, string $key): int
+{
+    $value = $body[$key] ?? null;
+    if (!is_int($value)) {
+        // A float that happens to be whole is still a client that rounded
+        // somewhere it should not have, and letting it through means two
+        // clients can disagree about the same run.
+        fail(422, 'shape');
+    }
+    return $value;
+}
+
+$timeMs = whole($body, 'timeMs');
+$kills = whole($body, 'kills');
+$level = whole($body, 'level');
+$bosses = whole($body, 'bosses');
+$seed = whole($body, 'seed');
+$weapon = is_string($body['weapon'] ?? null) ? substr($body['weapon'], 0, 16) : '';
+
+if ($timeMs < 0 || $timeMs > (int) $limits['maxRunMs']) {
+    fail(422, 'time');
+}
+if ($kills < 0 || $kills > ceilingFrom($limits['killCeiling'], $timeMs / 1000)) {
+    fail(422, 'kills');
+}
+if ($level < 1 || $level > ceilingFrom($limits['levelCeiling'], $kills)) {
+    fail(422, 'level');
+}
+
+$bossCeiling = (int) floor(($timeMs / 1000) / (float) $limits['bossIntervalSeconds'])
+    * (int) $limits['bossesPerInterval'];
+if ($bosses < 0 || $bosses > $bossCeiling) {
+    fail(422, 'bosses');
+}
+
+$pdo->prepare('INSERT INTO submissions (fingerprint, created_at) VALUES (?, NOW())')
+    ->execute([$fingerprint]);
+
+/*
+ * One row per name, updated only when the run is better.
+ *
+ * The comparison lives in the WHERE of the update rather than in PHP because
+ * two people can submit under the same name at the same moment, and a
+ * read-then-write would let the worse of the two land last. Ranking order and
+ * this condition have to agree exactly — time, then bosses, then kills.
+ */
+/*
+ * One row per name, replaced whole or not at all.
+ *
+ * Done as a locking read and then a write rather than as one clever
+ * INSERT ... ON DUPLICATE KEY UPDATE. The clever version has to decide
+ * "is this better" once and apply it to seven columns, which in MySQL means
+ * either repeating a four-line condition seven times or leaning on a user
+ * variable and the evaluation order of the SET list. Both are the kind of
+ * thing that works until it does not, on a server nobody here can test
+ * against.
+ *
+ * The important property either way: a leaderboard row has to describe a
+ * single run. Taking the best time from one run and the best kill count from
+ * another would produce a record of something nobody did.
+ */
+$pdo->beginTransaction();
+
+try {
+    $held = $pdo->prepare(
+        'SELECT time_ms, bosses, kills FROM scores WHERE name = ? FOR UPDATE'
+    );
+    $held->execute([$name]);
+    $previous = $held->fetch();
+
+    // FOR UPDATE holds the row until the commit, so two submissions under the
+    // same name at the same moment are ordered rather than racing: the second
+    // one reads what the first wrote.
+    $better = $previous === false
+        || $timeMs > (int) $previous['time_ms']
+        || ($timeMs === (int) $previous['time_ms'] && $bosses > (int) $previous['bosses'])
+        || ($timeMs === (int) $previous['time_ms'] && $bosses === (int) $previous['bosses']
+            && $kills > (int) $previous['kills']);
+
+    if ($better) {
+        $pdo->prepare(
+            'INSERT INTO scores (name, time_ms, kills, level, bosses, weapon, seed, created_at)
+                  VALUES (:name, :time_ms, :kills, :level, :bosses, :weapon, :seed, NOW())
+             ON DUPLICATE KEY UPDATE
+                  time_ms = VALUES(time_ms), kills = VALUES(kills), level = VALUES(level),
+                  bosses = VALUES(bosses), weapon = VALUES(weapon), seed = VALUES(seed),
+                  created_at = VALUES(created_at)'
+        )->execute([
+            ':name' => $name,
+            ':time_ms' => $timeMs,
+            ':kills' => $kills,
+            ':level' => $level,
+            ':bosses' => $bosses,
+            ':weapon' => $weapon,
+            ':seed' => $seed,
+        ]);
+    }
+
+    $pdo->commit();
+} catch (PDOException $e) {
+    $pdo->rollBack();
+    error_log('leaderboard: ' . $e->getMessage());
+    fail(503, 'database-unavailable');
+}
+
+/*
+ * Only the top hundred are kept, so everything below it is deleted rather than
+ * accumulating forever on a shared host. The subselect is wrapped because
+ * MySQL will not delete from a table it is also selecting from directly.
+ */
+$keep = (int) $limits['boardSize'];
+$pdo->exec(
+    "DELETE FROM scores WHERE id NOT IN (
+        SELECT id FROM (
+            SELECT id FROM scores
+             ORDER BY time_ms DESC, bosses DESC, kills DESC
+             LIMIT {$keep}
+        ) AS survivors
+     )"
+);
+
+// Old rate-limit rows are of no use once their window has passed.
+$pdo->exec("DELETE FROM submissions WHERE created_at < (NOW() - INTERVAL {$window} MINUTE)");
+
+$board = readBoard($pdo, (int) $limits['boardSize']);
+
+$rank = -1;
+foreach ($board as $index => $entry) {
+    if (mb_strtolower($entry['name'], 'UTF-8') === mb_strtolower($name, 'UTF-8')) {
+        $rank = $index;
+        break;
+    }
+}
+
+respond(200, ['board' => $board, 'rank' => $rank, 'name' => $name]);
