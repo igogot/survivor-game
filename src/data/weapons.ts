@@ -160,7 +160,60 @@ export interface HarpoonWeaponDef extends WeaponBase {
   readonly pierce: number;
 }
 
-export type WeaponDef = BoltWeaponDef | OrbitWeaponDef | NovaWeaponDef | SpearWeaponDef | HarpoonWeaponDef;
+/**
+ * Burning ground, laid where the player has been.
+ *
+ * The first weapon in the game that is not attached to the player. Everything
+ * else fires from them and lands within a radius of them; this one leaves
+ * something behind that keeps working after they have gone, which makes it the
+ * only weapon whose output is a function of the ground covered rather than of
+ * the time elapsed.
+ *
+ * That is the answer to a shape the game already has. The player outruns
+ * everything — 175 against a fastest enemy of 96, 275 once Light Boots are
+ * bought — so the horde spends the whole run in a queue behind them, which is
+ * exactly the ground the trail is laid on. Standing still lays nothing at all:
+ * the patch under the player burns out and the weapon stops, which is the
+ * price it charges and the one thing it asks of the player's hands.
+ *
+ * Two numbers make it work, and both are ratios rather than absolutes:
+ *
+ *   1. `spacing` is a fraction of the patch's radius, not a distance. A trail
+ *      laid at a fixed spacing comes apart into a row of dots the moment the
+ *      fire is widened, and it costs a query per patch per pulse — so a wider
+ *      fire would also be a more expensive one. Tying the two together makes
+ *      the ribbon continuous at every width and *cheaper* as it grows.
+ *   2. `cooldown` is the interval between burns, not between patches. Damage
+ *      is an instantaneous stamp, so an enemy crossing the ribbon has to be
+ *      standing in it when one lands: the interval must stay under the time
+ *      the fastest enemy takes to walk across a patch, `2 * radius / speed`.
+ *      This is the orbit ring's skipping problem in a straight line, and
+ *      tests/trail.test.ts pins it at every level and every upgrade.
+ */
+export interface TrailWeaponDef extends WeaponBase {
+  readonly kind: 'trail';
+  /** Frame one patch is drawn with; see `Flame.radius`. */
+  readonly sprite: SpriteName;
+  /** Radius of one patch of fire, before per-level growth and reach. */
+  readonly radius: number;
+  readonly radiusPerLevel: number;
+  /** Seconds a patch keeps burning after it is laid. */
+  readonly life: number;
+  /**
+   * How far the player walks between patches, as a fraction of a patch's
+   * radius. Under 1 so consecutive patches overlap and the trail is a ribbon
+   * rather than a dotted line.
+   */
+  readonly spacing: number;
+}
+
+export type WeaponDef =
+  | BoltWeaponDef
+  | OrbitWeaponDef
+  | NovaWeaponDef
+  | SpearWeaponDef
+  | HarpoonWeaponDef
+  | TrailWeaponDef;
 
 export const BOLT: BoltWeaponDef = {
   kind: 'bolt',
@@ -247,7 +300,44 @@ export const HARPOON: HarpoonWeaponDef = {
   pierce: 5,
 };
 
-export const WEAPONS: readonly WeaponDef[] = [BOLT, ORBIT, NOVA, SPEAR, HARPOON];
+export const EMBER: TrailWeaponDef = {
+  kind: 'trail',
+  id: 'ember',
+  name: 'Ember Trail',
+  playerSprite: 'playerEmber',
+  sprite: 'ember',
+  // Three burns a second. The bar is the runner, the fastest thing in the
+  // horde at 96: it crosses a 38-wide patch in 0.79s, so anything at or under
+  // half of that catches it twice on the way through.
+  cooldown: 0.3,
+  /*
+   * Per burn, and measured rather than chosen.
+   *
+   * It started at 5 — arithmetic said the ribbon already put more damage on
+   * the ground per second than the shockwave puts around the player, so a
+   * small number looked right. The stand disagreed twice over. At 5 the trail
+   * killed more than anything else in the game and still cost the run eighty
+   * seconds and half its bosses: it shreds grunts behind a fleeing player and
+   * does nothing about the body that actually reaches them, so every level
+   * spent on it was a level not spent on the ring or the wave.
+   *
+   * The response to fixing that turned out to be a threshold rather than a
+   * slope. Nearly doubling it to 9 bought 21s on twenty-four seeds, against a
+   * standard error of 32 — nothing. 14 bought back the whole gap. Halfway up
+   * a threshold is the same place as the bottom.
+   */
+  damage: 14,
+  damagePerLevel: 6,
+  color: 0xff7a3c,
+  radius: 38,
+  radiusPerLevel: 8,
+  // Long enough that the ribbon behind a running player is most of a screen,
+  // short enough that a player who doubles back finds cold ground.
+  life: 4,
+  spacing: 0.75,
+};
+
+export const WEAPONS: readonly WeaponDef[] = [BOLT, ORBIT, NOVA, SPEAR, HARPOON, EMBER];
 
 const BY_ID = new Map<string, WeaponDef>(WEAPONS.map((def) => [def.id, def]));
 
@@ -343,6 +433,22 @@ export function novaRadius(def: NovaWeaponDef, state: WeaponState): number {
   return (def.radius + def.radiusPerLevel * (state.level - 1)) * state.areaMul;
 }
 
+/** Radius of a patch laid right now. Reach widens the ribbon. */
+export function trailRadius(def: TrailWeaponDef, state: WeaponState): number {
+  return (def.radius + def.radiusPerLevel * (state.level - 1)) * state.areaMul;
+}
+
+/**
+ * How far the player walks between patches.
+ *
+ * Derived from the radius rather than stored, so widening the fire never
+ * punches gaps in it and never costs more queries per pulse. See
+ * `TrailWeaponDef` — this is the ratio the whole weapon is built on.
+ */
+export function trailSpacing(def: TrailWeaponDef, state: WeaponState): number {
+  return trailRadius(def, state) * def.spacing;
+}
+
 /**
  * A weapon's runtime state. Lives here beside the definition so that both the
  * world (which grants the starter weapon) and the weapon system (which grants
@@ -364,5 +470,11 @@ export function createWeaponState(defId: string): WeaponState {
     pierce: 0,
     spinMul: 1,
     swing: 0,
+    // The origin, which is also where a run starts — so the trail's first patch
+    // is laid one spacing into the first steps rather than on the opening tick.
+    // A weapon granted mid-run is far from here and lays one immediately, which
+    // is what a card taken at level nine should do.
+    trailX: 0,
+    trailY: 0,
   };
 }

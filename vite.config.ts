@@ -13,6 +13,9 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    sourcemap: true,
+    // Source maps are four times the size of the game itself and publish the
+    // TypeScript sources alongside it. Worth it locally, not on a host that
+    // has to ship them to every player.
+    sourcemap: false,
   },
 });

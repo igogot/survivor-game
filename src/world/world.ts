@@ -10,6 +10,7 @@ import type {
   Chest,
   Effect,
   Enemy,
+  Flame,
   Gem,
   MoveTarget,
   Player,
@@ -40,11 +41,14 @@ export class World {
   readonly projectiles: Projectile[] = [];
   readonly gems: Gem[] = [];
   readonly effects: Effect[] = [];
+  /** Burning ground the trail weapon has laid; see `trailSystem`. */
+  readonly flames: Flame[] = [];
 
   readonly enemyPool = new Pool<Enemy>(createEnemy, 256);
   readonly projectilePool = new Pool<Projectile>(createProjectile, 128);
   readonly gemPool = new Pool<Gem>(createGem, 256);
   readonly effectPool = new Pool<Effect>(createEffect, 16);
+  readonly flamePool = new Pool<Flame>(createFlame, 64);
 
   /** Weapons the player owns, in the order they were acquired. */
   readonly weapons: WeaponState[] = [];
@@ -230,6 +234,10 @@ function createProjectile(): Projectile {
 
 function createGem(): Gem {
   return { x: 0, y: 0, px: 0, py: 0, value: 1 };
+}
+
+function createFlame(): Flame {
+  return { x: 0, y: 0, radius: 0, life: 0, maxLife: 1, color: 0xffffff };
 }
 
 function createEffect(): Effect {

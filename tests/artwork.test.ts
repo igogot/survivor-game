@@ -13,12 +13,14 @@ import type { SpriteName } from '../src/data/sprites';
  * used. It reads as a larger bolt, because the bolt is a dagger from the same
  * sheet and both are grey on brown, and at ten pixels against eighteen that is
  * the entire silhouette. Drawn, the spike is a white mask and takes the
- * weapon's own green, which no tile could have given it.
+ * weapon's own green, which no tile could have given it. The trail's fire is
+ * the plainest of the four: the only flame on the sheet is a wall sconce,
+ * mortared into its own bricks.
  *
  * Listing them here rather than allowing any gap is the point — a sprite that
  * quietly lost its art would otherwise look like a deliberate choice.
  */
-const DRAWN_ONLY: readonly SpriteName[] = ['ring', 'spear', 'harpoon'];
+const DRAWN_ONLY: readonly SpriteName[] = ['ring', 'spear', 'harpoon', 'ember'];
 
 describe('sprite artwork', () => {
   it('gives every sprite either a tile or a deliberate exemption', () => {

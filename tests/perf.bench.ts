@@ -45,14 +45,25 @@ const RUN_TIME = 300;
 const HP_SCALE = 1 + (RUN_TIME / 60) * CONFIG.spawn.hpScalePerMinute;
 
 /**
- * A mid-run build. All three weapons fire, so every damage path in the game —
- * projectiles, the orbiting ring, the shockwave — is part of the measured tick.
+ * A mid-run build carrying the whole roster, so every damage path in the game
+ * is part of the measured tick: projectiles for the bolt and the harpoon, the
+ * orbiting ring, the shockwave's circle, the lance's segment and the trail's
+ * burning ground.
+ *
+ * The trail is the reason this list is worth keeping current. Every other
+ * weapon costs a fixed number of broad-phase queries per activation; that one
+ * costs one per patch of fire on the ground, and how many there are is decided
+ * by how far the player has walked. It is the only weapon that could make a
+ * tick more expensive without anything on screen changing.
  */
 const BUILD = [
   'orbit',
   'orbit',
   'nova',
   'nova',
+  'spear',
+  'harpoon',
+  'ember',
   'damage',
   'damage',
   'haste',

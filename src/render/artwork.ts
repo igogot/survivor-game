@@ -28,17 +28,19 @@ export const SHEET_TILES = 132;
  * crab so it looks like it takes a while to kill, and the boss is a spider so
  * it cannot be mistaken for a large brute.
  *
- * `ring`, `spear` and `harpoon` are absent on purpose, each for its own
- * reason. The shockwave is an expanding outline with no equivalent in a
+ * `ring`, `spear`, `harpoon` and `ember` are absent on purpose, each for its
+ * own reason. The shockwave is an expanding outline with no equivalent in a
  * dungeon tileset. The lance is stretched to the reach of its thrust, and a
  * 16px icon smeared eight times along one axis reads as a smudge rather than
  * as a weapon. The harpoon is the interesting one: the sheet does have spikes,
  * and that is the problem — every one of them is grey on brown like the
  * dagger below, so at ten pixels against eighteen the shot read as a larger
  * bolt. A drawn frame is a white mask and takes the weapon's own colour, which
- * is the one thing that tells two small shapes apart across a screen.
+ * is the one thing that tells two small shapes apart across a screen. The
+ * trail's fire is the plainest case of the four: the only flame on the sheet
+ * is a wall sconce, mortared into its own bricks.
  *
- * All three keep their drawn shape even when the artwork loads. Anything
+ * All four keep their drawn shape even when the artwork loads. Anything
  * missing here falls through to `SPRITE_DRAWERS`.
  */
 export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
@@ -47,6 +49,7 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
   playerNova: 84, // wizard, and the only figure on the sheet dressed in nova's purple
   playerSpear: 86, // bearded fighter in leather: the one head not confusable with the other three
   playerHarpoon: 100, // grey-haired hunter, told apart at a glance by the light head
+  playerEmber: 87, // horned helm: the only broken outline among the six figures
   grunt: 108, // green slime
   runner: 120, // bat
   brute: 110, // crab

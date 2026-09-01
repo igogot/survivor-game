@@ -8,6 +8,7 @@ import { progressionSystem } from '../systems/progression';
 import { projectileSystem } from '../systems/projectiles';
 import { reapSystem } from '../systems/reap';
 import { spawnSystem } from '../systems/spawn';
+import { trailSystem } from '../systems/trail';
 import { weaponSystem } from '../systems/weapons';
 import type { World } from './world';
 
@@ -27,8 +28,9 @@ import type { World } from './world';
  *                but never enemies, so no grid index moves
  *   7. progression — may flip the phase to 'levelup' and pause the run
  *
- * Cosmetic effects are advanced with the rest of the bookkeeping, after combat
- * has had its chance to spawn them.
+ * Cosmetic effects and the burning ground the trail leaves are advanced with
+ * the rest of the bookkeeping, after combat has had its chance to lay them.
+ * Neither touches an enemy, so neither can invalidate an index.
  *
  * Chests sit with the pickups because that is what they are: nothing about
  * them touches the grid, and reaching one stops the run the same way levelling
@@ -58,6 +60,7 @@ export function stepWorld(world: World, dt: number): void {
   pickupSystem(world, dt);
   chestSystem(world, dt);
   effectSystem(world, dt);
+  trailSystem(world, dt);
   progressionSystem(world);
 }
 

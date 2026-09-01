@@ -218,6 +218,37 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     });
   },
 
+  // A tongue of flame, cut the same way the other emblems are. The one player
+  // whose weapon is not carried but left behind, so the badge is the fire
+  // rather than the thing that makes it.
+  playerEmber: (ctx, size) => {
+    playerBody(ctx, size);
+    carve(ctx, () => {
+      const mid = size / 2;
+      const tip = size * 0.2;
+      const base = size * 0.74;
+      const half = size * 0.17;
+      // The tip leans off the vertical. A symmetric point over a round belly is
+      // a raindrop, which is what the first version of this drew.
+      const lean = size * 0.05;
+
+      ctx.beginPath();
+      ctx.moveTo(mid + lean, tip);
+      ctx.quadraticCurveTo(mid + half * 1.35, size * 0.46, mid + half, base - half * 0.5);
+      // The wavy base: two licks with a notch bitten between them. This is the
+      // part that tells a flame from a drop at the size a 64px frame is
+      // actually shown at, which on the player is about a third of that.
+      ctx.quadraticCurveTo(mid + half * 0.85, base, mid + half * 0.4, base - half * 0.3);
+      ctx.quadraticCurveTo(mid + half * 0.1, base + half * 0.55, mid - half * 0.25, base - half * 0.25);
+      ctx.quadraticCurveTo(mid - half * 0.75, base + half * 0.3, mid - half, base - half * 0.75);
+      // Up the left flank, hollowed rather than bulged, so the tongue curls
+      // back toward the tip instead of closing a leaf around it.
+      ctx.quadraticCurveTo(mid - half * 1.15, size * 0.4, mid + lean, tip);
+      ctx.closePath();
+      ctx.fill();
+    });
+  },
+
   grunt: (ctx, size) => {
     ctx.fillStyle = WHITE;
     ctx.beginPath();
@@ -405,6 +436,41 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     ctx.fill();
   },
 
+  /**
+   * One patch of burning ground.
+   *
+   * A disc with a wobbling edge rather than a clean circle: a trail is a few
+   * dozen of these laid along the player's path, and identical circles read as
+   * a row of dots instead of as fire. The renderer turns each patch by its own
+   * position so the wobble never lines up between neighbours.
+   *
+   * What the patch damages is its full radius, and this project's rule is that
+   * a weapon hits where it is drawn — so the wobble only ever goes inward. In
+   * the valleys the fire is drawn a fifth short of what it burns, and never a
+   * pixel long. On a ribbon that is covered by the neighbouring patches, which
+   * sit three quarters of a radius away; the only exposed rim in the game is
+   * the newest patch, the one under the player's own feet.
+   */
+  ember: (ctx, size) => {
+    const centre = size / 2;
+    const outer = size / 2 - 1;
+    const lobes = 7;
+    const steps = 96;
+
+    ctx.fillStyle = WHITE;
+    ctx.beginPath();
+    for (let i = 0; i < steps; i++) {
+      const angle = (i * TAU) / steps;
+      const radius = outer * (0.9 + 0.1 * Math.cos(lobes * angle));
+      const x = centre + Math.cos(angle) * radius;
+      const y = centre + Math.sin(angle) * radius;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  },
+
   gem: (ctx, size) => {
     ctx.fillStyle = WHITE;
     polygon(ctx, size, 4, 2);
@@ -456,6 +522,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'playerNova', size: 64 },
   { name: 'playerSpear', size: 64 },
   { name: 'playerHarpoon', size: 64 },
+  { name: 'playerEmber', size: 64 },
   { name: 'grunt', size: 64 },
   { name: 'runner', size: 64 },
   { name: 'brute', size: 64 },
@@ -469,6 +536,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'harpoon', size: 32 },
   { name: 'orb', size: 32 },
   { name: 'spear', size: 32, width: 192 },
+  { name: 'ember', size: 64 },
   { name: 'gem', size: 32 },
   { name: 'gemRich', size: 32 },
   { name: 'chest', size: 48 },
@@ -479,7 +547,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
  * Shelf packing: frames are laid left to right in rows, tallest first, and a
  * new row starts when the next frame would overrun the width.
  *
- * Deliberately simple. The atlas holds twenty-one frames and is built once at
+ * Deliberately simple. The atlas holds twenty-three frames and is built once at
  * startup, so a smarter packer would buy nothing and cost a bug surface. It is
  * a pure function of its input, which is what makes the overlap test possible.
  *
