@@ -1,7 +1,7 @@
 import { CONFIG } from '../config';
 import { TAU } from '../core/math';
 import { BOSS, ENEMIES } from '../data/enemies';
-import { partyAnchor, partySize } from '../world/party';
+import { arrivalScale, healthScale, partyAnchor, partySize } from '../world/party';
 import type { EnemyDef } from '../data/enemies';
 import type { PartyAnchor } from '../world/party';
 import type { World } from '../world/world';
@@ -36,7 +36,7 @@ export function spawnSystem(world: World, dt: number): void {
 
   world.spawnTimer -= dt;
   while (world.spawnTimer <= 0) {
-    if (world.enemies.length >= CONFIG.spawn.maxEnemies) {
+    if (world.enemies.length >= enemyCeiling(world)) {
       // Reset rather than let the debt accumulate, otherwise clearing the
       // screen later would dump the entire backlog at once.
       world.spawnTimer = interval;
@@ -49,11 +49,32 @@ export function spawnSystem(world: World, dt: number): void {
   }
 }
 
-/** Seconds between spawn ticks right now, surges included. */
+/**
+ * Seconds between spawn ticks right now, surges included.
+ *
+ * A party shortens it: the horde has to arrive faster to put a solo-sized crowd
+ * around each of several people. What it does *not* do is arrive faster and
+ * hit harder — see `CONFIG.spawn.perPlayerArrivals`.
+ */
 export function spawnInterval(world: World): number {
   const minutes = world.time / 60;
-  const rate = (1 + minutes * CONFIG.spawn.pressurePerMinute) * waveIntensity(world.time);
+  const rate =
+    (1 + minutes * CONFIG.spawn.pressurePerMinute) *
+    waveIntensity(world.time) *
+    arrivalScale(world);
   return Math.max(0.05, CONFIG.spawn.baseInterval / rate);
+}
+
+/**
+ * The ceiling on bodies alive at once, for the party actually playing.
+ *
+ * It has to move with the arrival rate or the cap becomes the difficulty: a
+ * four scaled to four times the arrivals would sit against a solo player's
+ * ceiling for the whole run, and the thing deciding how hard the game is would
+ * be a constant chosen to protect the frame rate.
+ */
+export function enemyCeiling(world: World): number {
+  return CONFIG.spawn.maxEnemies * partySize(world);
 }
 
 /** Enemies delivered per spawn tick right now. */
@@ -96,16 +117,21 @@ export function bodyCost(world: World): number {
  * bigger party.
  */
 export function hordeHpScale(world: World): number {
-  return (1 + (world.time / 60) * CONFIG.spawn.hpScalePerMinute) * partySize(world);
+  return (1 + (world.time / 60) * CONFIG.spawn.hpScalePerMinute) * healthScale(world);
 }
 
 /**
  * How much HP the boss due now carries over the first one.
  *
  * Counts bosses rather than minutes on purpose — see `CONFIG.boss` — and then
- * takes the same flat party multiplier the horde does. A duel is the one fight
- * the game asks a party to actually win, so it is the last place a bar should
- * melt because there are four people in front of it.
+ * takes the party's full size, not the horde's split of it.
+ *
+ * The split exists because a horde is a flow: arrivals and toughness trade off
+ * against each other while the party kills it as fast as it comes. A boss is
+ * not a flow, it is one body, and there is no "arrive faster" to spend the
+ * multiplier on. Four people are four times the damage pointed at it, so its
+ * bar takes four times the health or the one fight the game asks a party to
+ * actually win melts in a quarter of the time.
  *
  * Exported so a test can assert the second duel is harder than the first
  * without knowing the arithmetic.

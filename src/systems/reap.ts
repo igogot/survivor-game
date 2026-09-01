@@ -4,7 +4,7 @@ import { enemyById } from '../data/enemies';
 import { nearestPlayerDistanceSq } from '../world/party';
 import { damagePlayer } from './damage';
 import { spawnEffect } from './effects';
-import { bodyCost, defeatBoss, hordeHpScale, spawnEnemyAt } from './spawn';
+import { bodyCost, defeatBoss, enemyCeiling, hordeHpScale, spawnEnemyAt } from './spawn';
 import type { Enemy } from '../world/types';
 import type { World } from '../world/world';
 
@@ -76,7 +76,7 @@ function split(world: World, enemy: Enemy): void {
   let born = 0;
   for (let i = 0; i < def.split.count; i++) {
     // The cap is the horde's, and splitting must not be a way around it.
-    if (world.enemies.length >= CONFIG.spawn.maxEnemies) break;
+    if (world.enemies.length >= enemyCeiling(world)) break;
 
     const angle = base + (TAU * i) / def.split.count;
     spawnEnemyAt(

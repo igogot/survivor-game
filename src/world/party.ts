@@ -1,3 +1,4 @@
+import { CONFIG } from '../config';
 import type { Player } from './types';
 import type { World } from './world';
 
@@ -44,6 +45,26 @@ export function partySize(world: World): number {
     if (isAlive(world.players[i])) alive++;
   }
   return Math.max(1, alive);
+}
+
+/**
+ * How much faster the horde arrives, and how much tougher each body is.
+ *
+ * One multiplier of `partySize` split between the two by
+ * `CONFIG.spawn.perPlayerArrivals`, because they are two ends of one slider
+ * rather than two levers. `arrivalScale * healthScale` is always the party's
+ * size, which is the condition for the horde being killed as fast as it comes —
+ * see the note on that setting for why turning both up runs away.
+ *
+ * Both are exactly 1 for a solo run whatever the split is, so every number this
+ * project has ever measured alone is untouched.
+ */
+export function arrivalScale(world: World): number {
+  return Math.pow(partySize(world), CONFIG.spawn.perPlayerArrivals);
+}
+
+export function healthScale(world: World): number {
+  return Math.pow(partySize(world), 1 - CONFIG.spawn.perPlayerArrivals);
 }
 
 /**

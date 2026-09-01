@@ -10,7 +10,13 @@ import { applyUpgrade, progressionSystem, xpForLevel, xpForNextLevel } from '../
 import { reapSystem } from '../src/systems/reap';
 import { spawnEnemyAt } from '../src/systems/spawn';
 import { weaponSystem } from '../src/systems/weapons';
-import { anyAlive, nearestPlayer, partyAnchor } from '../src/world/party';
+import {
+  anyAlive,
+  arrivalScale,
+  healthScale,
+  nearestPlayer,
+  partyAnchor,
+} from '../src/world/party';
 import { rebuildGrid, stepWorld } from '../src/world/step';
 import { World } from '../src/world/world';
 import type { Enemy, Player } from '../src/world/types';
@@ -250,9 +256,11 @@ describe('who takes the hit and who takes the gem', () => {
 
     pickupSystem(world, DT);
 
-    // Two players, so the body it came off had twice the health and is worth
-    // twice the experience — see `pickupSystem`.
-    expect(world.xp).toBe(6);
+    // Worth whatever the party's health multiplier made the body that dropped
+    // it — see `pickupSystem`. Written from the multiplier rather than from a
+    // number, because how the party's size is split between tougher bodies and
+    // more of them is a tuned setting.
+    expect(world.xp).toBe(3 * healthScale(world));
     expect(world.gems).toHaveLength(0);
   });
 });
@@ -318,22 +326,41 @@ describe('the shared experience bar', () => {
   });
 
   /**
+   * The condition for the horde being killed as fast as it arrives.
+   *
+   * A party of N meets N times the horde, and that multiplier is split between
+   * more bodies and tougher ones. Split it any way you like, but the product
+   * has to be N — turn both up and the arrivals outrun the kills by a factor of
+   * N and the field pins against its ceiling for the rest of the run.
+   */
+  it('splits the party multiplier without inventing any of it', () => {
+    for (const size of [1, 2, 3, 4]) {
+      const world = party(36, size);
+      expect(arrivalScale(world) * healthScale(world)).toBeCloseTo(size);
+    }
+  });
+
+  /**
    * The pair of party multipliers has to cancel, or the game charges a party
    * for its size on one side of the ledger and refuses to pay it on the other.
-   * Measured as a ratio rather than as two numbers: what matters is how many
-   * bodies a level costs, and that has to be the same for one player as for
-   * four.
+   *
+   * Stated as *time* per level rather than bodies per level, which is the trap
+   * the first version of this test fell into: with the multiplier spent on
+   * arrivals a party does need more bodies for a level, and it also kills that
+   * many more of them per second. Gems arrive at `arrivalScale` times the solo
+   * rate and each pays `healthScale` times as much, so what a level costs in
+   * seconds is the bar divided by their product — and that has to be the solo
+   * figure for every party size and every split.
    */
-  it('costs the same number of bodies per level whatever the party size', () => {
-    const bodiesPerLevel = (size: number): number => {
+  it('takes the same time to level whatever the party size', () => {
+    const secondsPerLevel = (size: number): number => {
       const world = party(35, size);
-      // What one grunt's gem pays into the bar right now.
-      const perBody = 1 * size;
-      return xpForNextLevel(world) / perBody;
+      return xpForNextLevel(world) / (healthScale(world) * arrivalScale(world));
     };
 
-    expect(bodiesPerLevel(2)).toBe(bodiesPerLevel(1));
-    expect(bodiesPerLevel(4)).toBe(bodiesPerLevel(1));
+    expect(secondsPerLevel(2)).toBeCloseTo(secondsPerLevel(1));
+    expect(secondsPerLevel(3)).toBeCloseTo(secondsPerLevel(1));
+    expect(secondsPerLevel(4)).toBeCloseTo(secondsPerLevel(1));
   });
 
   /** The levels are shared; what they buy is not. */
