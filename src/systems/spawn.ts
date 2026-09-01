@@ -68,13 +68,19 @@ export function spawnInterval(world: World): number {
 /**
  * The ceiling on bodies alive at once, for the party actually playing.
  *
- * It has to move with the arrival rate or the cap becomes the difficulty: a
- * four scaled to four times the arrivals would sit against a solo player's
- * ceiling for the whole run, and the thing deciding how hard the game is would
- * be a constant chosen to protect the frame rate.
+ * It follows the *arrival* scale rather than the party's size, and the
+ * difference matters at both ends of the slider. Where the multiplier is spent
+ * on arrivals, the ceiling has to move with them or the cap becomes the
+ * difficulty: a four at four times the arrivals would sit against a solo
+ * player's ceiling all run, and the thing deciding how hard the game is would
+ * be a constant chosen to protect the frame rate. Where it is spent on health
+ * instead, the horde arrives at a solo player's rate and is killed at a solo
+ * player's rate, so a party that raised its own ceiling would only be buying
+ * itself headroom in the surges where the cap actually binds — which is relief
+ * a solo player never gets.
  */
 export function enemyCeiling(world: World): number {
-  return CONFIG.spawn.maxEnemies * partySize(world);
+  return CONFIG.spawn.maxEnemies * arrivalScale(world);
 }
 
 /** Enemies delivered per spawn tick right now. */

@@ -139,12 +139,15 @@ export const CONFIG = {
      *
      * This is the exponent that divides the two: `A = N^k`, `H = N^(1-k)`.
      * At 0 the whole multiplier is health, at 1 the whole of it is arrivals.
-     * Which end is right is a question about *threat* rather than throughput —
-     * both ends kill the horde at the same rate, but only the arrivals end puts
-     * a solo-sized crowd around each player — and it was measured rather than
-     * argued. See the README.
+     * Which end is right is a question about *threat* rather than throughput:
+     * both ends kill the horde at the same rate, and only the arrivals end puts
+     * a solo-sized crowd around each player. The slider was measured across its
+     * whole range rather than argued about, and the honest reading is that
+     * neither end reaches threat parity — see the README. It sits at 0, so the
+     * party's multiplier is entirely health: four players meet a solo player's
+     * crowd with four times the health in it.
      */
-    perPlayerArrivals: 1,
+    perPlayerArrivals: 0,
 
     /** Fraction of spawns placed in the player's path instead of anywhere. */
     aheadBias: 0.65,
