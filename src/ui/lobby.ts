@@ -20,8 +20,17 @@ import type { LobbyError, LobbyStart, LobbyState } from '../net/lobby';
  * otherwise would be the worst thing on this screen.
  */
 
-/** How long a knock waits for an answer. A broadcast is instant or it is nobody. */
-const KNOCK_TIMEOUT = 700;
+/**
+ * How long a knock waits for an answer.
+ *
+ * Across two windows of one browser a broadcast is instant, and this was set
+ * for that. Across two houses it is four hops of a poll that runs once every
+ * eight hundred milliseconds — post, the host picks it up, the host answers,
+ * this end picks that up — so anything under a couple of seconds would time out
+ * before a perfectly good room could reply, and tell the player it does not
+ * exist.
+ */
+const KNOCK_TIMEOUT = 3500;
 
 /** How long the copy button says it worked. */
 const COPIED_FOR = 1400;
@@ -172,7 +181,9 @@ export class LobbyView {
   }
 
   private create(): void {
-    this.lobby.host();
+    // The channel is told before the room exists on it, so the first poll is
+    // already running when the first guest knocks.
+    this.channel.join(this.lobby.host(), this.lobby.self);
     this.show('room');
   }
 
@@ -184,6 +195,7 @@ export class LobbyView {
     }
 
     this.joinError.hidden = true;
+    this.channel.join(typed, this.lobby.self);
     this.lobby.join(typed);
     this.render();
 
@@ -232,11 +244,13 @@ export class LobbyView {
 
   private leaveRoom(): void {
     this.lobby.leave();
+    this.channel.leave();
     this.show('party');
   }
 
   private leaveEntirely(): void {
     this.lobby.leave();
+    this.channel.leave();
     this.clearKnock();
     this.hide();
     this.onBack();

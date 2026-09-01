@@ -1,3 +1,5 @@
+import { openMailbox } from './mailbox';
+import type { Envelope } from './mailbox';
 import type { LobbyMessage } from './lobby';
 import type { NetMessage } from './session';
 
@@ -13,6 +15,64 @@ import type { NetMessage } from './session';
  */
 export interface LobbyChannel {
   send(message: LobbyMessage): void;
+  /**
+   * Which room this channel is carrying, so the half of it that goes over the
+   * network knows what to poll for. The local half neither needs nor notices
+   * it: a broadcast has no address.
+   */
+  join(code: string, me: string): void;
+  leave(): void;
+}
+
+/**
+ * Something to tell one delivery of a message from another.
+ *
+ * Every message goes out on both channels, so a second window on the same
+ * machine hears each one twice — once as a broadcast and once as post. A nonce
+ * is what lets the far end say "already had this". It belongs to the transport
+ * rather than to the lobby: the messages themselves have no identity and should
+ * not grow one for a problem that is not theirs.
+ */
+export function nonce(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * How many deliveries back a channel remembers.
+ *
+ * Enough that a duplicate arriving a poll later is still recognised, small
+ * enough that a room left open all evening is a set of a few hundred short
+ * strings rather than a leak.
+ */
+const SEEN_LIMIT = 512;
+
+/**
+ * Wraps a handler so it only ever hears a message once.
+ *
+ * Its own function so it can be tested without a browser: the thing worth
+ * checking is that a duplicate is dropped and a genuine repeat of the same
+ * *content* is not, and neither needs a `BroadcastChannel` to demonstrate.
+ */
+export function dedupe(
+  onMessage: (message: LobbyMessage) => void,
+): (envelope: Envelope) => void {
+  const seen = new Set<string>();
+
+  return (envelope) => {
+    if (seen.has(envelope.n)) return;
+
+    seen.add(envelope.n);
+    if (seen.size > SEEN_LIMIT) {
+      // Oldest first: a `Set` iterates in insertion order, which is exactly the
+      // order to forget things in.
+      for (const old of seen) {
+        seen.delete(old);
+        if (seen.size <= SEEN_LIMIT) break;
+      }
+    }
+
+    onMessage(envelope.m);
+  };
 }
 
 /** The names every window of this game agrees on. */
@@ -47,8 +107,29 @@ const GAME_CHANNEL = 'survivor-game';
  * lobby where nobody ever arrives, which is a disappointing room rather than a
  * broken page.
  */
+/**
+ * The waiting room's channel: both ways of reaching somebody at once.
+ *
+ * `BroadcastChannel` is instant and stops at the edge of the machine; the
+ * mailbox is a poll away and does not. Sending on both and dropping the
+ * duplicates is simpler than choosing, and it has a property choosing does not:
+ * two windows on one machine keep working when the network is unreachable, and
+ * a player who never opens a second window never notices there is a network.
+ */
 export function openLobbyChannel(onMessage: (message: LobbyMessage) => void): LobbyChannel {
-  return open(LOBBY_CHANNEL, onMessage);
+  const deliver = dedupe(onMessage);
+  const local = open<Envelope>(LOBBY_CHANNEL, deliver);
+  const mail = openMailbox(deliver);
+
+  return {
+    send(message) {
+      const envelope: Envelope = { n: nonce(), m: message };
+      local.send(envelope);
+      mail.post(envelope);
+    },
+    join: (code, me) => mail.join(code, me),
+    leave: () => mail.leave(),
+  };
 }
 
 /** The same, for the messages a run is made of. */
