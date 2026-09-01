@@ -586,6 +586,39 @@
         display: none;
       }
 
+      .account-form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 4px;
+      }
+
+      .account-form input {
+        pointer-events: auto;
+        width: min(260px, 80vw);
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13px;
+      }
+
+      .account-form input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
+      .account-form .actions {
+        margin: 0;
+      }
+
+      #account-held {
+        color: var(--accent);
+      }
+
       #submit-name {
         pointer-events: auto;
         min-width: 0;
@@ -1093,6 +1126,79 @@
       </div>
     </div>
 
+    <div class="overlay overlay--above" id="account" hidden>
+      <div class="panel">
+        <h2 data-i18n="account.title">Your name</h2>
+        <p class="sub" data-i18n="account.sub">
+          A name is yours the moment you use it. A password is only for keeping it somewhere else.
+        </p>
+
+        <p class="hint" id="account-held" hidden></p>
+
+        <form id="account-form" class="account-form">
+          <input
+            id="account-name"
+            type="text"
+            autocomplete="username"
+            spellcheck="false"
+            data-i18n-placeholder="account.name"
+            data-i18n-label="account.name"
+          />
+          <input
+            id="account-password"
+            type="password"
+            autocomplete="current-password"
+            data-i18n-placeholder="account.password"
+            data-i18n-label="account.password"
+          />
+          <div class="actions">
+            <button class="action" id="account-login" type="button" data-i18n="account.login">
+              Log in
+            </button>
+            <button
+              class="action"
+              id="account-register"
+              type="button"
+              data-i18n="account.register"
+            >
+              Register
+            </button>
+          </div>
+          <div class="actions">
+            <button
+              class="action"
+              id="account-protect"
+              type="button"
+              hidden
+              data-i18n="account.protect"
+            >
+              Keep this name with a password
+            </button>
+            <button
+              class="action"
+              id="account-signout"
+              type="button"
+              hidden
+              data-i18n="account.signOut"
+            >
+              Sign out
+            </button>
+          </div>
+        </form>
+
+        <p class="hint" id="account-status"></p>
+        <p class="hint" data-i18n="account.noRecovery">
+          There is no way to reset it.
+        </p>
+
+        <div class="actions">
+          <button class="action" id="account-close" type="button" data-i18n="board.back">
+            Back
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="overlay overlay--above" id="records" hidden>
       <div class="panel panel--help">
         <h2 data-i18n="board.title">Records</h2>
@@ -1119,6 +1225,9 @@
         <div class="actions">
           <button class="action" id="start-records" type="button" data-i18n="board.open">
             Records
+          </button>
+          <button class="action" id="start-account" type="button" data-i18n="account.open">
+            Account
           </button>
         </div>
         <!-- Filled by StartScreen from the weapons themselves. It said "1 2 3"

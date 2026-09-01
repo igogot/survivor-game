@@ -130,5 +130,33 @@ foreach ($measured as $index => $played) {
     is("run {$index} from the stand is accepted", faultInRun(run($played), $limits), null);
 }
 
+echo "passwords\n";
+require __DIR__ . '/../public/api/auth.php';
+
+is('too short is refused', faultInPassword('short'), 'password-short');
+is('exactly the minimum is fine', faultInPassword(str_repeat('x', MIN_PASSWORD_LENGTH)), null);
+is('an ordinary one is fine', faultInPassword('correct horse battery'), null);
+is('a novel is refused', faultInPassword(str_repeat('x', MAX_PASSWORD_LENGTH + 1)), 'password-long');
+is('a number is not a password', faultInPassword(12345678), 'password-shape');
+is('null is not a password', faultInPassword(null), 'password-shape');
+
+/*
+ * Counted in characters rather than bytes. Eight Cyrillic letters are sixteen
+ * bytes, and a byte count would quietly accept a four-letter password from
+ * anybody not writing in ASCII.
+ */
+is('eight Cyrillic letters count as eight', faultInPassword('пароль12'), null);
+is('four Cyrillic letters are still too short', faultInPassword('паро'), 'password-short');
+
+echo "tokens\n";
+$first = mintToken();
+$second = mintToken();
+is('a token is 64 hex characters', preg_match('/^[0-9a-f]{64}$/', $first), 1);
+check('two tokens differ', $first !== $second);
+check('the stored form is not the token', hashToken($first) !== $first);
+check('hashing is stable', hashToken($first) === hashToken($first));
+check('different tokens hash differently', hashToken($first) !== hashToken($second));
+
+
 echo "\n{$checks} checks, {$failures} failed\n";
 exit($failures === 0 ? 0 : 1);

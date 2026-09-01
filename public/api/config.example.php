@@ -31,3 +31,16 @@ const SUBMIT_LIMIT = 20;
 
 /** The window, in minutes. */
 const SUBMIT_WINDOW_MINUTES = 10;
+
+/**
+ * How many times one address may try to log in or register inside its window.
+ *
+ * Far tighter than the submit allowance, because this is the one endpoint
+ * where guessing repeatedly is the attack. Successes are counted too: an
+ * attacker who gets a password right on the tenth try has not failed ten
+ * times, as far as a failure-only counter is concerned.
+ */
+const AUTH_LIMIT = 10;
+
+/** That window, in minutes. */
+const AUTH_WINDOW_MINUTES = 10;

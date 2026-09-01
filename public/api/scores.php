@@ -45,85 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require __DIR__ . '/config.php';
 // The checks that need neither the database nor the request.
 require __DIR__ . '/validate.php';
-
-/** Sends a JSON body and stops. */
-function respond(int $status, array $body): void
-{
-    http_response_code($status);
-    echo json_encode($body, JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-function fail(int $status, string $reason): void
-{
-    respond($status, ['error' => $reason]);
-}
-
-/**
- * The bounds the build wrote out of the game's constants.
- *
- * A missing or unreadable file is a deploy that went wrong, and the right
- * answer is to refuse writes rather than to accept everything: an unchecked
- * board fills with nonsense in an afternoon and cannot be cleaned up by hand.
- */
-function limits(): array
-{
-    static $cached = null;
-    if ($cached !== null) {
-        return $cached;
-    }
-
-    $raw = @file_get_contents(__DIR__ . '/limits.json');
-    if ($raw === false) {
-        fail(503, 'limits-missing');
-    }
-
-    $parsed = json_decode($raw, true);
-    if (!is_array($parsed)) {
-        fail(503, 'limits-unreadable');
-    }
-
-    $cached = $parsed;
-    return $cached;
-}
-
-function db(): PDO
-{
-    static $pdo = null;
-    if ($pdo !== null) {
-        return $pdo;
-    }
-
-    try {
-        $pdo = new PDO(
-            sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_NAME),
-            DB_USER,
-            DB_PASSWORD,
-            [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
-            ]
-        );
-    } catch (PDOException $e) {
-        // The message can name the database, the user and the host. None of
-        // that belongs in a response to the internet.
-        error_log('leaderboard: ' . $e->getMessage());
-        fail(503, 'database-unavailable');
-    }
-
-    return $pdo;
-}
-
-/** The client's address, as far as a shared host can tell. */
-function clientFingerprint(): string
-{
-    // Not identity and not trusted — a shared host sits behind proxies that
-    // rewrite these freely. It only has to be stable enough to slow one
-    // machine down, so it is hashed and never stored raw.
-    $address = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-    return hash('sha256', $address . '|' . SUBMIT_SALT);
-}
+require __DIR__ . '/auth.php';
+require __DIR__ . '/shared.php';
 
 function readBoard(PDO $pdo, int $limit): array
 {
@@ -190,37 +113,49 @@ $bosses = (int) $body['bosses'];
 $seed = (int) $body['seed'];
 $weapon = is_string($body['weapon'] ?? null) ? substr($body['weapon'], 0, 16) : '';
 
+$token = is_string($body['token'] ?? null) ? $body['token'] : '';
+
 $pdo = db();
 
 // Then the rate limit, which is the first thing that needs the database. One
 // machine hammering the endpoint is the failure this host actually sees, long
 // before anybody bothers forging a plausible run.
 $fingerprint = clientFingerprint();
-// The window is interpolated rather than bound: MySQL will not accept a
-// placeholder as the quantity of an INTERVAL. It is an integer constant from
-// config.php and never touches anything a request sent, so the cast is the
-// whole of what makes that safe.
-$window = (int) SUBMIT_WINDOW_MINUTES;
-$recent = $pdo->prepare(
-    "SELECT COUNT(*) FROM submissions
-      WHERE fingerprint = ? AND created_at > (NOW() - INTERVAL {$window} MINUTE)"
-);
-$recent->execute([$fingerprint]);
-if ((int) $recent->fetchColumn() >= SUBMIT_LIMIT) {
+if (recentAttempts($pdo, $fingerprint, 'submit', SUBMIT_WINDOW_MINUTES) >= SUBMIT_LIMIT) {
     fail(429, 'too-many-submissions');
 }
 
-$pdo->prepare('INSERT INTO submissions (fingerprint, created_at) VALUES (?, NOW())')
-    ->execute([$fingerprint]);
+/*
+ * Counted before anything below can refuse the request.
+ *
+ * Recording only what succeeds leaves the cheapest attack open: hammering a
+ * name somebody else owns costs a database read every time and, if only
+ * successes count, nothing at all against the allowance. An attempt is an
+ * attempt whatever it turns out to be.
+ */
+recordAttempt($pdo, $fingerprint, 'submit');
 
 /*
- * One row per name, updated only when the run is better.
+ * Who is allowed to be this name.
  *
- * The comparison lives in the WHERE of the update rather than in PHP because
- * two people can submit under the same name at the same moment, and a
- * read-then-write would let the worse of the two land last. Ranking order and
- * this condition have to agree exactly — time, then bosses, then kills.
+ * A free name is claimed here and the token comes back in the response, so the
+ * ordinary player never sees any of this: they type a name once, the browser
+ * keeps what it is handed, and it keeps working. A name somebody already holds
+ * takes proof, which is the whole point — otherwise anybody could beat your run
+ * and submit under your name to take your row.
  */
+$granted = null;
+if (ownerOf($pdo, $name) === null) {
+    $granted = claimName($pdo, $name);
+    if ($granted === null) {
+        // Claimed between the read and the insert. Whoever won it holds it now,
+        // and this submission has no proof of anything.
+        fail(403, 'name-taken');
+    }
+} elseif (!tokenHoldsName($pdo, $name, $token)) {
+    fail(403, 'name-taken');
+}
+
 /*
  * One row per name, replaced whole or not at all.
  *
@@ -297,7 +232,9 @@ $pdo->exec(
 );
 
 // Old rate-limit rows are of no use once their window has passed.
-$pdo->exec("DELETE FROM submissions WHERE created_at < (NOW() - INTERVAL {$window} MINUTE)");
+// Old rate-limit rows are of no use once the longest window has passed.
+$keepFor = max((int) SUBMIT_WINDOW_MINUTES, (int) AUTH_WINDOW_MINUTES);
+$pdo->exec("DELETE FROM submissions WHERE created_at < (NOW() - INTERVAL {$keepFor} MINUTE)");
 
 $board = readBoard($pdo, (int) $limits['boardSize']);
 
@@ -309,4 +246,16 @@ foreach ($board as $index => $entry) {
     }
 }
 
-respond(200, ['board' => $board, 'rank' => $rank, 'name' => $name]);
+/*
+ * The token is returned only when this submission claimed the name.
+ *
+ * Never echoed back on an ordinary submission: there is no reason for a token
+ * to cross the wire again once the client has it, and every extra copy is
+ * another place it can be read out of.
+ */
+$answer = ['board' => $board, 'rank' => $rank, 'name' => $name];
+if ($granted !== null) {
+    $answer['token'] = $granted;
+}
+
+respond(200, $answer);

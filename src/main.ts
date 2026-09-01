@@ -11,8 +11,10 @@ import { getLang, initLang } from './i18n/lang';
 import { OFFERS_PER_LEVEL, applyUpgrade } from './systems/progression';
 import { takeSpoil } from './systems/chests';
 import { mountLanguageSwitch } from './ui/language';
+import { HttpAccounts } from './net/accounts';
 import { HttpLeaderboard } from './net/leaderboard';
 import { Hud } from './ui/hud';
+import { AccountScreen } from './ui/account';
 import { RecordsScreen, SubmitStrip } from './ui/records';
 import {
   ChestMenu,
@@ -71,6 +73,7 @@ async function main(): Promise<void> {
    */
   const leaderboard = new HttpLeaderboard();
   const recordsScreen = new RecordsScreen(leaderboard, closeRecords);
+  const accountScreen = new AccountScreen(new HttpAccounts(), closeAccount);
   const submitStrip = new SubmitStrip(leaderboard, (name) => {
     // Reopening the board after placing goes straight to the new row.
     placedAs = name;
@@ -96,6 +99,7 @@ async function main(): Promise<void> {
   // And from the opening screen, so the board is a thing you can look at before
   // you have anything to put on it — which is the whole reason to chase it.
   document.getElementById('start-records')?.addEventListener('click', openRecords);
+  document.getElementById('start-account')?.addEventListener('click', openAccount);
 
   /**
    * Whether a machine is driving this page.
@@ -198,6 +202,12 @@ async function main(): Promise<void> {
     const phase = world.phase;
 
     if (phase === 'paused') {
+      // A panel over a panel takes the key first, or Escape would resume the
+      // run from behind whatever is covering it.
+      if (accountScreen.isOpen) {
+        if (input.consumePressed('Escape')) closeAccount();
+        return;
+      }
       if (recordsScreen.isOpen) {
         if (input.consumePressed('Escape') || input.consumePressed('KeyL')) closeRecords();
         return;
@@ -287,6 +297,10 @@ async function main(): Promise<void> {
     }
 
     if (phase === 'dead') {
+      if (accountScreen.isOpen) {
+        if (input.consumePressed('Escape')) closeAccount();
+        return;
+      }
       if (recordsScreen.isOpen) {
         // Only a way out. Restarting from behind the board would leave it
         // covering a run that had already begun.
@@ -310,6 +324,15 @@ async function main(): Promise<void> {
 
   function closeRecords(): void {
     recordsScreen.hide();
+    input.clearPressed();
+  }
+
+  function openAccount(): void {
+    accountScreen.show();
+  }
+
+  function closeAccount(): void {
+    accountScreen.hide();
     input.clearPressed();
   }
 
@@ -456,6 +479,7 @@ async function main(): Promise<void> {
       resultScreen.hide();
       submitStrip.hide();
       recordsScreen.hide();
+      accountScreen.hide();
     }
   }
 

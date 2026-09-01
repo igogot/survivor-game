@@ -31,6 +31,19 @@ export interface Score {
   readonly seed: number;
 }
 
+/**
+ * A run, plus the proof that this player is allowed to be that name.
+ *
+ * Separate from `Score` because the board never holds a token and must never
+ * be able to: `Score` is what comes back from the server and what gets
+ * rendered, and a type that could carry a secret into a DOM node is a type
+ * that eventually will.
+ */
+export interface SubmittedScore extends Score {
+  /** Empty when the name has never been claimed, which is how it gets claimed. */
+  readonly token: string;
+}
+
 /** How many entries the board keeps. Everything below this rank is forgotten. */
 export const BOARD_SIZE = 100;
 

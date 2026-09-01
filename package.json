@@ -8,7 +8,7 @@
     "start": "vite --open",
     "dev": "vite",
     "limits": "vite-node scripts/emit-limits.ts",
-    "build": "tsc --noEmit && npm run limits && vite build",
+    "build": "tsc --noEmit && npm run limits && vite build && vite-node scripts/scrub-dist.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

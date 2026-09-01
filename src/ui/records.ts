@@ -1,6 +1,7 @@
 import { formatTime, requireElement } from './hud';
 import { BOARD_SIZE, MAX_NAME_LENGTH, cleanName, rankOf } from '../core/scores';
 import { weaponById } from '../data/weapons';
+import { loadIdentity } from '../net/identity';
 import { t, weaponName } from '../i18n';
 import type { Leaderboard, SubmitFailure } from '../net/leaderboard';
 import type { Score } from '../core/scores';
@@ -17,33 +18,6 @@ import type { World } from '../world/world';
  * game that will not let you press "run again" because a shared host in
  * another country is down is a worse game than one with no board at all.
  */
-
-/** Where the last name used is remembered, so nobody types it twice. */
-const NAME_KEY = 'survivor.name';
-
-/**
- * Reads the remembered name.
- *
- * Wrapped because storage throws rather than returning null in a private
- * window and wherever site data is blocked, and a thrown exception here would
- * take the result screen down with it.
- */
-export function rememberedName(): string {
-  try {
-    return cleanName(window.localStorage.getItem(NAME_KEY) ?? '') ?? '';
-  } catch {
-    return '';
-  }
-}
-
-function rememberName(name: string): void {
-  try {
-    window.localStorage.setItem(NAME_KEY, name);
-  } catch {
-    // A name that cannot be remembered is a name typed again next time. Not
-    // worth telling anybody about.
-  }
-}
 
 /** What the run just played would look like on the board. */
 export function scoreOfRun(world: World, name: string): Score {
@@ -201,7 +175,7 @@ export class SubmitStrip {
       return;
     }
 
-    const name = rememberedName();
+    const name = loadIdentity().name;
     const candidate = scoreOfRun(world, name === '' ? 'you' : name);
     const place = rankOf(candidate, known);
 
@@ -256,7 +230,6 @@ export class SubmitStrip {
       return;
     }
 
-    rememberName(name);
     this.form.hidden = true;
     this.pending = null;
     this.show(
@@ -281,6 +254,7 @@ const FAILURE_TEXT: Readonly<Record<SubmitFailure, StringId>> = {
   refused: 'board.failRefused',
   'too-many': 'board.failTooMany',
   invalid: 'board.failInvalid',
+  'name-taken': 'board.failNameTaken',
 };
 
 function ordinal(place: number): string {

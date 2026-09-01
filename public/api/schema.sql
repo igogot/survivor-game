@@ -46,7 +46,50 @@ CREATE TABLE IF NOT EXISTS scores (
 CREATE TABLE IF NOT EXISTS submissions (
   id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   fingerprint CHAR(64)     NOT NULL,
+  -- 'submit' or 'auth'. Guessing a password deserves a far tighter allowance
+  -- than finishing runs does, and one table with a kind is simpler than two
+  -- tables that would drift apart in how they are pruned.
+  kind        VARCHAR(8)   NOT NULL DEFAULT 'submit',
   created_at  DATETIME     NOT NULL,
   PRIMARY KEY (id),
-  KEY window_lookup (fingerprint, created_at)
+  KEY window_lookup (fingerprint, kind, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=ascii;
+
+-- Who owns a name.
+--
+-- A name is claimed by whoever submits under it first, and from then on it
+-- takes proof to use it again. Without this the board is a free-for-all: a
+-- name is the only identity there is, so anybody could beat your run, submit
+-- under your name and take your row.
+--
+-- `password_hash` is null for the ordinary case — a player who never asked for
+-- an account and holds their name through a token their browser keeps. Setting
+-- a password is what makes the name survive a cleared cache or another device,
+-- and it is entirely optional.
+--
+-- Same collation as `scores`, so "Ann" and "ANN" are one name to the owner
+-- table and to the board alike. Two tables disagreeing about that would let
+-- somebody own `Ann` and still be refused their own row.
+CREATE TABLE IF NOT EXISTS owners (
+  name          VARCHAR(18)  NOT NULL,
+  -- From PHP's password_hash(). Never a plain digest: a leaked table of sha256
+  -- passwords is a leaked table of passwords, and people reuse them.
+  password_hash VARCHAR(255) NULL,
+  created_at    DATETIME     NOT NULL,
+  PRIMARY KEY (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Proof of ownership, one row per device that holds a name.
+--
+-- Several per name on purpose: logging in on a phone must not sign the desktop
+-- out. Stored as a hash for the same reason passwords are — the table is the
+-- thing that leaks, and a stolen token is a stolen name.
+CREATE TABLE IF NOT EXISTS tokens (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name       VARCHAR(18)  NOT NULL,
+  token_hash CHAR(64)     NOT NULL,
+  created_at DATETIME     NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_token (token_hash),
+  KEY by_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -1,4 +1,5 @@
 import { BOARD_SIZE, cleanName, faultInScore, rankScores } from '../core/scores';
+import { saveIdentity, tokenFor } from './identity';
 import type { Score } from '../core/scores';
 
 /**
@@ -33,7 +34,7 @@ export type SubmitResult =
  * board's fault and worth retrying; the second means the run itself was not
  * believed, and retrying it will fail the same way forever.
  */
-export type SubmitFailure = 'offline' | 'refused' | 'too-many' | 'invalid';
+export type SubmitFailure = 'offline' | 'refused' | 'too-many' | 'invalid' | 'name-taken';
 
 /**
  * Where the API lives.
@@ -77,16 +78,30 @@ export class HttpLeaderboard implements Leaderboard {
       const response = await this.request({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(score),
+        // The proof travels with the run, and only when it belongs to this
+        // name — see `tokenFor`. A free name arrives with an empty one, which
+        // is what claims it.
+        body: JSON.stringify({ ...score, token: tokenFor(score.name) }),
       });
 
       if (response.status === 429) return { ok: false, reason: 'too-many' };
+      // Somebody else holds this name. A different refusal from a disbelieved
+      // run, because the player can do something about this one.
+      if (response.status === 403) return { ok: false, reason: 'name-taken' };
       if (response.status >= 400 && response.status < 500) {
         return { ok: false, reason: 'refused' };
       }
       if (!response.ok) return { ok: false, reason: 'offline' };
 
-      const body = (await response.json()) as { rank?: unknown };
+      const body = (await response.json()) as { rank?: unknown; token?: unknown };
+
+      // Present only when this submission claimed the name. Kept immediately:
+      // without it the next run under the same name is refused as somebody
+      // else's, and the player would have lost a name they just earned.
+      if (typeof body.token === 'string' && body.token !== '') {
+        saveIdentity(score.name, body.token);
+      }
+
       return {
         ok: true,
         board: parseBoard(body),
