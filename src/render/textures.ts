@@ -18,13 +18,19 @@ export interface TextureSet {
   /** False when the atlas failed to build and the per-shape fallback is in use. */
   readonly packed: boolean;
   /**
-   * True when the frames came from the artwork rather than from drawn shapes.
+   * Whether that frame is a white mask, and so has to be tinted into the
+   * colour it is meant to be.
    *
-   * The renderer needs to know: the shapes are white masks that tint into the
-   * colour they should be, and tinting artwork the same way would only make it
-   * darker. See how the damage flash is drawn.
+   * Per frame rather than per texture set, because the two sources are mixed:
+   * the shockwave, the lance and the harpoon keep their drawn shapes even when
+   * everything around them is cut from the sheet. Asking the set as a whole
+   * gave the wrong answer for exactly those three, and each of them had to
+   * carry a hand-written exception to work around it.
+   *
+   * Artwork brings its own colour, so tinting it could only darken it. See how
+   * the damage flash is drawn.
    */
-  readonly artwork: boolean;
+  readonly masked: (name: SpriteName) => boolean;
   /**
    * Draws one sprite onto a canvas of the caller's size.
    *
@@ -45,7 +51,7 @@ export interface TextureSet {
  * arrive without touching the renderer.
  */
 export async function createTextures(): Promise<TextureSet> {
-  const grid = Texture.from(drawToCanvas(GRID_TEXTURE_SIZE, drawGrid));
+  const grid = Texture.from(drawToCanvas(GRID_TEXTURE_SIZE, GRID_TEXTURE_SIZE, drawGrid));
   const sheet = await loadArtwork();
 
   try {
@@ -53,7 +59,7 @@ export async function createTextures(): Promise<TextureSet> {
       grid,
       sprites: await packedSprites(sheet),
       packed: true,
-      artwork: sheet !== null,
+      masked: (name) => tileFor(sheet, name) === undefined,
       paint: painter(sheet),
     };
   } catch (error) {
@@ -64,7 +70,8 @@ export async function createTextures(): Promise<TextureSet> {
       grid,
       sprites: separateSprites(),
       packed: false,
-      artwork: false,
+      // Nothing was cut from a sheet, so every frame is a mask again.
+      masked: () => true,
       paint: painter(null),
     };
   }
@@ -105,7 +112,7 @@ async function packedSprites(artwork: CanvasImageSource | null): Promise<Record<
     // nothing about where it landed in the sheet.
     ctx.save();
     ctx.translate(frame.x, frame.y);
-    SPRITE_DRAWERS[spec.name](ctx, spec.size);
+    SPRITE_DRAWERS[spec.name](ctx, frame.w, frame.h);
     ctx.restore();
   }
 
@@ -131,10 +138,23 @@ function painter(artwork: CanvasImageSource | null) {
     const frame = { x: 0, y: 0, w: canvas.width, h: canvas.height };
     if (blitTile(ctx, artwork, name, frame)) return;
 
-    // The drawn shapes are square by construction, so they are given the
-    // smaller side rather than being stretched to fill an oblong canvas.
-    SPRITE_DRAWERS[name](ctx, Math.min(canvas.width, canvas.height));
+    // Everything the picker asks for is square, so a shape is given the
+    // smaller side twice rather than being stretched to fill an oblong canvas.
+    // The lance is the one frame that is not square, and nothing paints it.
+    const side = Math.min(canvas.width, canvas.height);
+    SPRITE_DRAWERS[name](ctx, side, side);
   };
+}
+
+/**
+ * Which tile a sprite is cut from, or `undefined` when it is drawn.
+ *
+ * One decision with two readers — the atlas blits by it and the renderer tints
+ * by it — so a frame cannot be built as a mask and then coloured as though it
+ * were artwork, which is the failure the lance used to work around by hand.
+ */
+function tileFor(artwork: CanvasImageSource | null, name: SpriteName): number | undefined {
+  return artwork === null ? undefined : SPRITE_TILES[name];
 }
 
 /**
@@ -150,10 +170,10 @@ function blitTile(
   name: SpriteName,
   frame: Frame,
 ): boolean {
-  if (artwork === null) return false;
-
-  const tile = SPRITE_TILES[name];
-  if (tile === undefined) return false;
+  const tile = tileFor(artwork, name);
+  // The null check is the compiler's rather than the logic's: `tileFor` has
+  // already answered no when there is no sheet, but it cannot say so in a type.
+  if (artwork === null || tile === undefined) return false;
 
   const origin = tileOrigin(tile);
   ctx.drawImage(
@@ -191,7 +211,7 @@ function separateSprites(): Record<SpriteName, Texture> {
 
   for (const spec of SPRITE_SPECS) {
     textures[spec.name] = Texture.from(
-      drawToCanvas(spec.size, (ctx, size) => SPRITE_DRAWERS[spec.name](ctx, size)),
+      drawToCanvas(spec.width ?? spec.size, spec.size, SPRITE_DRAWERS[spec.name]),
     );
   }
 
@@ -225,14 +245,15 @@ function drawGrid(ctx: CanvasRenderingContext2D, size: number): void {
 }
 
 function drawToCanvas(
-  size: number,
-  draw: (ctx: CanvasRenderingContext2D, size: number) => void,
+  width: number,
+  height: number,
+  draw: (ctx: CanvasRenderingContext2D, width: number, height: number) => void,
 ): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = width;
+  canvas.height = height;
 
-  draw(context(canvas), size);
+  draw(context(canvas), width, height);
   return canvas;
 }
 

@@ -505,10 +505,11 @@ describe('siege harpoon', () => {
   });
 
   /**
-   * Two shots that differ only in colour are two shots that look identical once
-   * the artwork loads: `variantTint` returns white then, because a tile carries
-   * its own colour. Shape is the part that survives the swap, so the frame has
-   * to follow the weapon and not the pool the projectile came out of.
+   * Two shots that differ only in colour are two shots that can look identical:
+   * a frame cut from the sheet brings its own colour and is never tinted, so
+   * the weapon's colour never reaches the screen. Shape is what survives that,
+   * so the frame has to follow the weapon and not the pool the projectile was
+   * taken from.
    */
   it('draws its shot with its own frame and leaves the bolt with the bolt', () => {
     const world = new World(18);
