@@ -8,14 +8,26 @@ import type { World } from '../world/world';
  *
  * Gems never collide with anything, so they skip the grid entirely — a linear
  * scan over a few hundred of them is cheaper than the bookkeeping would be.
+ *
+ * A harvest widens that radius enormously for a few seconds. Nothing else
+ * about the pass changes: the gems still fly in and are still collected on
+ * contact, which is why a run that never opens a chest behaves exactly as it
+ * did before chests existed.
  */
 export function pickupSystem(world: World, dt: number): void {
   const { player, gems } = world;
 
-  const magnetRadius = player.stats.pickupRadius;
+  const harvesting = world.harvest > 0;
+  if (harvesting) world.harvest = Math.max(0, world.harvest - dt);
+
+  // `max`, not a replacement: a run that has stacked Magnet Core several times
+  // must not have its reach cut by the card that is supposed to extend it.
+  const magnetRadius = harvesting
+    ? Math.max(player.stats.pickupRadius, CONFIG.chest.harvestRadius)
+    : player.stats.pickupRadius;
   const magnetRadiusSq = magnetRadius * magnetRadius;
   const collectRadiusSq = CONFIG.player.collectRadius * CONFIG.player.collectRadius;
-  const pullStep = CONFIG.player.magnetSpeed * dt;
+  const pullStep = (harvesting ? CONFIG.chest.harvestSpeed : CONFIG.player.magnetSpeed) * dt;
 
   for (let i = gems.length - 1; i >= 0; i--) {
     const gem = gems[i];

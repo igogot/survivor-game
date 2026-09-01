@@ -1,3 +1,4 @@
+import { chestSystem } from '../systems/chests';
 import { contactSystem } from '../systems/contact';
 import { effectSystem } from '../systems/effects';
 import { enemyAttackSystem } from '../systems/enemyAttack';
@@ -29,6 +30,13 @@ import type { World } from './world';
  * Cosmetic effects are advanced with the rest of the bookkeeping, after combat
  * has had its chance to spawn them.
  *
+ * Chests sit with the pickups because that is what they are: nothing about
+ * them touches the grid, and reaching one stops the run the same way levelling
+ * does. When both happen on the same tick the chest wins and the level waits
+ * in `pendingLevels` — `progressionSystem` only offers while the phase is
+ * still 'playing', so the level-up screen arrives on the tick after the chest
+ * is spent rather than on top of it.
+ *
  * Separation nudges enemies by a few pixels after the rebuild; the combat
  * systems widen their queries by BROADPHASE_PAD to absorb that drift.
  */
@@ -48,6 +56,7 @@ export function stepWorld(world: World, dt: number): void {
   projectileSystem(world, dt);
   contactSystem(world);
   pickupSystem(world, dt);
+  chestSystem(world, dt);
   effectSystem(world, dt);
   progressionSystem(world);
 }

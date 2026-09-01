@@ -53,4 +53,6 @@ export type SpriteName =
   | 'gem'
   /** A pickup worth more than one XP, told apart by frame rather than by tint. */
   | 'gemRich'
+  /** The one thing standing still in the world, holding one of three spoils. */
+  | 'chest'
   | 'ring';

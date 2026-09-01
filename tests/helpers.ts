@@ -1,5 +1,6 @@
 import { CONFIG } from '../src/config';
 import { applyUpgrade } from '../src/systems/progression';
+import { takeSpoil } from '../src/systems/chests';
 import { stepWorld } from '../src/world/step';
 import { World } from '../src/world/world';
 
@@ -23,6 +24,14 @@ export function runHeadless(seed: number, seconds: number): World {
       // Always take the first offer; the point is to keep the run moving, not
       // to play well.
       applyUpgrade(world, world.offered[0].id);
+      continue;
+    }
+
+    // Both menus stop the world, so both have to be answered or the rest of
+    // the run is a loop over a frozen simulation reporting that nothing
+    // happened.
+    if (world.phase === 'chest') {
+      takeSpoil(world, world.spoils[0].id);
       continue;
     }
 

@@ -1,7 +1,9 @@
 import { CONFIG } from '../src/config';
 import { applyUpgrade } from '../src/systems/progression';
+import { takeSpoil } from '../src/systems/chests';
 import { stepWorld } from '../src/world/step';
 import { World } from '../src/world/world';
+import type { Chest } from '../src/world/types';
 
 const DT = 1 / CONFIG.tickRate;
 
@@ -13,6 +15,34 @@ const GEM_RADIUS = 340;
 const WANDER_TURN = 0.35;
 /** Ticks between gem searches. Gems are not in the grid, so this stays linear. */
 const GEM_INTERVAL = 6;
+
+/**
+ * Enemies on the field above which the bot calls the situation a crowd.
+ *
+ * Only used to choose a spoil. Roughly where the horde stops being something
+ * to walk around — the stand measures a few hundred bodies by the eighth
+ * minute — so a sweep below it would be spent clearing thin air.
+ */
+const CROWDED = 150;
+
+/** Health below which the bot would rather be patched up than anything else. */
+const HURT = 0.6;
+
+/**
+ * Seconds the bot will keep walking at one chest before writing it off.
+ *
+ * It has no patience of its own and would otherwise pursue forever, which is
+ * not a player: chests are placed behind, the flee vector points away from the
+ * crowd and therefore roughly forward, so a bot under steady pressure can be
+ * pulled at a chest it never closes on. Measured on seed 42, on the base
+ * before the spear and the harpoon — a chest out for 48% of the run, two
+ * collected in twelve minutes, and 537 kills at level 10 against the 10440 at
+ * level 29 the same seed used to produce. It was not playing the game any
+ * more, it was commuting.
+ *
+ * Five seconds is the unobstructed walk. Twenty-five is "I tried".
+ */
+const CHEST_PATIENCE = 25;
 
 /** How far ahead the bot looks for a hex that is going to hit it, in seconds. */
 const DODGE_HORIZON = 1.1;
@@ -81,6 +111,10 @@ export function runBot(seed: number, seconds: number, watch?: (world: World) => 
   let gemX = 0;
   let gemY = 0;
 
+  /** The chest currently being walked at, by identity, and when to give up. */
+  let pursued: Chest | null = null;
+  let patienceEndsAt = 0;
+
   for (let i = 0; i < ticks; i++) {
     if (world.phase === 'dead') break;
 
@@ -89,10 +123,23 @@ export function runBot(seed: number, seconds: number, watch?: (world: World) => 
       continue;
     }
 
+    if (world.phase === 'chest') {
+      takeSpoil(world, chooseSpoil(world));
+      continue;
+    }
+
+    // A new chest is a new decision, so the clock restarts with it. Compared
+    // by identity because every placement is a fresh object and nothing ever
+    // moves one.
+    if (world.chest !== pursued) {
+      pursued = world.chest;
+      patienceEndsAt = world.time + CHEST_PATIENCE;
+    }
+
     if (i % GEM_INTERVAL === 0) {
-      const gem = nearestGemDirection(world);
-      gemX = gem.x;
-      gemY = gem.y;
+      const shopping = shoppingDirection(world, world.time < patienceEndsAt);
+      gemX = shopping.x;
+      gemY = shopping.y;
     }
 
     wander += WANDER_TURN * DT;
@@ -109,6 +156,44 @@ function choose(world: World): string {
     if (world.offered.some((offer) => offer.id === id)) return id;
   }
   return world.offered[0].id;
+}
+
+/**
+ * Which spoil the bot takes.
+ *
+ * A fixed preference the way `PREFERENCE` is fixed would measure a player who
+ * heals at full health, and the stand would then be reading a card that does
+ * nothing rather than the card the game offers. Two conditions is enough to be
+ * a reasonable player and still be entirely deterministic: patch up when hurt,
+ * sweep when buried, otherwise take the gems.
+ */
+function chooseSpoil(world: World): string {
+  const player = world.player;
+  const offered = (id: string): boolean => world.spoils.some((spoil) => spoil.id === id);
+
+  if (player.hp < player.stats.maxHp * HURT && offered('mend')) return 'mend';
+  if (world.enemies.length >= CROWDED && offered('purge')) return 'purge';
+  return world.spoils[0].id;
+}
+
+/**
+ * Where the bot goes when it is not being chased.
+ *
+ * A chest outranks every gem on the field and is worth walking past them for:
+ * it is the only thing in the world that has to be fetched, and a bot that
+ * ignored it would measure a player leaving free power on the ground. But only
+ * while it is still worth chasing — see `CHEST_PATIENCE`. A bot that never
+ * gives up stops collecting anything at all, which is a different wrong answer
+ * and a worse one, because it looks like the game got harder.
+ */
+function shoppingDirection(world: World, pursuing: boolean): { x: number; y: number } {
+  const chest = world.chest;
+  if (chest === null || !pursuing) return nearestGemDirection(world);
+
+  const dx = chest.x - world.player.x;
+  const dy = chest.y - world.player.y;
+  const distance = Math.hypot(dx, dy) || 1;
+  return { x: dx / distance, y: dy / distance };
 }
 
 function steer(world: World, wander: number, pullX: number, pullY: number): void {

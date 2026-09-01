@@ -60,6 +60,7 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
   orb: 118, // axe head, which reads as a blade when it circles
   gem: 116, // blue flask
   gemRich: 115, // red flask, for pickups worth more
+  chest: 89, // a closed chest, still locked: the sheet's open ones look spent
 };
 
 /**

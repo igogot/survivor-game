@@ -1,4 +1,5 @@
 import { DESIGNED_UPGRADES, FALLBACK_UPGRADES, UPGRADES } from '../data/upgrades';
+import { healPlayer } from './damage';
 import { grantWeapon } from './weapons';
 import type { UpgradeDef } from '../data/upgrades';
 import type { World } from '../world/world';
@@ -122,10 +123,7 @@ export function applyUpgrade(world: World, id: string): void {
 
   // Max-HP upgrades heal by the amount they grant, otherwise taking one at low
   // health is a trap rather than a reward.
-  const gained = player.stats.maxHp - maxHpBefore;
-  if (gained > 0) {
-    player.hp = Math.min(player.stats.maxHp, player.hp + gained);
-  }
+  healPlayer(world, player.stats.maxHp - maxHpBefore);
 
   world.pendingLevels--;
 

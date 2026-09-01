@@ -243,6 +243,58 @@
         display: none;
       }
 
+      /* The chest pointer. Fixed rather than inside #hud, which has safe-area
+         padding: the marker is measured from the middle of the glass, and a
+         notch on one side would otherwise shift the centre it is measured
+         from. JS writes only the transform. */
+      #chest-marker {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        pointer-events: none;
+        width: 40px;
+        height: 40px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 209, 102, 0.5);
+        background: rgba(14, 17, 26, 0.85);
+        box-shadow: 0 0 14px rgba(255, 209, 102, 0.25);
+        animation: chest-pulse 1800ms ease-in-out infinite;
+      }
+
+      #chest-marker[hidden] {
+        display: none;
+      }
+
+      #chest-icon {
+        width: 24px;
+        height: 24px;
+        /* The artwork is 16px pixel art painted at 48; anything but this turns
+           the scale-down into a blur. */
+        image-rendering: pixelated;
+      }
+
+      /* Drawn pointing right and rotated into place, so one shape serves every
+         direction. */
+      #chest-arrow {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        background: #ffd166;
+        clip-path: polygon(100% 50%, 0% 0%, 0% 100%);
+      }
+
+      @keyframes chest-pulse {
+        0%,
+        100% {
+          opacity: 0.72;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
       @keyframes warning-pulse {
         0%,
         100% {
@@ -297,7 +349,11 @@
         font-size: 12px;
       }
 
-      #upgrade-cards {
+      /* One card layout for both menus: the chest screen is the level-up
+         screen with different words on the cards, and it should never look
+         like a different kind of decision. */
+      #upgrade-cards,
+      #chest-cards {
         display: flex;
         gap: 14px;
         flex-wrap: wrap;
@@ -398,6 +454,37 @@
       .card--weapon .badge {
         border-color: rgba(110, 231, 160, 0.45);
         color: var(--accent);
+      }
+
+      /* Spoils are spent the moment they are taken, so they get their own
+         accent rather than sharing the weapon green: a card that changes the
+         next second must not look like one that changes the next ten minutes.
+         Same three channels as the weapon cards — badge, edge, tint. */
+      .card--spoil {
+        border-color: rgba(255, 209, 102, 0.45);
+        background: rgba(255, 209, 102, 0.06);
+      }
+
+      .card--spoil::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 12px;
+        bottom: 12px;
+        width: 3px;
+        border-radius: 0 3px 3px 0;
+        background: #ffd166;
+      }
+
+      .card--spoil .badge {
+        border-color: rgba(255, 209, 102, 0.45);
+        color: #ffd166;
+      }
+
+      .card--spoil:hover,
+      .card--spoil:focus-visible {
+        border-color: #ffd166;
+        background: rgba(255, 209, 102, 0.12);
       }
 
       .starters {
@@ -724,7 +811,8 @@
           max-width: 94vw;
         }
 
-        #upgrade-cards {
+        #upgrade-cards,
+        #chest-cards {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 10px;
@@ -759,6 +847,10 @@
 
         #upgrade-cards {
           grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        #chest-cards {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
         }
       }
 
@@ -809,6 +901,11 @@
 
     <div id="warning" hidden>BOSS INCOMING</div>
 
+    <div id="chest-marker" hidden>
+      <canvas id="chest-icon"></canvas>
+      <i id="chest-arrow"></i>
+    </div>
+
     <div id="stick" hidden><div id="stick-knob"></div></div>
 
     <button id="pause-button" class="touch-only" type="button" aria-label="Pause">II</button>
@@ -823,6 +920,14 @@
 
     <!-- Shown once, before the first run. The button is the only way out, so a
          player who lands here cannot be killed while reading. -->
+    <div class="overlay" id="chest" hidden>
+      <div class="panel">
+        <h2>A Chest</h2>
+        <p class="sub">One of the three, used the moment you take it</p>
+        <div id="chest-cards"></div>
+      </div>
+    </div>
+
     <div class="overlay" id="start" hidden>
       <div class="panel panel--help">
         <h2>Survivor</h2>

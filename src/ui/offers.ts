@@ -1,4 +1,5 @@
 import { weaponById } from '../data/weapons';
+import type { SpoilCategory, SpoilDef } from '../data/spoils';
 import type { UpgradeDef } from '../data/upgrades';
 
 /**
@@ -69,4 +70,34 @@ function badgeFor(offer: UpgradeDef): string {
       throw new Error(`Unhandled upgrade kind: ${String(unhandled)}`);
     }
   }
+}
+
+/**
+ * What a chest card should say about one spoil.
+ *
+ * Two things separate these from level-up cards and both have to be visible
+ * without reading: which of the three questions this one answers, and that it
+ * is gone the moment it is taken. A player who mistakes a spoil for an upgrade
+ * spends the run waiting for a stat that is never coming.
+ */
+export interface SpoilLabel {
+  /** Word shown in the card's corner badge: which question this answers. */
+  readonly badge: string;
+  /** Bottom line, in the place a level-up card puts its stack count. */
+  readonly note: string;
+}
+
+const CATEGORY_BADGES: Readonly<Record<SpoilCategory, string>> = {
+  survive: 'SURVIVE',
+  clear: 'CLEAR',
+  gather: 'GATHER',
+};
+
+export function describeSpoil(spoil: SpoilDef): SpoilLabel {
+  return {
+    badge: CATEGORY_BADGES[spoil.category],
+    // The one line every spoil shares, which is what makes it the family
+    // trait rather than a property of any single card.
+    note: 'ONE USE',
+  };
 }
