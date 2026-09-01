@@ -106,29 +106,29 @@ describe('a run opened with a chosen weapon', () => {
     for (const def of WEAPONS) {
       const world = new World(1, def.id);
 
-      expect(world.weapons.map((state) => state.defId)).toEqual([def.id]);
-      expect(world.starterId).toBe(def.id);
+      expect(world.players[0].weapons.map((state) => state.defId)).toEqual([def.id]);
+      expect(world.players[0].starterId).toBe(def.id);
     }
   });
 
   it('makes the player the figure that weapon comes with', () => {
     for (const def of WEAPONS) {
-      expect(new World(1, def.id).player.sprite).toBe(def.playerSprite);
+      expect(new World(1, def.id).players[0].sprite).toBe(def.playerSprite);
     }
   });
 
   it('opens with the starter when nobody chose', () => {
     const world = new World(1);
 
-    expect(world.starterId).toBe(STARTER_WEAPON_ID);
-    expect(world.weapons).toHaveLength(1);
+    expect(world.players[0].starterId).toBe(STARTER_WEAPON_ID);
+    expect(world.players[0].weapons).toHaveLength(1);
   });
 
   it('arms the player even when handed an id that names nothing', () => {
     const world = new World(1, 'not-a-weapon');
 
-    expect(world.starterId).toBe(STARTER_WEAPON_ID);
-    expect(world.weapons.map((state) => state.defId)).toEqual([STARTER_WEAPON_ID]);
+    expect(world.players[0].starterId).toBe(STARTER_WEAPON_ID);
+    expect(world.players[0].weapons.map((state) => state.defId)).toEqual([STARTER_WEAPON_ID]);
   });
 
   /** The seed is what makes a run reproducible; the weapon must not disturb it. */

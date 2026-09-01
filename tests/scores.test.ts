@@ -265,9 +265,9 @@ describe('what the bounds must never refuse', () => {
         name: 'bot',
         timeMs: Math.round(world.time * 1000),
         kills: world.kills,
-        level: world.player.level,
+        level: world.level,
         bosses: world.bossesKilled,
-        weapon: world.starterId,
+        weapon: world.players[0].starterId,
         seed,
       };
 

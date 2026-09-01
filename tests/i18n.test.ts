@@ -243,7 +243,7 @@ describe('the markup and the tables', () => {
    * in one of these ids renders as a missing sentence rather than as an error.
    */
   it('leaves an element for every line built out of keycaps', () => {
-    for (const id of ['levelup-sub', 'pause-sub', 'result-hint']) {
+    for (const id of ['levelup-sub', 'pause-sub', 'result-hint', 'chat-hint']) {
       expect(markup, `index.html is missing id="${id}"`).toContain(`id="${id}"`);
     }
   });

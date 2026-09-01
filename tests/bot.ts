@@ -1,9 +1,10 @@
 import { CONFIG } from '../src/config';
+import { TAU } from '../src/core/math';
 import { applyUpgrade } from '../src/systems/progression';
 import { takeSpoil } from '../src/systems/chests';
 import { stepWorld } from '../src/world/step';
 import { World } from '../src/world/world';
-import type { Chest } from '../src/world/types';
+import type { Chest, Player } from '../src/world/types';
 
 const DT = 1 / CONFIG.tickRate;
 
@@ -106,17 +107,45 @@ const PREFERENCE = [
  * crowd — but it kites, which is the one skill the genre actually requires, and
  * it is deterministic, so two runs of the same seed are the same run.
  *
- * It always opens with the bolt, which is what `new World(seed)` grants. The
- * opening choice is therefore the one thing in the game no stand here weighs;
- * see the README for what a one-off probe measured about it.
+ * It opens with the bolt, which is what `new World(seed)` grants. The opening
+ * choice is therefore the one thing in the game no stand here weighs; see the
+ * README for what a one-off probe measured about it.
  */
 export function runBot(seed: number, seconds: number, watch?: (world: World) => void): World {
-  const world = new World(seed);
-  const ticks = Math.round(seconds * CONFIG.tickRate);
+  return play(new World(seed), seconds, watch);
+}
 
-  let wander = 0;
-  let gemX = 0;
-  let gemY = 0;
+/**
+ * The same bot, one per player, in one world.
+ *
+ * Each of them steers by its own potential field — its own crowd pushes it, its
+ * own nearest gem pulls it, its own wander carries it when nothing else does —
+ * so a party is genuinely several players rather than one player drawn four
+ * times. What they share is what the game shares: the horde, the chest, and the
+ * experience bar.
+ *
+ * They do not cooperate, and that is on purpose. A stand that measured four
+ * bots executing a plan would be measuring the plan. This measures what the
+ * rules do to four people playing the only way this game asks anybody to play.
+ */
+export function runParty(
+  seed: number,
+  seconds: number,
+  starters: readonly string[],
+  watch?: (world: World) => void,
+): World {
+  return play(new World(seed, starters), seconds, watch);
+}
+
+function play(world: World, seconds: number, watch?: (world: World) => void): World {
+  const ticks = Math.round(seconds * CONFIG.tickRate);
+  const count = world.players.length;
+
+  // Per player, because every one of them is steering separately. A shared
+  // wander would march the whole party in step, which is one player again.
+  const wander = world.players.map((_, index) => (index * TAU) / count);
+  const gemX = new Array<number>(count).fill(0);
+  const gemY = new Array<number>(count).fill(0);
 
   /** The chest currently being walked at, by identity, and when to give up. */
   let pursued: Chest | null = null;
@@ -125,32 +154,44 @@ export function runBot(seed: number, seconds: number, watch?: (world: World) => 
   for (let i = 0; i < ticks; i++) {
     if (world.phase === 'dead') break;
 
+    // Both menus belong to somebody in particular, and `choosing` says who.
     if (world.phase === 'levelup') {
-      applyUpgrade(world, choose(world));
+      const player = world.players[world.choosing];
+      applyUpgrade(world, player, choose(player));
       continue;
     }
 
     if (world.phase === 'chest') {
-      takeSpoil(world, chooseSpoil(world));
+      const player = world.players[world.choosing];
+      takeSpoil(world, player, chooseSpoil(world, player));
       continue;
     }
 
     // A new chest is a new decision, so the clock restarts with it. Compared
     // by identity because every placement is a fresh object and nothing ever
-    // moves one.
+    // moves one. One clock for the party: the chest is one errand, and whoever
+    // gets there first spends it.
     if (world.chest !== pursued) {
       pursued = world.chest;
       patienceEndsAt = world.time + CHEST_PATIENCE;
     }
 
-    if (i % GEM_INTERVAL === 0) {
-      const shopping = shoppingDirection(world, world.time < patienceEndsAt);
-      gemX = shopping.x;
-      gemY = shopping.y;
+    const pursuing = world.time < patienceEndsAt;
+
+    for (let p = 0; p < count; p++) {
+      const player = world.players[p];
+      if (player.hp <= 0) continue;
+
+      if (i % GEM_INTERVAL === 0) {
+        const shopping = shoppingDirection(world, player, pursuing);
+        gemX[p] = shopping.x;
+        gemY[p] = shopping.y;
+      }
+
+      wander[p] += WANDER_TURN * DT;
+      steer(world, player, wander[p], gemX[p], gemY[p]);
     }
 
-    wander += WANDER_TURN * DT;
-    steer(world, wander, gemX, gemY);
     stepWorld(world, DT);
     watch?.(world);
   }
@@ -158,11 +199,11 @@ export function runBot(seed: number, seconds: number, watch?: (world: World) => 
   return world;
 }
 
-function choose(world: World): string {
+function choose(player: Player): string {
   for (const id of PREFERENCE) {
-    if (world.offered.some((offer) => offer.id === id)) return id;
+    if (player.offered.some((offer) => offer.id === id)) return id;
   }
-  return world.offered[0].id;
+  return player.offered[0].id;
 }
 
 /**
@@ -174,8 +215,7 @@ function choose(world: World): string {
  * a reasonable player and still be entirely deterministic: patch up when hurt,
  * sweep when buried, otherwise take the gems.
  */
-function chooseSpoil(world: World): string {
-  const player = world.player;
+function chooseSpoil(world: World, player: Player): string {
   const offered = (id: string): boolean => world.spoils.some((spoil) => spoil.id === id);
 
   if (player.hp < player.stats.maxHp * HURT && offered('mend')) return 'mend';
@@ -193,19 +233,27 @@ function chooseSpoil(world: World): string {
  * gives up stops collecting anything at all, which is a different wrong answer
  * and a worse one, because it looks like the game got harder.
  */
-function shoppingDirection(world: World, pursuing: boolean): { x: number; y: number } {
+function shoppingDirection(
+  world: World,
+  player: Player,
+  pursuing: boolean,
+): { x: number; y: number } {
   const chest = world.chest;
-  if (chest === null || !pursuing) return nearestGemDirection(world);
+  if (chest === null || !pursuing) return nearestGemDirection(world, player);
 
-  const dx = chest.x - world.player.x;
-  const dy = chest.y - world.player.y;
+  const dx = chest.x - player.x;
+  const dy = chest.y - player.y;
   const distance = Math.hypot(dx, dy) || 1;
   return { x: dx / distance, y: dy / distance };
 }
 
-function steer(world: World, wander: number, pullX: number, pullY: number): void {
-  const player = world.player;
-
+function steer(
+  world: World,
+  player: Player,
+  wander: number,
+  pullX: number,
+  pullY: number,
+): void {
   let pushX = 0;
   let pushY = 0;
 
@@ -288,12 +336,11 @@ function steer(world: World, wander: number, pullX: number, pullY: number): void
   }
 
   const length = Math.hypot(x, y);
-  world.intentX = x / length;
-  world.intentY = y / length;
+  player.intentX = x / length;
+  player.intentY = y / length;
 }
 
-function nearestGemDirection(world: World): { x: number; y: number } {
-  const player = world.player;
+function nearestGemDirection(world: World, player: Player): { x: number; y: number } {
   const gems = world.gems;
 
   let bestSq = GEM_RADIUS * GEM_RADIUS;

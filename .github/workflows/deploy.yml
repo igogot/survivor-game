@@ -2,6 +2,9 @@
 #
 # The build is the same `npm run build` CI runs, typecheck included, so a page
 # is never published from code that would not compile.
+#
+# The leaderboard API does not come here. Pages is static and cannot run PHP,
+# so `api/` would be served as source text — see the step that removes it.
 
 name: Deploy
 
@@ -36,6 +39,21 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Pages serves what it is given, and it cannot execute PHP. Left in, the
+      # endpoint answers a request for the board with its own source, which the
+      # game then fails to parse and reports as unreachable — the right screen
+      # for the wrong reason, after downloading thirty kilobytes to get there.
+      #
+      # No secret is involved: `npm run build` already strips config.php, and
+      # this repository is public, so the rest is readable on GitHub anyway.
+      # It simply has no business on a static host.
+      #
+      # A Pages build that should reach a real board wants VITE_LEADERBOARD_URL
+      # and VITE_ACCOUNT_URL pointing at the host that runs the PHP, not a copy
+      # of the PHP.
+      - name: Drop the API, which Pages cannot run
+        run: rm -rf dist/api
 
       - uses: actions/configure-pages@v5
 

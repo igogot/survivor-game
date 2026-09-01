@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
+import { xpForNextLevel } from '../src/systems/progression';
 import { TAU } from '../src/core/math';
 import { BOSS, enemyById } from '../src/data/enemies';
 import { SPOILS, SPOIL_CATEGORIES } from '../src/data/spoils';
@@ -29,13 +30,13 @@ const DT = 1 / CONFIG.tickRate;
 function play(world: World, seconds: number, x = 1, y = 0): void {
   for (let i = 0; i < Math.round(seconds * CONFIG.tickRate); i++) {
     if (world.phase === 'levelup') {
-      applyUpgrade(world, world.offered[0].id);
+      applyUpgrade(world, world.players[0], world.players[0].offered[0].id);
       continue;
     }
     if (world.phase !== 'playing') return;
 
-    world.intentX = x;
-    world.intentY = y;
+    world.players[0].intentX = x;
+    world.players[0].intentY = y;
     stepWorld(world, DT);
   }
 }
@@ -44,8 +45,8 @@ function play(world: World, seconds: number, x = 1, y = 0): void {
 function walkIntoChest(world: World): void {
   const chest = world.chest;
   if (chest === null) throw new Error('there is no chest to walk into');
-  world.player.x = chest.x;
-  world.player.y = chest.y;
+  world.players[0].x = chest.x;
+  world.players[0].y = chest.y;
   stepWorld(world, DT);
 }
 
@@ -68,7 +69,7 @@ describe('placing a chest', () => {
 
     const chest = world.chest;
     expect(chest).not.toBeNull();
-    const distance = Math.hypot(chest!.x - world.player.x, chest!.y - world.player.y);
+    const distance = Math.hypot(chest!.x - world.players[0].x, chest!.y - world.players[0].y);
     // The player keeps walking after it is placed, so this is a floor rather
     // than an equality: it was placed at the full distance and closed some.
     expect(distance).toBeGreaterThan(CONFIG.chest.distance / 2);
@@ -88,12 +89,12 @@ describe('placing a chest', () => {
       const chest = world.chest;
       expect(chest).not.toBeNull();
 
-      const heading = Math.hypot(world.headingX, world.headingY);
+      const heading = Math.hypot(world.players[0].headingX, world.players[0].headingY);
       expect(heading).toBeGreaterThan(0.15);
 
-      const toChestX = chest!.x - world.player.x;
-      const toChestY = chest!.y - world.player.y;
-      const forward = (toChestX * world.headingX + toChestY * world.headingY) / heading;
+      const toChestX = chest!.x - world.players[0].x;
+      const toChestY = chest!.y - world.players[0].y;
+      const forward = (toChestX * world.players[0].headingX + toChestY * world.players[0].headingY) / heading;
       expect(forward).toBeLessThan(0);
     }
   });
@@ -106,7 +107,7 @@ describe('placing a chest', () => {
   it('places one anywhere when the player has not moved', () => {
     const world = new World(9);
     world.chestTimer = 0;
-    expect(Math.hypot(world.headingX, world.headingY)).toBe(0);
+    expect(Math.hypot(world.players[0].headingX, world.players[0].headingY)).toBe(0);
 
     stepWorld(world, DT);
     expect(world.chest).not.toBeNull();
@@ -141,7 +142,7 @@ describe('placing a chest', () => {
     const moved = world.chest;
     expect(moved).not.toBeNull();
     expect(moved).not.toBe(first);
-    expect(Math.hypot(moved!.x - world.player.x, moved!.y - world.player.y)).toBeLessThanOrEqual(
+    expect(Math.hypot(moved!.x - world.players[0].x, moved!.y - world.players[0].y)).toBeLessThanOrEqual(
       CONFIG.chest.abandonAt,
     );
   });
@@ -225,7 +226,7 @@ describe('opening a chest', () => {
     play(world, CONFIG.chest.firstAt + 1);
     walkIntoChest(world);
 
-    takeSpoil(world, world.spoils[0].id);
+    takeSpoil(world, world.players[0], world.spoils[0].id);
     expect(world.phase).toBe('playing');
     expect(world.spoils).toHaveLength(0);
   });
@@ -237,18 +238,18 @@ describe('opening a chest', () => {
     walkIntoChest(world);
     world.spoils = world.spoils.filter((spoil) => spoil.id !== 'purge');
 
-    takeSpoil(world, 'purge');
+    takeSpoil(world, world.players[0], 'purge');
     expect(world.phase).toBe('chest');
 
-    takeSpoil(world, 'nothing-of-the-sort');
+    takeSpoil(world, world.players[0], 'nothing-of-the-sort');
     expect(world.phase).toBe('chest');
   });
 
   it('does nothing at all outside the chest screen', () => {
     const world = new World(18);
-    world.player.hp = 10;
-    takeSpoil(world, 'mend');
-    expect(world.player.hp).toBe(10);
+    world.players[0].hp = 10;
+    takeSpoil(world, world.players[0], 'mend');
+    expect(world.players[0].hp).toBe(10);
   });
 });
 
@@ -257,11 +258,11 @@ describe('mend', () => {
     const world = new World(19);
     world.phase = 'chest';
     world.spoils = SPOILS.filter((spoil) => spoil.id === 'mend');
-    world.player.hp = 10;
+    world.players[0].hp = 10;
 
-    takeSpoil(world, 'mend');
-    expect(world.player.hp).toBeCloseTo(
-      10 + world.player.stats.maxHp * CONFIG.chest.mendFraction,
+    takeSpoil(world, world.players[0], 'mend');
+    expect(world.players[0].hp).toBeCloseTo(
+      10 + world.players[0].stats.maxHp * CONFIG.chest.mendFraction,
       5,
     );
   });
@@ -271,10 +272,10 @@ describe('mend', () => {
     const world = new World(20);
     world.phase = 'chest';
     world.spoils = SPOILS.filter((spoil) => spoil.id === 'mend');
-    world.player.hp = world.player.stats.maxHp - 1;
+    world.players[0].hp = world.players[0].stats.maxHp - 1;
 
-    takeSpoil(world, 'mend');
-    expect(world.player.hp).toBe(world.player.stats.maxHp);
+    takeSpoil(world, world.players[0], 'mend');
+    expect(world.players[0].hp).toBe(world.players[0].stats.maxHp);
   });
 });
 
@@ -295,8 +296,8 @@ describe('purge', () => {
         world,
         grunt,
         1,
-        world.player.x + Math.cos(angle) * 200,
-        world.player.y + Math.sin(angle) * 200,
+        world.players[0].x + Math.cos(angle) * 200,
+        world.players[0].y + Math.sin(angle) * 200,
       );
     }
 
@@ -310,7 +311,7 @@ describe('purge', () => {
     const standing = world.enemies.length;
     const killsBefore = world.kills;
 
-    takeSpoil(world, 'purge');
+    takeSpoil(world, world.players[0], 'purge');
     expect(world.enemies.every((enemy) => enemy.hp <= 0)).toBe(true);
     expect(world.kills).toBe(killsBefore + standing);
   });
@@ -326,7 +327,7 @@ describe('purge', () => {
     const standing = world.enemies.length;
     const gemsBefore = world.gems.length;
 
-    takeSpoil(world, 'purge');
+    takeSpoil(world, world.players[0], 'purge');
     expect(world.enemies).toHaveLength(standing);
 
     stepWorld(world, DT);
@@ -337,11 +338,11 @@ describe('purge', () => {
   /** The one fight the game asks to be won is not settled from a menu. */
   it('leaves the boss standing', () => {
     const world = buried(23);
-    spawnEnemyAt(world, BOSS, 1, world.player.x + 60, world.player.y);
+    spawnEnemyAt(world, BOSS, 1, world.players[0].x + 60, world.players[0].y);
     const boss = world.enemies[world.enemies.length - 1];
     expect(boss.boss).toBe(true);
 
-    takeSpoil(world, 'purge');
+    takeSpoil(world, world.players[0], 'purge');
     expect(boss.hp).toBeGreaterThan(0);
   });
 });
@@ -351,7 +352,7 @@ describe('harvest', () => {
   function strandGem(world: World, distance: number): void {
     const grunt = enemyById('grunt');
     if (grunt === undefined) throw new Error('the horde lost its grunt');
-    spawnEnemyAt(world, grunt, 1, world.player.x + distance, world.player.y);
+    spawnEnemyAt(world, grunt, 1, world.players[0].x + distance, world.players[0].y);
     const enemy = world.enemies[world.enemies.length - 1];
     enemy.hp = 0;
     stepWorld(world, DT);
@@ -365,7 +366,7 @@ describe('harvest', () => {
 
     world.phase = 'chest';
     world.spoils = SPOILS.filter((spoil) => spoil.id === 'harvest');
-    takeSpoil(world, 'harvest');
+    takeSpoil(world, world.players[0], 'harvest');
 
     // Standing still, so nothing new is dropped and nothing is walked over.
     play(world, CONFIG.chest.harvestTime, 0, 0);
@@ -382,14 +383,14 @@ describe('harvest', () => {
     const world = new World(25);
     strandGem(world, CONFIG.chest.harvestRadius * 3);
     const far = world.gems[world.gems.length - 1];
-    const distanceBefore = Math.hypot(far.x - world.player.x, far.y - world.player.y);
+    const distanceBefore = Math.hypot(far.x - world.players[0].x, far.y - world.players[0].y);
 
     world.phase = 'chest';
     world.spoils = SPOILS.filter((spoil) => spoil.id === 'harvest');
-    takeSpoil(world, 'harvest');
+    takeSpoil(world, world.players[0], 'harvest');
     play(world, CONFIG.chest.harvestTime, 0, 0);
 
-    expect(Math.hypot(far.x - world.player.x, far.y - world.player.y)).toBeCloseTo(
+    expect(Math.hypot(far.x - world.players[0].x, far.y - world.players[0].y)).toBeCloseTo(
       distanceBefore,
       5,
     );
@@ -399,18 +400,18 @@ describe('harvest', () => {
     const world = new World(26);
     world.phase = 'chest';
     world.spoils = SPOILS.filter((spoil) => spoil.id === 'harvest');
-    takeSpoil(world, 'harvest');
-    expect(world.harvest).toBeCloseTo(CONFIG.chest.harvestTime, 5);
+    takeSpoil(world, world.players[0], 'harvest');
+    expect(world.players[0].harvest).toBeCloseTo(CONFIG.chest.harvestTime, 5);
 
     play(world, CONFIG.chest.harvestTime + 1, 0, 0);
-    expect(world.harvest).toBe(0);
+    expect(world.players[0].harvest).toBe(0);
 
     strandGem(world, CONFIG.chest.harvestRadius * 0.8);
     const far = world.gems[world.gems.length - 1];
-    const distanceBefore = Math.hypot(far.x - world.player.x, far.y - world.player.y);
+    const distanceBefore = Math.hypot(far.x - world.players[0].x, far.y - world.players[0].y);
     play(world, 1, 0, 0);
 
-    expect(Math.hypot(far.x - world.player.x, far.y - world.player.y)).toBeCloseTo(
+    expect(Math.hypot(far.x - world.players[0].x, far.y - world.players[0].y)).toBeCloseTo(
       distanceBefore,
       5,
     );
@@ -436,13 +437,13 @@ describe('the chest and the level-up screen', () => {
     const world = new World(27);
     play(world, CONFIG.chest.firstAt + 1);
 
-    world.player.xp = world.player.xpToNext;
+    world.xp = xpForNextLevel(world);
     walkIntoChest(world);
 
     expect(world.phase).toBe('chest');
-    expect(world.pendingLevels).toBeGreaterThan(0);
+    expect(world.players[0].pendingLevels).toBeGreaterThan(0);
 
-    takeSpoil(world, world.spoils[0].id);
+    takeSpoil(world, world.players[0], world.spoils[0].id);
     stepWorld(world, DT);
     expect(world.phase).toBe('levelup');
   });

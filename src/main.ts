@@ -30,6 +30,8 @@ import { starterChoices } from './ui/starters';
 import { canPause, pauseRun, resumeRun } from './world/pause';
 import { stepWorld } from './world/step';
 import { World } from './world/world';
+import { isAlive, nextLiving, viewedBy } from './world/party';
+import type { Player } from './world/types';
 
 async function main(): Promise<void> {
   const host = document.getElementById('app');
@@ -115,6 +117,23 @@ async function main(): Promise<void> {
   let world = newWorld();
 
   /**
+   * The player at this keyboard.
+   *
+   * A function rather than a binding because `world` is replaced on restart,
+   * and index zero because a solo run has exactly one. It is the single place
+   * this file decides whose screen it is drawing, which is what a second
+   * participant would have to change and nothing else.
+   */
+  function me(): Player {
+    return world.players[0];
+  }
+
+  /** The player whose level-up menu is up, or null when nobody's is. */
+  function chooser(): Player | null {
+    return world.players[world.choosing] ?? null;
+  }
+
+  /**
    * Whether the opening screen is up and a weapon has yet to be chosen.
    *
    * The run is genuinely paused behind it, which means `syncOverlays` would
@@ -125,8 +144,8 @@ async function main(): Promise<void> {
    * just watched one fail is exactly the person who wants to make it
    * differently.
    */
-  let choosing = !unattended;
-  if (choosing) pauseRun(world);
+  let picking = !unattended;
+  if (picking) pauseRun(world);
 
   // Text first, then the screens built out of it. `relabel` ends by syncing the
   // overlays, so this is also the first sync — and it has to happen here rather
@@ -213,7 +232,13 @@ async function main(): Promise<void> {
         return;
       }
 
-      if (choosing) {
+      if (picking) {
+        // Only on the panel these keys belong to. The opening screen is a flow
+        // now — mode, then a weapon or a team — and Enter inside the waiting
+        // room is how a player talks to their team, not how they abandon it for
+        // a solo run.
+        if (!startScreen.awaitingWeapon()) return;
+
         // The same digits the level-up screen uses, because it is the same
         // gesture: read three cards, pick one, live with it.
         for (let i = 0; i < starters.length; i++) {
@@ -262,21 +287,28 @@ async function main(): Promise<void> {
       // Read before the intent, so a click and a key pressed in the same tick
       // resolve the way they should: the key wins and the order is dropped
       // inside `steeringSystem` rather than half-obeyed here.
-      const order = clicks.consume();
-      if (order !== null) world.moveTarget = renderer.screenToWorld(order.x, order.y);
+      // A downed player steers nothing and orders nothing. What their mouse
+      // does instead is move the camera along the team — see `watching`.
+      if (isAlive(me())) {
+        const order = clicks.consume();
+        if (order !== null) me().moveTarget = renderer.screenToWorld(order.x, order.y);
 
-      const intent = combinedIntent();
-      world.intentX = intent.x;
-      world.intentY = intent.y;
+        const intent = combinedIntent();
+        me().intentX = intent.x;
+        me().intentY = intent.y;
+      } else if (clicks.consumePrimary()) {
+        me().watching = nextLiving(world, me().watching);
+      }
       stepWorld(world, dt);
       syncOverlays();
       return;
     }
 
     if (phase === 'levelup') {
-      for (let i = 0; i < world.offered.length; i++) {
+      const offers = chooser()?.offered ?? [];
+      for (let i = 0; i < offers.length; i++) {
         if (input.consumePressed(`Digit${i + 1}`)) {
-          pickUpgrade(world.offered[i].id);
+          pickUpgrade(offers[i].id);
           return;
         }
       }
@@ -360,7 +392,7 @@ async function main(): Promise<void> {
     // The opening screen is paused too, and this button would lift that pause
     // while leaving the panel up — a run advancing behind a screen that says
     // it has not started. Choosing a weapon is the only way out of it.
-    if (choosing) return;
+    if (picking) return;
 
     if (world.phase === 'paused') {
       resumeGame();
@@ -390,7 +422,7 @@ async function main(): Promise<void> {
    * seed with this weapon rather than silently ignoring one of the two.
    */
   function startRun(weaponId: string): void {
-    choosing = false;
+    picking = false;
     placedAs = undefined;
     world = newWorld(weaponId);
     // Everything an unpause clears, for the same reason: the key or the click
@@ -417,13 +449,21 @@ async function main(): Promise<void> {
   }
 
   function draw(alpha: number): void {
-    renderer.draw(world, alpha);
-    hud.update(world);
+    // Whose eyes: their own while they are standing, and a teammate's while
+    // they are not. One answer for the camera and the bars alike, so a
+    // spectator's screen is a coherent view of somebody else rather than a
+    // camera over there and a health bar over here.
+    const eyes = viewedBy(world, me());
+    renderer.draw(world, eyes, alpha);
+    hud.update(world, eyes, me());
     stick.update(touch);
   }
 
   function pickUpgrade(id: string): void {
-    applyUpgrade(world, id);
+    const player = chooser();
+    if (player === null) return;
+
+    applyUpgrade(world, player, id);
     // Otherwise a still-held number key would immediately eat the next offer.
     input.clearPressed();
     // Only the click: a right button still down goes on steering, which is the
@@ -440,7 +480,10 @@ async function main(): Promise<void> {
    * spent the spoil must not also take the first card of the menu behind it.
    */
   function pickSpoil(id: string): void {
-    takeSpoil(world, id);
+    const player = chooser();
+    if (player === null) return;
+
+    takeSpoil(world, player, id);
     input.clearPressed();
     clicks.clearPending();
     syncOverlays();
@@ -448,20 +491,21 @@ async function main(): Promise<void> {
 
   /** Single source of truth for which overlay is visible. */
   function syncOverlays(): void {
-    if (world.phase === 'paused' && choosing) {
+    if (world.phase === 'paused' && picking) {
       startScreen.show();
     } else {
       startScreen.hide();
     }
 
-    if (world.phase === 'paused' && !choosing) {
+    if (world.phase === 'paused' && !picking) {
       pauseScreen.show();
     } else {
       pauseScreen.hide();
     }
 
-    if (world.phase === 'levelup') {
-      upgradeMenu.show(world.offered, world.stacks);
+    const picker = chooser();
+    if (world.phase === 'levelup' && picker !== null) {
+      upgradeMenu.show(picker.offered, picker.stacks);
     } else {
       upgradeMenu.hide();
     }
@@ -514,7 +558,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    choosing = true;
+    picking = true;
     placedAs = undefined;
     world = newWorld();
     pauseRun(world);

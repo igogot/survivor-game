@@ -1,8 +1,10 @@
 import { CONFIG } from '../config';
 import { MAX_ENEMY_RADIUS } from '../data/enemies';
+import { anyAlive, nearestPlayer, nextLiving } from '../world/party';
+import { respawnDelay } from './respawn';
 import { dist2 } from '../core/math';
 import { BROADPHASE_PAD } from './shared';
-import type { Enemy } from '../world/types';
+import type { Enemy, Player } from '../world/types';
 import type { World } from '../world/world';
 
 /**
@@ -29,28 +31,47 @@ export function applyDamage(world: World, enemy: Enemy, amount: number): void {
 }
 
 /**
- * The single place the *player* loses health.
+ * The single place a player loses health.
  *
- * Two things reach them now — a body touching them and a hex landing on them —
- * and both must agree on the invulnerability window and on what happens at
- * zero. The window is the game's damage governor: it is why standing in a
- * crowd of forty is survivable, and routing the horde's projectiles through it
- * rather than around it is what keeps that promise while still letting them
- * land when nothing is close enough to touch.
+ * Three things reach them — a body touching them, a hex landing on them and a
+ * bomber going off under them — and all three must agree on the invulnerability
+ * window and on what happens at zero. The window is the game's damage governor:
+ * it is why standing in a crowd of forty is survivable, and routing the horde's
+ * projectiles through it rather than around it is what keeps that promise while
+ * still letting them land when nothing is close enough to touch.
+ *
+ * The window is per player, which is the only thing it could sensibly be: it is
+ * the grace *this* body was granted for the hit *it* took.
+ *
+ * A run ends when the last player falls, not the first. Anybody else going down
+ * starts a countdown instead: they watch a teammate until it runs out and come
+ * back beside them. See `respawnSystem` — the wait, the camera and where the
+ * body reappears all live there.
  *
  * Returns whether the hit landed, so a caller can tell a blocked hit from one
  * that connected.
  */
-export function damagePlayer(world: World, amount: number): boolean {
-  const player = world.player;
-  if (player.invuln > 0 || amount <= 0) return false;
+export function damagePlayer(world: World, player: Player, amount: number): boolean {
+  if (player.invuln > 0 || amount <= 0 || player.hp <= 0) return false;
 
   player.hp -= amount;
   player.invuln = CONFIG.player.invulnTime;
 
   if (player.hp <= 0) {
     player.hp = 0;
-    world.phase = 'dead';
+
+    if (anyAlive(world)) {
+      // Somebody is left, so this is a wait rather than an ending. The camera
+      // starts on whoever is nearest, which is almost always whoever they were
+      // fighting beside — and it is a starting point, not a sentence: the left
+      // mouse button moves it.
+      player.respawnAt = world.time + respawnDelay(world);
+      const nearest = nearestPlayer(world, player.x, player.y);
+      player.watching =
+        nearest === null ? nextLiving(world, 0) : world.players.indexOf(nearest);
+    } else {
+      world.phase = 'dead';
+    }
   }
 
   return true;
@@ -67,8 +88,7 @@ export function damagePlayer(world: World, amount: number): boolean {
  * Returns how much was actually restored, so a caller can tell a heal that
  * landed from one poured onto a full bar.
  */
-export function healPlayer(world: World, amount: number): number {
-  const player = world.player;
+export function healPlayer(player: Player, amount: number): number {
   // A dead player is not hurt, they are finished. Healing one would take the
   // run back out of an ending it has already reached.
   if (amount <= 0 || player.hp <= 0) return 0;

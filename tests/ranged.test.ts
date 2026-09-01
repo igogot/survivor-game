@@ -75,7 +75,7 @@ describe('the caster', () => {
 
     for (let i = 0; i < 60 * 20; i++) movementSystem(world, DT);
 
-    const distance = Math.hypot(caster.x - world.player.x, caster.y - world.player.y);
+    const distance = Math.hypot(caster.x - world.players[0].x, caster.y - world.players[0].y);
     expect(distance).toBeLessThanOrEqual(RANGED.range + 1);
     expect(distance).toBeGreaterThan(RANGED.range - 5);
   });
@@ -86,15 +86,15 @@ describe('the caster', () => {
 
     for (let i = 0; i < 60 * 20; i++) movementSystem(world, DT);
 
-    expect(Math.hypot(grunt.x - world.player.x, grunt.y - world.player.y)).toBeLessThan(2);
+    expect(Math.hypot(grunt.x - world.players[0].x, grunt.y - world.players[0].y)).toBeLessThan(2);
   });
 
   it('aims where a moving player is going, not where they are', () => {
     const world = new World(5);
     place(world, 'caster', 0, -400);
     // Moving right at full tilt, heading already settled.
-    world.headingX = 1;
-    world.headingY = 0;
+    world.players[0].headingX = 1;
+    world.players[0].headingY = 0;
 
     enemyAttackSystem(world, DT);
 
@@ -126,23 +126,23 @@ describe('hostile projectiles', () => {
   it('damages the player and is spent', () => {
     const world = new World(7);
     hexOnPlayer(world);
-    const before = world.player.hp;
+    const before = world.players[0].hp;
 
     projectileSystem(world, DT);
 
-    expect(world.player.hp).toBeLessThan(before);
+    expect(world.players[0].hp).toBeLessThan(before);
     expect(world.projectiles).toHaveLength(0);
   });
 
   it('respects the invulnerability window like a body does', () => {
     const world = new World(8);
-    world.player.invuln = CONFIG.player.invulnTime;
+    world.players[0].invuln = CONFIG.player.invulnTime;
     hexOnPlayer(world);
-    const before = world.player.hp;
+    const before = world.players[0].hp;
 
     projectileSystem(world, DT);
 
-    expect(world.player.hp).toBe(before);
+    expect(world.players[0].hp).toBe(before);
     // Absorbed rather than passing through: i-frames eat the hex.
     expect(world.projectiles).toHaveLength(0);
   });
@@ -161,12 +161,12 @@ describe('hostile projectiles', () => {
 
   it('kills the player when the last of their health goes', () => {
     const world = new World(10);
-    world.player.hp = 1;
+    world.players[0].hp = 1;
     hexOnPlayer(world);
 
     projectileSystem(world, DT);
 
-    expect(world.player.hp).toBe(0);
+    expect(world.players[0].hp).toBe(0);
     expect(world.phase).toBe('dead');
   });
 

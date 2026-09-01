@@ -2,8 +2,11 @@ import { CONFIG } from '../config';
 import { SPOIL_CATEGORIES, spoilById, spoilsOf } from '../data/spoils';
 import { TAU, dist2 } from '../core/math';
 import { applyDamage, healPlayer } from './damage';
+import { nearestPlayerDistanceSq, partyAnchor } from '../world/party';
 import type { SpoilDef } from '../data/spoils';
-import type { Chest } from '../world/types';
+import type { PartyAnchor } from '../world/party';
+import type { Chest, Player } from '../world/types';
+import { NOBODY } from '../world/world';
 import type { World } from '../world/world';
 
 /**
@@ -19,6 +22,12 @@ import type { World } from '../world/world';
  * player's path, so the ground ahead is where the game is sending its next
  * wave; the ground behind is the crowd already following. A chest is always
  * behind, so taking it means turning into what has been chasing you.
+ *
+ * There is one chest for the party rather than one each, and it is hung on the
+ * party's own centre and heading — the same anchor the spawn ring uses. Four
+ * chests would be four errands instead of one decision, and would quietly pay
+ * out four times as often. It also makes the thing worth arguing about: the
+ * spoil goes to whoever reaches it.
  */
 export function chestSystem(world: World, dt: number): void {
   placeChest(world, dt);
@@ -46,7 +55,9 @@ function placeChest(world: World, dt: number): void {
   const chest = world.chest;
   if (chest !== null) {
     const abandoned = CONFIG.chest.abandonAt;
-    if (dist2(world.player.x, world.player.y, chest.x, chest.y) > abandoned * abandoned) {
+    // Measured to the nearest player: one is abandoned when the whole party
+    // has left it behind, not when the first person in the array has.
+    if (nearestPlayerDistanceSq(world, chest.x, chest.y) > abandoned * abandoned) {
       world.chest = chestSpot(world);
     }
     return;
@@ -60,10 +71,11 @@ function placeChest(world: World, dt: number): void {
 
 /** A place to put one: a full walk away, on the ground already crossed. */
 function chestSpot(world: World): Chest {
-  const angle = chestAngle(world);
+  const anchor = partyAnchor(world);
+  const angle = chestAngle(world, anchor);
   return {
-    x: world.player.x + Math.cos(angle) * CONFIG.chest.distance,
-    y: world.player.y + Math.sin(angle) * CONFIG.chest.distance,
+    x: anchor.x + Math.cos(angle) * CONFIG.chest.distance,
+    y: anchor.y + Math.sin(angle) * CONFIG.chest.distance,
   };
 }
 
@@ -75,32 +87,43 @@ function chestSpot(world: World): Chest {
  * would cost nothing and the choice would be free. Standing still has no
  * behind, so it goes anywhere.
  */
-function chestAngle(world: World): number {
-  const heading = Math.hypot(world.headingX, world.headingY);
+function chestAngle(world: World, anchor: PartyAnchor): number {
+  const heading = Math.hypot(anchor.headingX, anchor.headingY);
   if (heading < 0.15) return world.rng.next() * TAU;
 
-  const forward = Math.atan2(world.headingY, world.headingX);
+  const forward = Math.atan2(anchor.headingY, anchor.headingX);
   return forward + Math.PI + world.rng.range(-CONFIG.chest.spread, CONFIG.chest.spread);
 }
 
 /**
- * Opens the chest when the player walks into it.
+ * Opens the chest when somebody walks into it.
  *
  * There is no key to press: the game has none for interacting and it is played
  * with a thumb as often as with a keyboard. Touching it is the whole gesture,
  * and the screen that follows is the confirmation.
+ *
+ * Whoever gets there first opens it, and `world.choosing` remembers who —
+ * the spoil has to heal the body that walked into the crowd for it.
  */
 function openReachedChest(world: World): void {
   const chest = world.chest;
   if (chest === null) return;
 
   const reach = CONFIG.player.radius + CONFIG.chest.radius;
-  if (dist2(world.player.x, world.player.y, chest.x, chest.y) > reach * reach) return;
+  const players = world.players;
 
-  world.chest = null;
-  world.chestTimer = CONFIG.chest.interval;
-  world.spoils = rollSpoils(world);
-  world.phase = 'chest';
+  for (let i = 0; i < players.length; i++) {
+    const player = players[i];
+    if (player.hp <= 0) continue;
+    if (dist2(player.x, player.y, chest.x, chest.y) > reach * reach) continue;
+
+    world.chest = null;
+    world.chestTimer = CONFIG.chest.interval;
+    world.spoils = rollSpoils(world);
+    world.choosing = i;
+    world.phase = 'chest';
+    return;
+  }
 }
 
 /**
@@ -131,8 +154,13 @@ export function rollSpoils(world: World): SpoilDef[] {
  * Applied here rather than from a function on the definition, so `data/spoils`
  * stays a table the simulation reads and never a place that reaches into the
  * world — the same split that keeps `WeaponDef` free of `weaponSystem`.
+ *
+ * The player is named by the caller for the same reason `applyUpgrade` names
+ * one: it is whoever walked into the chest, and a spoil spent on somebody who
+ * was not standing there would make a chest a thing the party shares rather
+ * than a thing one of them fetched.
  */
-export function takeSpoil(world: World, id: string): void {
+export function takeSpoil(world: World, player: Player, id: string): void {
   if (world.phase !== 'chest') return;
 
   const def = spoilById(id);
@@ -143,13 +171,13 @@ export function takeSpoil(world: World, id: string): void {
 
   switch (def.id) {
     case 'mend':
-      healPlayer(world, world.player.stats.maxHp * CONFIG.chest.mendFraction);
+      healPlayer(player, player.stats.maxHp * CONFIG.chest.mendFraction);
       break;
     case 'purge':
       sweep(world);
       break;
     case 'harvest':
-      world.harvest = CONFIG.chest.harvestTime;
+      player.harvest = CONFIG.chest.harvestTime;
       break;
     default: {
       // Exhaustiveness check: a spoil added to the table without an effect
@@ -160,6 +188,7 @@ export function takeSpoil(world: World, id: string): void {
   }
 
   world.spoils = [];
+  world.choosing = NOBODY;
   world.phase = 'playing';
 }
 
