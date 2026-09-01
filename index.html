@@ -89,6 +89,21 @@
         font-size: 13px;
       }
 
+      /* Whose run this is, next to how strong they are — the two facts about
+         the player, side by side. Hidden entirely when this browser holds no
+         name, so a solo player who never touched the board sees nothing new. */
+      #player-name {
+        color: var(--accent);
+        border-color: rgba(110, 231, 160, 0.4);
+        max-width: 12ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #player-name[hidden] {
+        display: none;
+      }
+
       #hp-wrap {
         width: 320px;
       }
@@ -1276,6 +1291,7 @@
     <div id="hud">
       <div id="top-row">
         <span class="badge" id="level">LV 1</span>
+        <span class="badge" id="player-name" hidden></span>
         <div id="hp-wrap">
           <div id="hp-bar">
             <i id="hp-ghost"></i>

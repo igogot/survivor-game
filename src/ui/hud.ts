@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { xpForNextLevel } from '../systems/progression';
 import { isAlive } from '../world/party';
 import { edgeMark } from './offscreen';
+import { loadIdentity, onIdentityChange } from '../net/identity';
 import type { SpritePainter } from './starters';
 import type { Enemy, Player } from '../world/types';
 import type { World } from '../world/world';
@@ -61,6 +62,7 @@ export class Hud {
   private readonly chestMarker = requireElement('chest-marker');
   private readonly downed = requireElement('downed');
   private readonly chestArrow = requireElement('chest-arrow');
+  private readonly playerName = requireElement('player-name');
 
   /** Exponential moving average — a raw per-frame value is unreadable. */
   private smoothedFps = 60;
@@ -78,6 +80,23 @@ export class Hud {
    * what the arrow is drawn as.
    */
   constructor(paint: SpritePainter) {
+    /*
+     * The name a run will be submitted under, kept on screen.
+     *
+     * Somebody who signed in ten minutes ago has no other way to remember that
+     * this run is going onto the board as them, and the moment to find out is
+     * not after dying under a name they did not expect.
+     *
+     * Driven by a subscription rather than read in `update`, which runs sixty
+     * times a second and would ask storage the same question every frame.
+     *
+     * Set up before the icon below, which returns early when the canvas is
+     * missing — putting this after it would make the name depend on a chest
+     * marker having painted.
+     */
+    this.showName(loadIdentity());
+    onIdentityChange((identity) => this.showName(identity));
+
     const icon = requireElement('chest-icon');
     if (!(icon instanceof HTMLCanvasElement)) return;
     // Sized here rather than in the markup, and painted at the frame's own
@@ -182,6 +201,21 @@ export class Hud {
    * Drawn from the viewer's own position: with a party the chest is one place,
    * but which way it lies is a different answer for each of them.
    */
+  /**
+   * Shows the held name, or nothing at all.
+   *
+   * Nothing is the common case: a player who has never touched the board holds
+   * no name, and an empty chip beside the level would be a widget explaining
+   * itself. Both halves are required — a name without its token is one this
+   * browser cannot actually submit under, so showing it would promise a place
+   * on the board that the server would refuse.
+   */
+  private showName(identity: { name: string; token: string }): void {
+    const holds = identity.name !== '' && identity.token !== '';
+    this.playerName.hidden = !holds;
+    this.playerName.textContent = holds ? identity.name : '';
+  }
+
   private updateChest(world: World, view: Player): void {
     const chest = world.chest;
     if (chest === null) {

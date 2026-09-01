@@ -39,6 +39,28 @@ export interface Identity {
   readonly kept: boolean;
 }
 
+/**
+ * Who to tell when the name changes.
+ *
+ * The HUD shows the name a run will be submitted under, and it has to be right
+ * the moment somebody signs in or out rather than after a reload. Reading
+ * storage every frame would answer the same question sixty times a second, so
+ * the two functions that can change the answer say so instead — the same shape
+ * `onLangChange` uses, and for the same reason.
+ */
+const listeners = new Set<(identity: Identity) => void>();
+
+/** Subscribes to sign-in and sign-out. Returns the unsubscribe. */
+export function onIdentityChange(listener: (identity: Identity) => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function announce(): void {
+  const identity = loadIdentity();
+  for (const listener of listeners) listener(identity);
+}
+
 export function loadIdentity(): Identity {
   return {
     name: read(NAME_KEY, cleanName),
@@ -58,6 +80,7 @@ export function saveIdentity(name: string, token: string, kept = false): void {
   write(NAME_KEY, name);
   write(TOKEN_KEY, token);
   write(PROTECTED_KEY, kept ? '1' : '');
+  announce();
 }
 
 /**
@@ -70,6 +93,7 @@ export function saveIdentity(name: string, token: string, kept = false): void {
 export function forgetToken(): void {
   write(TOKEN_KEY, '');
   write(PROTECTED_KEY, '');
+  announce();
 }
 
 /**
