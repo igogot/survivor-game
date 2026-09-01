@@ -39,8 +39,6 @@ export interface BoltWeaponDef extends WeaponBase {
   readonly range: number;
   /** Projectile lifetime in seconds. */
   readonly life: number;
-  /** Angle between adjacent projectiles when the player has more than one. */
-  readonly spread: number;
 }
 
 /**
@@ -229,7 +227,6 @@ export const BOLT: BoltWeaponDef = {
   projectileRadius: 5,
   range: 430,
   life: 1.4,
-  spread: 0.16,
 };
 
 export const ORBIT: OrbitWeaponDef = {

@@ -36,7 +36,7 @@ export const RU_WEAPONS: Readonly<Record<string, string>> = {
  * in one and not the other is the failure this file exists to make visible.
  */
 export const EN_ROLES: Readonly<Record<string, string>> = {
-  bolt: 'Fires at the nearest enemy in range. The only weapon that reaches across the screen, which makes it the forgiving one to open with.',
+  bolt: 'Fires at the nearest enemy in range, and at one more for every extra shot it has bought. The only weapon that reaches across the screen, which makes it the forgiving one to open with.',
   orbit: 'Blades circle you and cut what they touch. They guard the ground you are standing on, not the ground ahead.',
   nova: 'A burst of damage around you every few seconds. It does not care how many enemies are caught in it.',
   spear: 'Lunges at the nearest enemy and hits everything standing behind them. The way through a wall rather than around it.',
@@ -45,7 +45,7 @@ export const EN_ROLES: Readonly<Record<string, string>> = {
 };
 
 export const RU_ROLES: Readonly<Record<string, string>> = {
-  bolt: 'Стреляет в ближайшего врага в радиусе. Единственное оружие, достающее через весь экран, — потому с ним и проще всего начинать.',
+  bolt: 'Стреляет в ближайшего врага в радиусе, и ещё по одному на каждый докупленный выстрел. Единственное оружие, достающее через весь экран, — потому с ним и проще всего начинать.',
   orbit: 'Клинки кружат вокруг тебя и режут то, чего касаются. Они стерегут землю, на которой ты стоишь, а не ту, что впереди.',
   nova: 'Взрыв урона вокруг тебя раз в несколько секунд. Ему всё равно, сколько врагов накрыло.',
   spear: 'Выпад в ближайшего врага, задевающий всех, кто стоит за ним. Путь сквозь стену, а не в обход неё.',
@@ -66,7 +66,10 @@ export const RU_UPGRADES: Readonly<Record<string, ContentText>> = {
   damage: { name: 'Точильный камень', description: '+25% урона' },
   haste: { name: 'Быстрые руки', description: '+20% скорости атаки' },
   boots: { name: 'Лёгкие сапоги', description: '+12% скорости бега' },
-  multishot: { name: 'Раздвоенный выстрел', description: 'Автоболт выпускает +1 снаряд' },
+  multishot: {
+    name: 'Раздвоенный прицел',
+    description: 'Автоболт бьёт ещё по одному врагу за раз',
+  },
   pierce: { name: 'Пробивающее остриё', description: 'Автоболт пробивает ещё одного врага' },
   'orbit-reach': {
     name: 'Длинный размах',

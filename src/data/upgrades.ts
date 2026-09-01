@@ -117,8 +117,8 @@ export const UPGRADES: readonly UpgradeDef[] = [
     kind: 'weaponMod',
     id: 'multishot',
     weaponId: 'bolt',
-    name: 'Split Shot',
-    description: 'Auto Bolt fires +1 projectile',
+    name: 'Split Aim',
+    description: 'Auto Bolt shoots one more enemy at once',
     maxStacks: 4,
     apply: (weapon) => {
       weapon.projectiles += 1;
