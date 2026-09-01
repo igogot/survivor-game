@@ -67,3 +67,47 @@ export type SpriteName =
   /** The one thing standing still in the world, holding one of three spoils. */
   | 'chest'
   | 'ring';
+
+/**
+ * Every frame name, in a fixed order.
+ *
+ * The union above is the vocabulary; this is the same vocabulary numbered, so
+ * that a sprite can travel over a wire as one byte instead of a string. The
+ * order is the contract — appending is safe, reordering is not, and
+ * `tests/snapshot.test.ts` checks the list against the union so neither can
+ * drift from the other unnoticed.
+ */
+export const SPRITE_NAMES = [
+  'playerBolt',
+  'playerOrbit',
+  'playerNova',
+  'playerSpear',
+  'playerHarpoon',
+  'playerEmber',
+  'grunt',
+  'runner',
+  'brute',
+  'splitter',
+  'spawnling',
+  'caster',
+  'bomber',
+  'hex',
+  'boss',
+  'bolt',
+  'harpoon',
+  'orb',
+  'spear',
+  'ember',
+  'ember2',
+  'ember3',
+  'ember4',
+  'gem',
+  'gemRich',
+  'chest',
+  'ring',
+] as const satisfies readonly SpriteName[];
+
+/** Where a frame sits in `SPRITE_NAMES`, for putting one into a byte. */
+export function spriteIndex(name: SpriteName): number {
+  return SPRITE_NAMES.indexOf(name);
+}

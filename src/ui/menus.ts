@@ -2,6 +2,7 @@ import { formatTime, requireElement } from './hud';
 import { describeOffer, describeSpoil } from './offers';
 import { renderHelp } from './help';
 import { LobbyView } from './lobby';
+import type { LobbyStart } from '../net/lobby';
 import {
   plural,
   spoilDescription,
@@ -58,9 +59,10 @@ export class StartScreen {
   constructor(
     private readonly onStart: (weaponId: string) => void,
     private readonly paint: SpritePainter,
+    onTeamStart: (start: LobbyStart) => void,
   ) {
     this.build();
-    this.lobby = new LobbyView(() => this.step('mode'));
+    this.lobby = new LobbyView(() => this.step('mode'), onTeamStart);
 
     requireElement('mode-solo').addEventListener('click', () => this.step('weapons'));
     requireElement('mode-party').addEventListener('click', () => this.step('party'));
@@ -120,6 +122,11 @@ export class StartScreen {
    */
   awaitingWeapon(): boolean {
     return this.current === 'weapons';
+  }
+
+  /** The channel a run's introductions travel on. See `LobbyView.onSignal`. */
+  get signalling(): LobbyView {
+    return this.lobby;
   }
 
   /** Always opens on the mode choice: a restart is a chance to play differently. */
