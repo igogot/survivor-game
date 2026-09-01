@@ -14,14 +14,26 @@ import type { World } from '../world/world';
  * every player pulling on every gem — makes a gem between two of them travel at
  * twice the magnet speed toward nobody in particular, and a gem picked up twice
  * would be XP the horde never paid for. Nearest also settles the harder
- * question by default: XP is not shared, so a player who does the walking gets
- * the levels.
+ * question by default: XP is not shared, so whoever does the walking gets the
+ * levels.
+ *
+ * A harvest widens one player's radius enormously for a few seconds. Nothing
+ * else about the pass changes: the gems still fly in and are still collected on
+ * contact, which is why a run that never opens a chest behaves exactly as it
+ * did before chests existed.
  */
 export function pickupSystem(world: World, dt: number): void {
   const { gems } = world;
-
   const collectRadiusSq = CONFIG.player.collectRadius * CONFIG.player.collectRadius;
-  const pullStep = CONFIG.player.magnetSpeed * dt;
+
+  // Every player's harvest burns down once per tick, here rather than inside
+  // the gem loop: a player no gem happens to be nearest to still spends their
+  // seconds.
+  const players = world.players;
+  for (let i = 0; i < players.length; i++) {
+    const player = players[i];
+    if (player.harvest > 0) player.harvest = Math.max(0, player.harvest - dt);
+  }
 
   for (let i = gems.length - 1; i >= 0; i--) {
     const gem = gems[i];
@@ -31,7 +43,13 @@ export function pickupSystem(world: World, dt: number): void {
     const owner = nearestPlayer(world, gem.x, gem.y);
     if (owner === null) continue;
 
-    const magnetRadius = owner.stats.pickupRadius;
+    const harvesting = owner.harvest > 0;
+    // `max`, not a replacement: a run that has stacked Magnet Core several
+    // times must not have its reach cut by the card meant to extend it.
+    const magnetRadius = harvesting
+      ? Math.max(owner.stats.pickupRadius, CONFIG.chest.harvestRadius)
+      : owner.stats.pickupRadius;
+    const pullStep = (harvesting ? CONFIG.chest.harvestSpeed : CONFIG.player.magnetSpeed) * dt;
     const distanceSq = dist2(gem.x, gem.y, owner.x, owner.y);
 
     if (distanceSq <= magnetRadius * magnetRadius && distanceSq > 0) {

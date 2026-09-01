@@ -10,13 +10,13 @@ import type { World } from './world';
  * made the compiler point at each place that had to learn about it.
  */
 export function canPause(world: World): boolean {
-  return world.phase === 'playing' || world.phase === 'levelup';
+  return world.phase === 'playing' || world.phase === 'levelup' || world.phase === 'chest';
 }
 
 export function pauseRun(world: World): void {
   const from = world.phase;
   // Narrowed by the comparison, so `resumeTo` needs no cast.
-  if (from !== 'playing' && from !== 'levelup') return;
+  if (from !== 'playing' && from !== 'levelup' && from !== 'chest') return;
 
   world.resumeTo = from;
   world.phase = 'paused';

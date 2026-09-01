@@ -18,6 +18,20 @@ export interface MoveTarget {
   y: number;
 }
 
+/**
+ * A chest waiting to be walked into, in world units.
+ *
+ * The only thing in the game that stays where it was put. It carries no
+ * `px`/`py` because it never moves, and no contents because what is inside is
+ * rolled when it is opened rather than when it is placed — a chest the player
+ * can see is a chest whose spoils have not been decided yet, which is what
+ * stops the same seed from being read off the arrow.
+ */
+export interface Chest {
+  x: number;
+  y: number;
+}
+
 export interface PlayerStats {
   maxHp: number;
   moveSpeed: number;
@@ -93,6 +107,17 @@ export interface Player {
   pendingLevels: number;
   offered: UpgradeDef[];
   readonly stacks: Map<string, number>;
+
+  /**
+   * Seconds left on a harvest, the spoil that drags every gem in range home.
+   *
+   * On the player rather than on the run, which is a change of mind the party
+   * forced. With one player the distinction was invisible and "not a stat"
+   * was reason enough to keep it on the world. With four it is the whole
+   * question: a chest is spent by one person, and a harvest that paid out for
+   * everybody would be worth four times what it costs.
+   */
+  harvest: number;
 }
 
 export interface Enemy {

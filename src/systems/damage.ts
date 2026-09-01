@@ -65,6 +65,27 @@ export function damagePlayer(world: World, player: Player, amount: number): bool
 }
 
 /**
+ * The single place the player gains health.
+ *
+ * Mirrors `damagePlayer` for the same reason it exists: overhealing has to be
+ * clamped somewhere, and a second copy of that clamp is where the two would
+ * disagree. Until chests arrived the only healing in the game was a max-HP
+ * card paying back what it granted, and that clamp was written inline.
+ *
+ * Returns how much was actually restored, so a caller can tell a heal that
+ * landed from one poured onto a full bar.
+ */
+export function healPlayer(player: Player, amount: number): number {
+  // A dead player is not hurt, they are finished. Healing one would take the
+  // run back out of an ending it has already reached.
+  if (amount <= 0 || player.hp <= 0) return 0;
+
+  const restored = Math.min(amount, player.stats.maxHp - player.hp);
+  player.hp += restored;
+  return restored;
+}
+
+/**
  * Damages every enemy overlapping a circle, at most once per damage event.
  *
  * `event` comes from `world.nextDamageEvent()` and is shared by every circle

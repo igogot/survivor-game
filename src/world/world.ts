@@ -4,15 +4,16 @@ import { Rng } from '../core/rng';
 import { SpatialGrid } from './grid';
 import { STARTER_WEAPON_ID, createWeaponState, starterWeapon } from '../data/weapons';
 import { xpForLevel } from '../systems/progression';
-import type { Effect, Enemy, Flame, Gem, Player, Projectile } from './types';
+import type { SpoilDef } from '../data/spoils';
+import type { Chest, Effect, Enemy, Flame, Gem, Player, Projectile } from './types';
 
-export type Phase = 'playing' | 'levelup' | 'paused' | 'dead';
+export type Phase = 'playing' | 'levelup' | 'chest' | 'paused' | 'dead';
 
 /**
  * The phases a run can be paused from, and therefore returned to. A finished
  * run is already stopped, so pausing one would mean nothing.
  */
-export type ResumablePhase = 'playing' | 'levelup';
+export type ResumablePhase = 'playing' | 'levelup' | 'chest';
 
 /** Nobody is on the level-up screen. See `World.choosing`. */
 export const NOBODY = -1;
@@ -56,12 +57,15 @@ export class World {
   resumeTo: ResumablePhase = 'playing';
 
   /**
-   * Index of the player whose level-up screen is up, or `NOBODY`.
+   * Index of the player whose menu is up, or `NOBODY`.
+   *
+   * One field for both screens, because the phases are exclusive: 'levelup'
+   * means they are picking a card and 'chest' means they are picking a spoil,
+   * and either way somebody in particular is standing at a menu that has to
+   * spend their level or heal their body.
    *
    * An index rather than a reference, so a world stays a plain bag of data that
-   * could be serialised whole. It is also what gives `phase === 'levelup'` a
-   * meaning once there is more than one player: somebody in particular is
-   * choosing, and the menu has to show their cards and spend their level.
+   * could be serialised whole.
    */
   choosing: number = NOBODY;
 
@@ -91,6 +95,23 @@ export class World {
    * from it, because the fight has no other record of when it started.
    */
   hordeResumesAt = 0;
+
+  /**
+   * The chest waiting on the ground, or null when there is none.
+   *
+   * One at a time, by the type rather than by a rule somebody has to remember.
+   * It never expires: the arrow on the HUD points at it until it is taken, so
+   * it is a standing offer rather than something a player can be too slow for.
+   *
+   * One for the party rather than one each. A chest is a place worth crossing
+   * the field for, and four of them on the ground would be four errands rather
+   * than one decision — it would also quietly quadruple the reward rate.
+   */
+  chest: Chest | null = null;
+  /** Seconds until the next chest is placed. Only counts down while there is none. */
+  chestTimer: number = CONFIG.chest.firstAt;
+  /** What the open chest is offering. Only meaningful while the phase is 'chest'. */
+  spoils: SpoilDef[] = [];
 
   nextEntityId = 1;
 
@@ -163,6 +184,7 @@ function createPlayer(starterId: string): Player {
     pendingLevels: 0,
     offered: [],
     stacks: new Map<string, number>(),
+    harvest: 0,
   };
 }
 

@@ -7,8 +7,16 @@ import { TouchInput } from './core/touch-input';
 import { GameRenderer } from './render/renderer';
 import { STARTER_WEAPON_ID } from './data/weapons';
 import { applyUpgrade } from './systems/progression';
+import { takeSpoil } from './systems/chests';
 import { Hud } from './ui/hud';
-import { PauseScreen, ResultScreen, StartScreen, UpgradeMenu, mountHelp } from './ui/menus';
+import {
+  ChestMenu,
+  PauseScreen,
+  ResultScreen,
+  StartScreen,
+  UpgradeMenu,
+  mountHelp,
+} from './ui/menus';
 import { StickView } from './ui/stick';
 import { starterChoices } from './ui/starters';
 import { canPause, pauseRun, resumeRun } from './world/pause';
@@ -37,11 +45,12 @@ async function main(): Promise<void> {
   const clicks = new ClickInput();
   clicks.attach(host);
 
-  const hud = new Hud();
+  const hud = new Hud(renderer.paintSprite);
   const stick = new StickView();
   const resultScreen = new ResultScreen(restart);
   const pauseScreen = new PauseScreen(resumeGame, restart);
   const upgradeMenu = new UpgradeMenu(pickUpgrade);
+  const chestMenu = new ChestMenu(pickSpoil);
   const startScreen = new StartScreen(startRun, renderer.paintSprite);
 
   /** The weapons on offer, in the order their cards and their keys appear. */
@@ -175,7 +184,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    if ((phase === 'playing' || phase === 'levelup') && pausePressed()) {
+    if ((phase === 'playing' || phase === 'levelup' || phase === 'chest') && pausePressed()) {
       pauseGame();
       return;
     }
@@ -202,6 +211,19 @@ async function main(): Promise<void> {
       for (let i = 0; i < offers.length; i++) {
         if (input.consumePressed(`Digit${i + 1}`)) {
           pickUpgrade(offers[i].id);
+          return;
+        }
+      }
+      return;
+    }
+
+    // Same digits as the level-up screen, because it is the same gesture on
+    // the same cards. The two never overlap: a level gained on the tick a
+    // chest opened waits in `pendingLevels` until the chest is spent.
+    if (phase === 'chest') {
+      for (let i = 0; i < world.spoils.length; i++) {
+        if (input.consumePressed(`Digit${i + 1}`)) {
+          pickSpoil(world.spoils[i].id);
           return;
         }
       }
@@ -311,6 +333,23 @@ async function main(): Promise<void> {
     syncOverlays();
   }
 
+  /**
+   * Same handling as an upgrade, for the same two reasons.
+   *
+   * A chest can be followed immediately by a level-up screen — a sweep kills
+   * the whole field and every body drops its gem — so the held digit that
+   * spent the spoil must not also take the first card of the menu behind it.
+   */
+  function pickSpoil(id: string): void {
+    const player = chooser();
+    if (player === null) return;
+
+    takeSpoil(world, player, id);
+    input.clearPressed();
+    clicks.clearPending();
+    syncOverlays();
+  }
+
   /** Single source of truth for which overlay is visible. */
   function syncOverlays(): void {
     if (world.phase === 'paused' && picking) {
@@ -330,6 +369,12 @@ async function main(): Promise<void> {
       upgradeMenu.show(picker.offered, picker.stacks);
     } else {
       upgradeMenu.hide();
+    }
+
+    if (world.phase === 'chest') {
+      chestMenu.show(world.spoils);
+    } else {
+      chestMenu.hide();
     }
 
     if (world.phase === 'dead') {

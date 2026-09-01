@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { SPOILS } from '../src/data/spoils';
 import { UPGRADES } from '../src/data/upgrades';
 import { weaponById } from '../src/data/weapons';
-import { describeOffer } from '../src/ui/offers';
+import { describeOffer, describeSpoil } from '../src/ui/offers';
 import type { UpgradeDef } from '../src/data/upgrades';
 
 function upgrade(id: string): UpgradeDef {
@@ -113,5 +114,40 @@ describe('describeOffer', () => {
     }
 
     expect(describeOffer(endless, 3).progress).toBe('Lv 3 → 4');
+  });
+});
+
+describe('describeSpoil', () => {
+  /**
+   * The badge is the only thing separating three cards that otherwise look
+   * alike, and it is read in the couple of seconds a chest screen is up. A
+   * category without a word here would render as a blank corner.
+   */
+  it('gives every spoil in the table a badge', () => {
+    for (const spoil of SPOILS) {
+      const label = describeSpoil(spoil);
+      expect(label.badge.length).toBeGreaterThan(0);
+      expect(label.badge).toBe(label.badge.toUpperCase());
+    }
+  });
+
+  it('badges each spoil by the question it answers', () => {
+    const badges = new Map(SPOILS.map((spoil) => [spoil.id, describeSpoil(spoil).badge]));
+
+    expect(badges.get('mend')).toBe('SURVIVE');
+    expect(badges.get('purge')).toBe('CLEAR');
+    expect(badges.get('harvest')).toBe('GATHER');
+  });
+
+  /**
+   * Spoils never stack and never come back, and a card that looked like an
+   * upgrade would have the player waiting all run for a stat that is not
+   * coming. Every one of them says so, in the place a level-up card puts its
+   * stack count.
+   */
+  it('says on every card that it is spent on the spot', () => {
+    for (const spoil of SPOILS) {
+      expect(describeSpoil(spoil).note).toBe('ONE USE');
+    }
   });
 });

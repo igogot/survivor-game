@@ -106,7 +106,7 @@ function theDeal(): HelpSection {
         kind: 'note',
         term: 'One life',
         detail:
-          'Nothing heals you except a Vitality card, and that only pays back the health it adds. Damage taken is gone for the rest of the run.',
+          'Health does not come back on its own. A chest can hand you half of it, and a Vitality card pays back exactly what it adds — everything else you lose stays lost for the rest of the run.',
       },
       {
         kind: 'note',
@@ -147,14 +147,16 @@ function controls(): HelpSection {
       {
         kind: 'keys',
         keys: Array.from({ length: OFFERS_PER_LEVEL }, (_, index) => String(index + 1)),
-        detail: 'Take that upgrade. Clicking the card does the same.',
+        // One row for both menus, because it is one gesture: the chest screen
+        // is the level-up screen with different cards on it.
+        detail: 'Take that card — an upgrade at a level, a spoil at a chest. Clicking it does the same.',
         audience: 'keys',
       },
       {
         kind: 'keys',
         keys: [],
         gesture: 'Tap a card',
-        detail: 'Take that upgrade.',
+        detail: 'Take that upgrade, or that spoil.',
         audience: 'touch',
       },
       { kind: 'keys', keys: ['Esc'], detail: 'Pause. So does P.', audience: 'keys' },
@@ -195,6 +197,17 @@ function theLoop(): HelpSection {
         term: 'Gems are the only XP',
         detail:
           'An enemy you hurt but did not kill is worth nothing, and one that wanders off the map takes its gem with it.',
+      },
+      {
+        kind: 'note',
+        term: 'Chests are somewhere else',
+        detail: `One chest waits on the ground at a time and it is always behind you, on ground you have already crossed. An arrow at the edge of the screen points at it until you take it — it never expires, and the next one is not placed until this one is gone.`,
+      },
+      {
+        kind: 'note',
+        term: 'A chest holds one of three',
+        detail:
+          'Health, the horde killed where it stands, or every gem you walked past coming to you. One of each, always, so there is something in it whatever kind of trouble you are in. It is spent the moment you take it.',
       },
       {
         kind: 'note',

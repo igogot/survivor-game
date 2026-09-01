@@ -39,8 +39,9 @@ function play(seed: number): { world: World; sample: Sample } {
 
   const world = runBot(seed, CAP, (w) => {
     const hp = w.players[0].hp;
-    // The player loses health only to a contact hit, so a drop between ticks is
-    // exactly one hit — no need to reach into the damage system to count them.
+    // A drop between ticks is exactly one hit — nothing else takes health, and
+    // the one thing that gives it back only ever moves this the other way — so
+    // there is no need to reach into the damage system to count them.
     if (hp < lastHp) {
       sample.hits++;
       if (w.time >= LATE_AFTER) sample.lateHits++;
