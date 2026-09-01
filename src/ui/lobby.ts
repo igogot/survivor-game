@@ -40,12 +40,18 @@ export class LobbyView {
   private readonly roomRoster = requireElement('room-roster');
   private readonly copyButton = requireElement('room-copy');
   private readonly joinConfirm = requireElement('join-confirm');
+  private readonly chatPanel = requireElement('room-chat');
+  private readonly chatLog = requireElement('chat-log');
+  private readonly chatForm = requireElement('chat-form');
+  private readonly chatInput = requireElement('chat-input');
 
   private readonly channel: LobbyChannel;
   private readonly lobby: Lobby;
 
   private step: LobbyStep = 'party';
   private knock: ReturnType<typeof setTimeout> | null = null;
+  /** Lines already on screen, so an arriving one can open a shut panel. */
+  private heard = 0;
   private copied: ReturnType<typeof setTimeout> | null = null;
 
   /** `onBack` is the way out of multiplayer entirely, back to the mode choice. */
@@ -68,6 +74,30 @@ export class LobbyView {
       this.attemptJoin();
     });
 
+    this.chatForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const field = this.chatInput as HTMLInputElement;
+      this.lobby.say(field.value);
+      field.value = '';
+      this.render();
+    });
+
+    // Enter opens the chat, and Escape closes it. Bound on the window rather
+    // than on a button because that is the gesture the request was for and the
+    // one every game with a lobby has taught players — but only while the room
+    // is actually on screen, and never while a field already has the keyboard.
+    window.addEventListener('keydown', (event) => {
+      if (this.roomPanel.hidden) return;
+      if (event.key === 'Escape' && this.chatting()) {
+        this.closeChat();
+        return;
+      }
+      if (event.key !== 'Enter' || event.target instanceof HTMLInputElement) return;
+
+      event.preventDefault();
+      this.openChat();
+    });
+
     // Typed straight into the shape the code has, so what is on screen while
     // typing is what will be compared. Nothing is rejected here — a wrong
     // character is a message on submit, not a key that silently does nothing.
@@ -80,6 +110,21 @@ export class LobbyView {
   /** Enters the multiplayer flow at its first panel. */
   open(): void {
     this.show('party');
+  }
+
+  private chatting(): boolean {
+    return !this.chatPanel.hidden;
+  }
+
+  private openChat(): void {
+    this.chatPanel.hidden = false;
+    this.render();
+    this.chatInput.focus();
+  }
+
+  private closeChat(): void {
+    this.chatPanel.hidden = true;
+    this.chatInput.blur();
   }
 
   hide(): void {
@@ -103,6 +148,13 @@ export class LobbyView {
       this.joinError.hidden = true;
       (this.joinInput as HTMLInputElement).value = '';
       this.joinInput.focus();
+    }
+
+    // A fresh room starts quiet. Whatever was said in the last one is not this
+    // room's business, and `Lobby` has already forgotten it.
+    if (step !== 'room') {
+      this.chatPanel.hidden = true;
+      (this.chatInput as HTMLInputElement).value = '';
     }
 
     this.render();
@@ -137,11 +189,18 @@ export class LobbyView {
    */
   private afterChange(): void {
     const state = this.lobby.state();
+    const said = state.chat.length;
 
     if (state.phase === 'joined') {
       this.clearKnock();
       if (this.step !== 'room') this.show('room');
     }
+
+    // Somebody spoke while the chat was shut. Opening it is the only thing that
+    // is not a lie: a closed panel that quietly collects what your team said to
+    // you is worse than having no chat at all.
+    if (said > this.heard && this.step === 'room') this.chatPanel.hidden = false;
+    this.heard = said;
 
     if (state.phase === 'error') {
       this.clearKnock();
@@ -204,7 +263,49 @@ export class LobbyView {
     this.joinConfirm.textContent =
       state.phase === 'joining' ? t('join.searching') : t('join.confirm');
     (this.joinInput as HTMLInputElement).placeholder = t('join.placeholder');
+    (this.chatInput as HTMLInputElement).placeholder = t('room.chatPlaceholder');
+
+    this.chatLog.replaceChildren(...chatRows(state));
+    // Pinned to the newest line. A log that has to be scrolled to see the reply
+    // you were waiting for is a log nobody reads.
+    this.chatLog.scrollTop = this.chatLog.scrollHeight;
   }
+}
+
+/**
+ * What has been said, oldest first.
+ *
+ * The seat number comes off the line rather than being looked up now — see
+ * `ChatLine`. An empty log says so out loud, and says why it might be empty for
+ * somebody who has only just walked in.
+ */
+function chatRows(state: LobbyState): HTMLElement[] {
+  if (state.chat.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'chat--empty';
+    empty.textContent = `${t('room.chatEmpty')} ${t('room.chatLate')}`;
+    return [empty];
+  }
+
+  return state.chat.map((line) => {
+    const row = document.createElement('li');
+    if (line.mine) row.className = 'mine';
+
+    const who = document.createElement('span');
+    who.className = 'who';
+    // A seat of -1 means the speaker had already left the roster by the time
+    // their line landed; the words still happened, so they are still shown.
+    who.textContent =
+      line.seat < 0 ? '—' : `${t('room.chatFrom', { n: line.seat + 1 })}:`;
+
+    const text = document.createElement('span');
+    // textContent, never innerHTML: this is the one string on the page written
+    // by another person.
+    text.textContent = line.text;
+
+    row.append(who, text);
+    return row;
+  });
 }
 
 /**

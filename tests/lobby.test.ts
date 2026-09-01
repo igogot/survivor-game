@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CODE_ALPHABET, CODE_LENGTH, isCode, makeCode, normaliseCode } from '../src/net/code';
-import { Lobby, MAX_PARTY } from '../src/net/lobby';
+import { CHAT_HISTORY, Lobby, MAX_PARTY, MAX_SAID } from '../src/net/lobby';
 import type { LobbyMessage } from '../src/net/lobby';
 
 /**
@@ -217,6 +217,18 @@ describe('a waiting room', () => {
     expect(bystander.state().members).toHaveLength(0);
   });
 
+  it('forgets what was said in the room before', () => {
+    const shared = room();
+    const host = shared.join();
+
+    host.host();
+    host.say('first room');
+    host.leave();
+    host.host();
+
+    expect(host.state().chat).toHaveLength(0);
+  });
+
   it('gives everyone in the room the same list in the same order', () => {
     const shared = room();
     const host = shared.join();
@@ -230,5 +242,146 @@ describe('a waiting room', () => {
     expect(first.state().members).toEqual(host.state().members);
     expect(second.state().members).toEqual(host.state().members);
     expect(host.state().members[0]).toBe(host.self);
+  });
+});
+
+/**
+ * Talking in the room.
+ *
+ * A chat line is not a fact two people could disagree on, so it does not go
+ * through the host the way the roster does — everyone keeps a log of what
+ * reached them. What that costs is written down rather than hidden: somebody
+ * who joins late did not hear what came before, and there is no history to
+ * hand them that would not be invented.
+ */
+describe('talking in the room', () => {
+  it('says nothing until there is a room to say it in', () => {
+    const lobby = room().join();
+    lobby.say('anybody there');
+
+    expect(lobby.state().chat).toHaveLength(0);
+  });
+
+  it('shows a line to everybody in the room, once', () => {
+    const shared = room();
+    const host = shared.join();
+    const guest = shared.join();
+
+    const code = host.host();
+    guest.join(code);
+    host.say('ready?');
+
+    expect(host.state().chat).toEqual([{ seat: 0, text: 'ready?', mine: true }]);
+    expect(guest.state().chat).toEqual([{ seat: 0, text: 'ready?', mine: false }]);
+  });
+
+  /**
+   * A broadcast does not come back to whoever made it, so the sender puts their
+   * own words on their own screen — and a transport that *does* echo must not
+   * then show them twice. This harness echoes, which is the harder case.
+   */
+  it('never doubles a line for the person who said it', () => {
+    const shared = room();
+    const host = shared.join();
+    host.host();
+
+    host.say('hello');
+
+    expect(host.state().chat).toHaveLength(1);
+  });
+
+  it('keeps the room in the order it was said', () => {
+    const shared = room();
+    const host = shared.join();
+    const guest = shared.join();
+
+    const code = host.host();
+    guest.join(code);
+
+    host.say('one');
+    guest.say('two');
+    host.say('three');
+
+    expect(guest.state().chat.map((line) => line.text)).toEqual(['one', 'two', 'three']);
+    expect(guest.state().chat.map((line) => line.seat)).toEqual([0, 1, 0]);
+  });
+
+  it('ignores a stray Enter on an empty field', () => {
+    const shared = room();
+    const host = shared.join();
+    host.host();
+
+    host.say('');
+    host.say('   ');
+
+    expect(host.state().chat).toHaveLength(0);
+  });
+
+  it('trims what is said and caps how much of it there is', () => {
+    const shared = room();
+    const host = shared.join();
+    host.host();
+
+    host.say('  spaced  ');
+    host.say('x'.repeat(MAX_SAID + 50));
+
+    expect(host.state().chat[0].text).toBe('spaced');
+    expect(host.state().chat[1].text).toHaveLength(MAX_SAID);
+  });
+
+  /** A code is a shared secret; somebody outside the roster is not in the room. */
+  it('refuses a line from somebody who is not in the team', () => {
+    const shared = room();
+    const host = shared.join();
+    const code = host.host();
+
+    host.receive({ kind: 'chat', code, from: 'STRANGER', text: 'let me in' });
+
+    expect(host.state().chat).toHaveLength(0);
+  });
+
+  it('does not carry a line into another team on the same channel', () => {
+    const shared = room();
+    const hostA = shared.join(1);
+    const hostB = shared.join(2);
+
+    hostA.host();
+    hostB.host();
+    hostA.say('ours');
+
+    expect(hostB.state().chat).toHaveLength(0);
+  });
+
+  it('keeps a bounded log', () => {
+    const shared = room();
+    const host = shared.join();
+    host.host();
+
+    for (let i = 0; i < CHAT_HISTORY + 10; i++) host.say(`line ${i}`);
+
+    const chat = host.state().chat;
+    expect(chat).toHaveLength(CHAT_HISTORY);
+    expect(chat[chat.length - 1].text).toBe(`line ${CHAT_HISTORY + 9}`);
+  });
+
+  /**
+   * A log is a record of what was said, so a line keeps the seat it was said
+   * from even after the roster shifts under it.
+   */
+  it('does not relabel history when somebody leaves', () => {
+    const shared = room();
+    const host = shared.join();
+    const first = shared.join();
+    const second = shared.join();
+
+    const code = host.host();
+    first.join(code);
+    second.join(code);
+
+    second.say('mine');
+    expect(host.state().chat[0].seat).toBe(2);
+
+    first.leave();
+    expect(host.state().chat[0].seat).toBe(2);
   });
 });

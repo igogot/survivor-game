@@ -17,6 +17,9 @@ import type { SpoilDef } from '../data/spoils';
 import type { UpgradeDef } from '../data/upgrades';
 import type { World } from '../world/world';
 
+/** Which panel of the opening screen is up. */
+type StartStep = 'mode' | 'weapons' | 'party';
+
 /** Side of the figure painted onto a card, matching its atlas frame. */
 const STARTER_ART_SIZE = 64;
 
@@ -43,6 +46,7 @@ export class StartScreen {
   private readonly modePanel = requireElement('step-mode');
   private readonly weaponsPanel = requireElement('step-weapons');
   private readonly lobby: LobbyView;
+  private current: StartStep = 'mode';
 
   /**
    * Built once, not on every show.
@@ -71,7 +75,8 @@ export class StartScreen {
    * than several overlays because everything around the panels — the frame, the
    * language switch, the rules — belongs to all of them.
    */
-  private step(step: 'mode' | 'weapons' | 'party'): void {
+  private step(step: StartStep): void {
+    this.current = step;
     this.modePanel.hidden = step !== 'mode';
     this.weaponsPanel.hidden = step !== 'weapons';
 
@@ -103,6 +108,18 @@ export class StartScreen {
     }
 
     this.keys.replaceChildren(...keyHint(choices));
+  }
+
+  /**
+   * Whether the keys that pick a weapon should do anything.
+   *
+   * The opening screen binds digits and Enter to "take that weapon", and those
+   * belong to exactly one of its panels. Left ungated they fire on the mode
+   * choice and inside the waiting room, where Enter means something else
+   * entirely — pressing it to talk to your team would start a solo run instead.
+   */
+  awaitingWeapon(): boolean {
+    return this.current === 'weapons';
   }
 
   /** Always opens on the mode choice: a restart is a chance to play differently. */
@@ -186,7 +203,7 @@ function keyHint(choices: readonly StarterChoice[]): readonly Node[] {
 }
 
 /**
- * The three lines that mix a sentence with keycaps.
+ * The lines that mix a sentence with keycaps.
  *
  * They cannot be plain `data-i18n` text, because the caps sit inside the
  * sentence and land in a different place in each language. `textNodes` splits
@@ -203,6 +220,7 @@ export function renderKeyLines(offers: number): void {
     r: [keycap('R')],
   });
   fillLine('result-hint', 'result.hint', { r: [keycap('R')] });
+  fillLine('chat-hint', 'room.chatHint', { keys: [keycap('Enter')] });
 }
 
 function fillLine(

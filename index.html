@@ -589,6 +589,61 @@
         color: var(--accent, #6ee7a0);
       }
 
+      .chat {
+        width: 320px;
+        margin: 4px auto 10px;
+        pointer-events: auto;
+      }
+
+      .chat-log {
+        list-style: none;
+        margin: 0 0 8px;
+        padding: 8px 10px;
+        height: 132px;
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.22);
+        text-align: left;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .chat-log li {
+        margin-bottom: 4px;
+        /* Long words and pasted links have to fold rather than widen the panel. */
+        overflow-wrap: anywhere;
+      }
+
+      .chat-log .who {
+        color: var(--muted);
+        margin-right: 6px;
+      }
+
+      .chat-log li.mine .who {
+        color: var(--accent, #6ee7a0);
+      }
+
+      .chat-log li.chat--empty {
+        color: var(--muted);
+      }
+
+      .chat-input {
+        width: 100%;
+        padding: 7px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.25);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13px;
+      }
+
+      .chat-input:focus-visible {
+        border-color: var(--accent, #6ee7a0);
+        outline: none;
+      }
+
       .roster {
         list-style: none;
         margin: 14px auto;
@@ -1224,6 +1279,24 @@
             Everyone in the room can see it. Nobody outside can guess it.
           </p>
           <ol class="roster" id="room-roster"></ol>
+
+          <!-- Closed until somebody presses Enter, and opened by itself when
+               somebody else says something: a chat that hides what was said is
+               worse than no chat. Filled by LobbyView. -->
+          <div class="chat" id="room-chat" hidden>
+            <ol class="chat-log" id="chat-log"></ol>
+            <form class="chat-form" id="chat-form">
+              <input
+                class="chat-input"
+                id="chat-input"
+                type="text"
+                autocomplete="off"
+                maxlength="160"
+              />
+            </form>
+          </div>
+          <p class="hint keys-only" id="chat-hint"></p>
+
           <p class="hint" data-i18n="room.notYet">The team gathers, but the run is not networked yet.</p>
           <button class="action action--quiet" type="button" id="room-leave" data-i18n="room.leave">
             Leave the team

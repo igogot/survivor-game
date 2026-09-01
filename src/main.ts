@@ -191,6 +191,12 @@ async function main(): Promise<void> {
 
     if (phase === 'paused') {
       if (picking) {
+        // Only on the panel these keys belong to. The opening screen is a flow
+        // now — mode, then a weapon or a team — and Enter inside the waiting
+        // room is how a player talks to their team, not how they abandon it for
+        // a solo run.
+        if (!startScreen.awaitingWeapon()) return;
+
         // The same digits the level-up screen uses, because it is the same
         // gesture: read three cards, pick one, live with it.
         for (let i = 0; i < starters.length; i++) {

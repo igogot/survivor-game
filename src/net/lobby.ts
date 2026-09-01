@@ -13,10 +13,35 @@ import { makeCode, makeMemberId } from './code';
  * The host owns the roster. Guests do not track each other — they display what
  * the host last told them — because two people who both think they are keeping
  * the list is how a lobby ends up showing different rooms to different people.
+ *
+ * Chat is the exception and does not go through the host, because it does not
+ * have to: a line is not a fact about the room that two people could disagree
+ * on, it is a thing somebody said. Everyone keeps their own log of what reached
+ * them, which is also the only honest thing a log can be — somebody who joined
+ * late did not hear what was said before they arrived, and pretending otherwise
+ * would mean inventing a history to hand them.
  */
 
 /** Four, which is what the world can hold. See `World`'s constructor. */
 export const MAX_PARTY = 4;
+
+/**
+ * The longest thing anybody can say at once.
+ *
+ * A waiting room's chat is "ready?", "give me a second", "what's the code
+ * again" — a limit generous enough for all of those and short enough that one
+ * person cannot fill everybody's screen.
+ */
+export const MAX_SAID = 160;
+
+/**
+ * How many lines are kept.
+ *
+ * The log is a room's short-term memory rather than a transcript: nobody
+ * scrolls a lobby, and holding an unbounded array for a screen that exists for
+ * two minutes is a leak with a nice name.
+ */
+export const CHAT_HISTORY = 50;
 
 export type LobbyPhase = 'idle' | 'hosting' | 'joining' | 'joined' | 'error';
 
@@ -28,7 +53,22 @@ export type LobbyMessage =
   | { readonly kind: 'roster'; readonly code: string; readonly members: readonly string[] }
   | { readonly kind: 'full'; readonly code: string; readonly to: string }
   | { readonly kind: 'bye'; readonly code: string; readonly from: string }
-  | { readonly kind: 'closed'; readonly code: string };
+  | { readonly kind: 'closed'; readonly code: string }
+  | { readonly kind: 'chat'; readonly code: string; readonly from: string; readonly text: string };
+
+/**
+ * One thing somebody said.
+ *
+ * The seat is resolved when the line arrives rather than when it is drawn, and
+ * that is deliberate: a log is a record of what was said, so a line must not
+ * change who said it because somebody later left and the roster shifted under
+ * it.
+ */
+export interface ChatLine {
+  readonly seat: number;
+  readonly text: string;
+  readonly mine: boolean;
+}
 
 export interface LobbyState {
   readonly phase: LobbyPhase;
@@ -39,6 +79,8 @@ export interface LobbyState {
   readonly self: string;
   readonly hosting: boolean;
   readonly error: LobbyError | null;
+  /** What has been said in this room, oldest first. */
+  readonly chat: readonly ChatLine[];
 }
 
 export class Lobby {
@@ -47,6 +89,7 @@ export class Lobby {
   private members: string[] = [];
   private hosting = false;
   private error: LobbyError | null = null;
+  private chat: ChatLine[] = [];
 
   readonly self: string;
 
@@ -70,6 +113,7 @@ export class Lobby {
       self: this.self,
       hosting: this.hosting,
       error: this.error,
+      chat: this.chat,
     };
   }
 
@@ -79,6 +123,7 @@ export class Lobby {
     this.members = [this.self];
     this.hosting = true;
     this.error = null;
+    this.chat = [];
     this.phase = 'hosting';
     return this.code;
   }
@@ -95,6 +140,7 @@ export class Lobby {
     this.members = [];
     this.hosting = false;
     this.error = null;
+    this.chat = [];
     this.phase = 'joining';
     this.send({ kind: 'hello', code, from: this.self });
   }
@@ -129,6 +175,29 @@ export class Lobby {
     this.members = [];
     this.hosting = false;
     this.error = null;
+    this.chat = [];
+  }
+
+  /**
+   * Says something to the room.
+   *
+   * Appended locally as well as sent, because a broadcast does not come back to
+   * whoever made it — the sender has to put their own words on their own screen
+   * or the one person who knows what was said is the one who cannot see it.
+   * `receive` drops anything from `self` for the same reason: a transport that
+   * *does* echo must not double every line.
+   *
+   * Empty is not a message. Trimming first means a stray Enter on an untouched
+   * field is nothing rather than a blank row in everybody's log.
+   */
+  say(text: string): void {
+    if (this.phase !== 'hosting' && this.phase !== 'joined') return;
+
+    const said = text.trim().slice(0, MAX_SAID);
+    if (said.length === 0) return;
+
+    this.remember(this.self, said);
+    this.send({ kind: 'chat', code: this.code, from: this.self, text: said });
   }
 
   /**
@@ -156,6 +225,15 @@ export class Lobby {
         break;
       case 'closed':
         if (!this.hosting) this.fail('closed');
+        break;
+      case 'chat':
+        // Only from somebody sitting in this room, and never the echo of one's
+        // own words. A line from a stranger who happens to know the code is the
+        // one thing a shared secret is supposed to make impossible, and
+        // checking is cheaper than trusting it.
+        if (message.from !== this.self && this.members.includes(message.from)) {
+          this.remember(message.from, message.text.trim().slice(0, MAX_SAID));
+        }
         break;
       default: {
         // Exhaustiveness check: a message kind added without a branch here
@@ -199,10 +277,19 @@ export class Lobby {
     this.send({ kind: 'roster', code: this.code, members: this.members });
   }
 
+  private remember(from: string, text: string): void {
+    if (text.length === 0) return;
+
+    const seat = this.members.indexOf(from);
+    this.chat = [...this.chat, { seat, text, mine: from === this.self }];
+    if (this.chat.length > CHAT_HISTORY) this.chat = this.chat.slice(-CHAT_HISTORY);
+  }
+
   private fail(error: LobbyError): void {
     this.phase = 'error';
     this.error = error;
     this.members = [];
     this.hosting = false;
+    this.chat = [];
   }
 }
