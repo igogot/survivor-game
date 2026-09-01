@@ -13,9 +13,35 @@ describe('packFrames', () => {
     for (const spec of SPRITE_SPECS) {
       const frame = layout.frames[spec.name];
       expect(frame, spec.name).toBeDefined();
-      expect(frame.w).toBe(spec.size);
-      expect(frame.h).toBe(spec.size);
+      expect(frame.w, spec.name).toBe(spec.width ?? spec.size);
+      expect(frame.h, spec.name).toBe(spec.size);
     }
+  });
+
+  /**
+   * The lance is drawn on a frame six times wider than it is tall, and shelf
+   * packing measures a shelf by height. Width has to be what decides when a row
+   * is full and height what decides how tall it is; swapping the two puts a
+   * 192px frame into a 32px hole and every sprite after it comes out wearing a
+   * neighbour.
+   */
+  it('lays a frame wider than it is tall without disturbing the shelf', () => {
+    const layout = packFrames([
+      { name: 'grunt', size: 32 },
+      { name: 'spear', size: 32, width: 192 },
+      { name: 'bolt', size: 32 },
+    ]);
+
+    expect(layout.frames.spear.w).toBe(192);
+    // The two square frames share a shelf; the wide one does not fit beside
+    // them and starts a fresh one at the left edge.
+    expect(layout.frames.bolt.y).toBe(layout.frames.grunt.y);
+    expect(layout.frames.spear.y).toBeGreaterThan(layout.frames.bolt.y);
+    expect(layout.frames.spear.x).toBe(layout.frames.bolt.x);
+    expect(layout.width).toBeLessThanOrEqual(256);
+    // Two shelves of 32, not three, and not one 192 tall: the wide frame took
+    // width from the row and height from itself.
+    expect(layout.height).toBeLessThan(32 * 3);
   });
 
   /**

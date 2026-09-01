@@ -120,9 +120,9 @@ export interface Projectile {
    * Which frame the renderer draws, the same way `Enemy.sprite` works.
    *
    * A hex must not look like the player's bolt, and colour cannot carry that
-   * distinction: `variantTint` returns white once the artwork loads, because
-   * artwork brings its own. Shape is what survives the swap, so whoever fires
-   * says what the shot looks like.
+   * distinction: a frame cut from the sheet is not tinted at all, because it
+   * brings its own colour — see `TextureSet.masked`. Shape is what survives
+   * the swap, so whoever fires says what the shot looks like.
    */
   sprite: SpriteName;
 }

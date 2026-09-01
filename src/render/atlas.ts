@@ -21,8 +21,18 @@ import type { SpriteName } from '../data/sprites';
 
 export interface FrameSpec {
   readonly name: SpriteName;
-  /** Frames are square; this is the side in pixels. */
+  /** The side in pixels, and the height of a frame that `width` widens. */
   readonly size: number;
+  /**
+   * Width, for the one frame that is not square.
+   *
+   * The lance is stretched to the reach of the thrust that landed, so a square
+   * frame reached the screen at two fifths of its height and two to five times
+   * its width — every edge in it arrived as a gradient, which is why the weapon
+   * looked like a smear rather than a spear. Drawn at the proportions it is
+   * shown at, the same shape lands between 0.7x and 1.6x instead.
+   */
+  readonly width?: number;
 }
 
 export interface Frame {
@@ -42,7 +52,11 @@ export interface AtlasLayout {
 const PADDING = 2;
 const MAX_WIDTH = 256;
 
-type Draw = (ctx: CanvasRenderingContext2D, size: number) => void;
+/**
+ * Every drawer is handed both sides of its frame. Square frames pass the same
+ * number twice, which is why all but the lance can go on ignoring the second.
+ */
+type Draw = (ctx: CanvasRenderingContext2D, width: number, height: number) => void;
 
 const WHITE = '#ffffff';
 
@@ -339,30 +353,42 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
   },
 
   /**
-   * A spike on a hafted shaft with a guard, pointing up the same axis the
-   * sheet's tile does, so the renderer's one rotation serves both.
+   * A barbed spike on a haft, pointing up the axis the renderer rotates from.
    *
-   * Solid on purpose. Swept barbs were the obvious drawing and they came apart
-   * into loose pixels at a 32px frame — the diagonal that makes a barb a barb
-   * is a sliver by the time it reaches the point. The crossbar carries the same
-   * reading and survives the resolution.
+   * Drawn rather than cut from the sheet, and that is the whole point of it.
+   * The tileset has no harpoon; the two things in it that come closest are a
+   * dagger and a spike on a haft, and the bolt already is the dagger. Both are
+   * grey on brown, and at the size a shot is actually seen — ten pixels
+   * against eighteen — they read as one weapon fired at two strengths. A drawn
+   * frame is a white mask, so it takes the weapon's own colour instead of the
+   * tileset's, and colour is what separates two small shapes across a screen.
+   *
+   * Stubby barbs rather than swept ones: a swept barb is a sliver by the time
+   * it reaches the point, and at a 32px frame it came apart into loose pixels.
+   * These are short enough to stay solid and still say barb.
    */
   harpoon: (ctx, size) => {
     const mid = size / 2;
-    const head = size * 0.4;
-    const headHalf = size * 0.25;
-    const haftHalf = size * 0.06;
-    const barHalf = size * 0.22;
 
     ctx.fillStyle = WHITE;
     ctx.beginPath();
-    ctx.moveTo(mid, 1);
-    ctx.lineTo(mid + headHalf, head);
-    ctx.lineTo(mid - headHalf, head);
+    ctx.moveTo(mid, 0);
+    ctx.lineTo(mid + size * 0.25, size * 0.34);
+    ctx.lineTo(mid - size * 0.25, size * 0.34);
     ctx.closePath();
     ctx.fill();
-    ctx.fillRect(mid - haftHalf, head - 1, haftHalf * 2, size - head);
-    ctx.fillRect(mid - barHalf, size * 0.5, barHalf * 2, size * 0.09);
+
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(mid + side * size * 0.11, size * 0.24);
+      ctx.lineTo(mid + side * size * 0.46, size * 0.46);
+      ctx.lineTo(mid + side * size * 0.3, size * 0.52);
+      ctx.lineTo(mid + side * size * 0.11, size * 0.42);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.fillRect(mid - size * 0.11, size * 0.28, size * 0.22, size * 0.72);
   },
 
   orb: (ctx, size) => {
@@ -371,27 +397,41 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
   },
 
   /**
-   * A lance pointing right, drawn to be stretched.
+   * A lance pointing right, drawn on a frame as long as a lance is.
    *
    * Every other frame is scaled uniformly; this one is squeezed to the length
    * and width of the thrust that just landed, so what is drawn here are the
-   * proportions of the box the lance fills, not of a lance. The head keeps its
-   * share of that box at any reach, which is what stops a long thrust from
-   * reading as a plank.
+   * proportions of the box the lance fills. The frame is six times wider than
+   * it is tall because that box is, and that is what lets the shape survive
+   * the squeeze — it used to be a square arrow blown up along one axis, and it
+   * showed.
+   *
+   * Everything is a fraction of the frame, so reach lengthens a spear rather
+   * than a plank: blade, collar, two bindings and a butt cap all keep their
+   * share of it. The bindings are what stop a fully bought lance, three
+   * hundred pixels of it, from reading as a bar of colour.
    */
-  spear: (ctx, size) => {
-    const mid = size / 2;
-    const shaft = size * 0.42;
-    const neck = size * 0.76;
+  spear: (ctx, width, height) => {
+    const mid = height / 2;
+    const haft = height * 0.2;
+    const band = height * 0.32;
+    const collar = width * 0.77;
+
     ctx.fillStyle = WHITE;
+    // The haft starts at the player's own centre, because that is where the
+    // frame starts: the box runs from the player to the reach of the thrust.
+    ctx.fillRect(0, mid - haft, collar + width * 0.03, haft * 2);
+    ctx.fillRect(0, mid - band, width * 0.035, band * 2);
+    ctx.fillRect(width * 0.26, mid - band, width * 0.03, band * 2);
+    ctx.fillRect(width * 0.4, mid - band, width * 0.03, band * 2);
+    ctx.fillRect(collar, mid - height * 0.34, width * 0.025, height * 0.68);
+
     ctx.beginPath();
-    ctx.moveTo(0, mid - shaft / 2);
-    ctx.lineTo(neck, mid - shaft / 2);
-    ctx.lineTo(neck, 1);
-    ctx.lineTo(size - 1, mid);
-    ctx.lineTo(neck, size - 1);
-    ctx.lineTo(neck, mid + shaft / 2);
-    ctx.lineTo(0, mid + shaft / 2);
+    ctx.moveTo(width * 0.795, mid - height * 0.19);
+    ctx.lineTo(width * 0.85, mid - height * 0.42);
+    ctx.lineTo(width - 1, mid);
+    ctx.lineTo(width * 0.85, mid + height * 0.42);
+    ctx.lineTo(width * 0.795, mid + height * 0.19);
     ctx.closePath();
     ctx.fill();
   },
@@ -473,7 +513,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'bolt', size: 32 },
   { name: 'harpoon', size: 32 },
   { name: 'orb', size: 32 },
-  { name: 'spear', size: 64 },
+  { name: 'spear', size: 32, width: 192 },
   { name: 'ember', size: 64 },
   { name: 'gem', size: 32 },
   { name: 'gemRich', size: 32 },
@@ -484,9 +524,12 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
  * Shelf packing: frames are laid left to right in rows, tallest first, and a
  * new row starts when the next frame would overrun the width.
  *
- * Deliberately simple. The atlas holds a couple of dozen frames and is built once at
+ * Deliberately simple. The atlas holds twenty-three frames and is built once at
  * startup, so a smarter packer would buy nothing and cost a bug surface. It is
  * a pure function of its input, which is what makes the overlap test possible.
+ *
+ * Sorted by height, because that is what a shelf is: a frame wider than it is
+ * tall changes which shelf still has room, never how tall the shelf is.
  */
 export function packFrames(specs: readonly FrameSpec[]): AtlasLayout {
   const ordered = [...specs].sort((a, b) => b.size - a.size || a.name.localeCompare(b.name));
@@ -498,15 +541,16 @@ export function packFrames(specs: readonly FrameSpec[]): AtlasLayout {
   let width = 0;
 
   for (const spec of ordered) {
-    if (x > PADDING && x + spec.size + PADDING > MAX_WIDTH) {
+    const frameWidth = spec.width ?? spec.size;
+    if (x > PADDING && x + frameWidth + PADDING > MAX_WIDTH) {
       x = PADDING;
       y += shelfHeight + PADDING;
       shelfHeight = 0;
     }
 
-    frames[spec.name] = { x, y, w: spec.size, h: spec.size };
+    frames[spec.name] = { x, y, w: frameWidth, h: spec.size };
 
-    x += spec.size + PADDING;
+    x += frameWidth + PADDING;
     shelfHeight = Math.max(shelfHeight, spec.size);
     width = Math.max(width, x);
   }

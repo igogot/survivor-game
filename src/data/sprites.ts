@@ -37,11 +37,19 @@ export type SpriteName =
   | 'hex'
   | 'boss'
   | 'bolt'
-  /** The spike the harpoon throws: heavier and slower than a bolt, and it reads
-   * that way standing still, which is the whole reason it is not a big bolt. */
+  /**
+   * The spike the harpoon throws.
+   *
+   * Drawn rather than cut from the sheet, and so wearing the weapon's own
+   * colour: every spike in the tileset is the bolt's dagger at another size,
+   * which is the one thing this frame exists not to look like.
+   */
   | 'harpoon'
   | 'orb'
-  /** The lance, drawn stretched to the reach of the thrust that landed. */
+  /**
+   * The lance, drawn stretched to the reach of the thrust that landed — which
+   * is why it is the one frame in the atlas wider than it is tall.
+   */
   | 'spear'
   /** One patch of burning ground. A trail is a few dozen of these overlapping. */
   | 'ember'
