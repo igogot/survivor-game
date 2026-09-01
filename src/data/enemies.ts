@@ -215,6 +215,16 @@ export const MAX_ENEMY_RADIUS = ENEMIES.reduce(
   BOSS.radius,
 );
 
+/**
+ * The richest gem any single kill can drop.
+ *
+ * Read rather than typed, because it is what bounds how fast a run can level:
+ * XP has one source, so the most a kill can be worth is the most any enemy is
+ * worth. The boss is in the reduction on purpose — it drops a gem like
+ * everything else, and it is worth two hundred of them.
+ */
+export const MAX_ENEMY_XP = ENEMIES.reduce((max, def) => Math.max(max, def.xp), BOSS.xp);
+
 const BY_ID = new Map<string, EnemyDef>([...ENEMIES, BOSS].map((def) => [def.id, def]));
 
 /**

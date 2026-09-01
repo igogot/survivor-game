@@ -220,7 +220,12 @@ describe('what the screens say', () => {
  * DOM.
  */
 describe('the markup and the tables', () => {
-  const stamped = [...markup.matchAll(/data-i18n(?:-label)?="([^"]+)"/g)].map((match) => match[1]);
+  // Every stamp kind, placeholders included. A typo in one of those renders
+  // as an empty box rather than an error, which is the sort of thing that
+  // ships.
+  const stamped = [...markup.matchAll(/data-i18n(?:-label|-placeholder)?="([^"]+)"/g)].map(
+    (match) => match[1],
+  );
 
   it('finds ids to check in the first place', () => {
     expect(stamped.length).toBeGreaterThan(10);

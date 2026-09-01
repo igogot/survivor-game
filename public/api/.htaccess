@@ -1,0 +1,42 @@
+# Everything in here that is not the endpoint itself is off limits over HTTP.
+#
+# scores.php is served. Nothing else in this directory should ever be fetched:
+# the schema describes the tables, the example names the settings, and
+# config.php holds the database password. PHP reads config.php off the disk, so
+# denying it here costs the API nothing — `require` is a filesystem read, not a
+# request.
+#
+# The reason to deny config.php explicitly, when PHP would normally execute it
+# and return an empty body: if the PHP handler is ever off — a panel toggle, a
+# botched upgrade, a plan change — Apache falls back to serving .php as plain
+# text, and the password goes out over the wire. This is the line that makes
+# that failure boring instead of expensive.
+
+<IfModule mod_authz_core.c>
+  # Apache 2.4
+  <FilesMatch "\.(sql|json|md)$">
+    Require all denied
+  </FilesMatch>
+  <Files "config.php">
+    Require all denied
+  </Files>
+  <Files "config.example.php">
+    Require all denied
+  </Files>
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+  # Apache 2.2 and older
+  <FilesMatch "\.(sql|json|md)$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+  <Files "config.php">
+    Order allow,deny
+    Deny from all
+  </Files>
+  <Files "config.example.php">
+    Order allow,deny
+    Deny from all
+  </Files>
+</IfModule>

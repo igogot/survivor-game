@@ -26,3 +26,11 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # The server's copy of the leaderboard rules, run against the limits the
+      # build just wrote. The endpoint and the game have to agree about what a
+      # valid run is: if they drift, the game offers to submit a score and the
+      # board refuses it, and a player reads that as the board being broken.
+      # Ubuntu runners ship PHP, so this costs a second and needs no setup.
+      - name: Test the API's validation
+        run: php tests/api.php
