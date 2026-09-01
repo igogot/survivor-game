@@ -4,7 +4,7 @@ import { Lobby, MAX_PARTY } from '../net/lobby';
 import { openLobbyChannel } from '../net/channel';
 import { requireElement } from './hud';
 import type { LobbyChannel } from '../net/channel';
-import type { LobbyError, LobbyState } from '../net/lobby';
+import type { LobbyError, LobbyStart, LobbyState } from '../net/lobby';
 
 /**
  * The multiplayer half of the opening screen.
@@ -44,6 +44,8 @@ export class LobbyView {
   private readonly chatLog = requireElement('chat-log');
   private readonly chatForm = requireElement('chat-form');
   private readonly chatInput = requireElement('chat-input');
+  private readonly beginButton = requireElement('room-begin');
+  private readonly beginHint = requireElement('room-begin-hint');
 
   private readonly channel: LobbyChannel;
   private readonly lobby: Lobby;
@@ -54,19 +56,28 @@ export class LobbyView {
   private heard = 0;
   private copied: ReturnType<typeof setTimeout> | null = null;
 
-  /** `onBack` is the way out of multiplayer entirely, back to the mode choice. */
-  constructor(private readonly onBack: () => void) {
+  /**
+   * `onBack` is the way out of multiplayer entirely, back to the mode choice,
+   * and `onStart` is the way forward — the moment a room stops being a room and
+   * becomes a run.
+   */
+  constructor(
+    private readonly onBack: () => void,
+    onStart: (start: LobbyStart) => void,
+  ) {
     this.channel = openLobbyChannel((message) => {
       this.lobby.receive(message);
       this.afterChange();
     });
     this.lobby = new Lobby((message) => this.channel.send(message), secureRandom);
+    this.lobby.onStart = onStart;
 
     requireElement('party-create').addEventListener('click', () => this.create());
     requireElement('party-join').addEventListener('click', () => this.show('join'));
     requireElement('party-back').addEventListener('click', () => this.leaveEntirely());
     requireElement('join-back').addEventListener('click', () => this.show('party'));
     requireElement('room-leave').addEventListener('click', () => this.leaveRoom());
+    this.beginButton.addEventListener('click', () => this.lobby.begin());
     this.copyButton.addEventListener('click', () => void this.copy());
 
     this.joinForm.addEventListener('submit', (event) => {
@@ -264,6 +275,15 @@ export class LobbyView {
       state.phase === 'joining' ? t('join.searching') : t('join.confirm');
     (this.joinInput as HTMLInputElement).placeholder = t('join.placeholder');
     (this.chatInput as HTMLInputElement).placeholder = t('room.chatPlaceholder');
+
+    // Only the host has a button, because only the host's machine runs the
+    // world. A guest is told what it is waiting for rather than shown a control
+    // that would do nothing.
+    const ready = state.hosting && state.members.length > 1;
+    this.beginButton.hidden = !state.hosting;
+    this.beginButton.textContent = ready ? t('room.begin') : t('room.beginAlone');
+    (this.beginButton as HTMLButtonElement).disabled = !ready;
+    this.beginHint.textContent = state.hosting ? t('room.beginHint') : t('room.guestWait');
 
     this.chatLog.replaceChildren(...chatRows(state));
     // Pinned to the newest line. A log that has to be scrolled to see the reply

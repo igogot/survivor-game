@@ -5,7 +5,6 @@ import { autoPauseDisabled } from './dev/flags';
 import { Input } from './core/input';
 import { TouchInput } from './core/touch-input';
 import { GameRenderer } from './render/renderer';
-import { STARTER_WEAPON_ID } from './data/weapons';
 import { applyStaticText } from './i18n';
 import { getLang, initLang } from './i18n/lang';
 import { OFFERS_PER_LEVEL, applyUpgrade } from './systems/progression';
@@ -30,6 +29,11 @@ import { starterChoices } from './ui/starters';
 import { canPause, pauseRun, resumeRun } from './world/pause';
 import { stepWorld } from './world/step';
 import { World } from './world/world';
+import { GuestSession, HostSession } from './net/session';
+import { openGameChannel } from './net/channel';
+import { STARTER_WEAPON_ID } from './data/weapons';
+import type { Session } from './net/session';
+import type { LobbyStart } from './net/lobby';
 import { isAlive, nextLiving, viewedBy } from './world/party';
 import type { Player } from './world/types';
 
@@ -83,7 +87,7 @@ async function main(): Promise<void> {
 
   /** The name this run was put on the board under, if it was. */
   let placedAs: string | undefined;
-  const startScreen = new StartScreen(startRun, renderer.paintSprite);
+  const startScreen = new StartScreen(startRun, renderer.paintSprite, startTeamRun);
 
   /** The weapons on offer, in the order their cards and their keys appear. */
   const starters = starterChoices();
@@ -117,6 +121,15 @@ async function main(): Promise<void> {
   let world = newWorld();
 
   /**
+   * The other machines, or null when there are none.
+   *
+   * Solo is the absence of this rather than a special case of it: with no
+   * session the loop below is exactly the loop this game has always had, which
+   * is what keeps every measured table in the README about the same code.
+   */
+  let net: Session | null = null;
+
+  /**
    * The player at this keyboard.
    *
    * A function rather than a binding because `world` is replaced on restart,
@@ -125,7 +138,7 @@ async function main(): Promise<void> {
    * participant would have to change and nothing else.
    */
   function me(): Player {
-    return world.players[0];
+    return world.players[net?.guest === true ? net.seat : 0];
   }
 
   /** The player whose level-up menu is up, or null when nobody's is. */
@@ -214,6 +227,31 @@ async function main(): Promise<void> {
     syncOverlays();
   }
 
+  /**
+   * Begins a run the lobby put together.
+   *
+   * Everybody builds the same world from the same seed — only the host steps
+   * it, but a guest whose world disagreed about which weapons exist would draw
+   * the wrong figures — and then the two roles part company: the host plays,
+   * and a guest becomes a screen with a mailbox behind it.
+   */
+  function startTeamRun(start: LobbyStart): void {
+    picking = false;
+    placedAs = undefined;
+    world = new World(start.seed, start.members.map(() => STARTER_WEAPON_ID));
+
+    const channel = openGameChannel((message) => net?.receive(world, message));
+    net = start.hosting
+      ? new HostSession(channel, start.members)
+      : new GuestSession(channel, start.members[start.seat], start.seat);
+
+    input.clearPressed();
+    touch.reset();
+    clicks.reset();
+    loop.resync();
+    syncOverlays();
+  }
+
   function tick(dt: number): void {
     // Read the phase once. Branching on `world.phase` directly would let the
     // compiler narrow it for the rest of the block, and the systems below
@@ -289,17 +327,37 @@ async function main(): Promise<void> {
       // inside `steeringSystem` rather than half-obeyed here.
       // A downed player steers nothing and orders nothing. What their mouse
       // does instead is move the camera along the team — see `watching`.
-      if (isAlive(me())) {
-        const order = clicks.consume();
-        if (order !== null) me().moveTarget = renderer.screenToWorld(order.x, order.y);
+      const alive = isAlive(me());
+      const order = alive ? clicks.consume() : null;
+      const intent = alive ? combinedIntent() : { x: 0, y: 0 };
+      if (net?.guest === true) {
+        // A guest changes nothing here. It says what its hands are doing and
+        // waits to be told what happened — the world it holds is a mailbox.
+        if (alive) {
+          net.sendInput(
+            intent.x,
+            intent.y,
+            order === null ? null : renderer.screenToWorld(order.x, order.y),
+          );
+        } else if (clicks.consumePrimary()) {
+          net.watchNext();
+        }
+        return;
+      }
 
-        const intent = combinedIntent();
+      if (alive) {
+        if (order !== null) me().moveTarget = renderer.screenToWorld(order.x, order.y);
         me().intentX = intent.x;
         me().intentY = intent.y;
       } else if (clicks.consumePrimary()) {
         me().watching = nextLiving(world, me().watching);
       }
+
+      // Every guest's hand, written where the local input layer just wrote
+      // this machine's. Both have to land before the world moves.
+      if (net !== null && !net.guest) net.applyInputs(world);
       stepWorld(world, dt);
+      if (net !== null && !net.guest) net.publish(world, dt);
       syncOverlays();
       return;
     }
@@ -422,6 +480,7 @@ async function main(): Promise<void> {
    * seed with this weapon rather than silently ignoring one of the two.
    */
   function startRun(weaponId: string): void {
+    net = null;
     picking = false;
     placedAs = undefined;
     world = newWorld(weaponId);
@@ -463,7 +522,11 @@ async function main(): Promise<void> {
     const player = chooser();
     if (player === null) return;
 
-    applyUpgrade(world, player, id);
+    // On a guest a pick is a request, not a change: the host owns the world and
+    // the cards were its roll. The menu closes when the snapshot saying so
+    // arrives, which is the same rule every other thing on screen follows.
+    if (net?.guest === true) net.pick(id);
+    else applyUpgrade(world, player, id);
     // Otherwise a still-held number key would immediately eat the next offer.
     input.clearPressed();
     // Only the click: a right button still down goes on steering, which is the
@@ -483,7 +546,8 @@ async function main(): Promise<void> {
     const player = chooser();
     if (player === null) return;
 
-    takeSpoil(world, player, id);
+    if (net?.guest === true) net.takeSpoil(id);
+    else takeSpoil(world, player, id);
     input.clearPressed();
     clicks.clearPending();
     syncOverlays();

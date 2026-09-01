@@ -1,4 +1,5 @@
 import type { LobbyMessage } from './lobby';
+import type { NetMessage } from './session';
 
 /**
  * How a lobby's messages travel, and the one place that knows they travel at
@@ -14,8 +15,20 @@ export interface LobbyChannel {
   send(message: LobbyMessage): void;
 }
 
-/** The name every window of this game agrees on. */
-const CHANNEL_NAME = 'survivor-lobby';
+/** The names every window of this game agrees on. */
+const LOBBY_CHANNEL = 'survivor-lobby';
+
+/**
+ * A second channel for the run itself.
+ *
+ * Separate from the lobby's because the two carry different things at different
+ * rates — a roster changes when somebody walks in, a snapshot twenty times a
+ * second — and a lobby that had to skip past thousands of snapshots to find its
+ * own messages would be paying for the run all game. A transport that costs
+ * something to open, which the next one will, would multiplex these onto one
+ * connection instead; the seam is the same either way.
+ */
+const GAME_CHANNEL = 'survivor-game';
 
 /**
  * A channel across the windows of one browser.
@@ -35,11 +48,22 @@ const CHANNEL_NAME = 'survivor-lobby';
  * broken page.
  */
 export function openLobbyChannel(onMessage: (message: LobbyMessage) => void): LobbyChannel {
+  return open(LOBBY_CHANNEL, onMessage);
+}
+
+/** The same, for the messages a run is made of. */
+export function openGameChannel(onMessage: (message: NetMessage) => void): {
+  send(message: NetMessage): void;
+} {
+  return open(GAME_CHANNEL, onMessage);
+}
+
+function open<T>(name: string, onMessage: (message: T) => void): { send(message: T): void } {
   const Channel = globalThis.BroadcastChannel;
   if (Channel === undefined) return SILENT;
 
-  const channel = new Channel(CHANNEL_NAME);
-  channel.onmessage = (event: MessageEvent<LobbyMessage>) => onMessage(event.data);
+  const channel = new Channel(name);
+  channel.onmessage = (event: MessageEvent<T>) => onMessage(event.data);
 
   // Never closed: the page owns it for as long as the page exists, and there is
   // no second one to leak. A transport that does need taking down can add that
@@ -48,4 +72,4 @@ export function openLobbyChannel(onMessage: (message: LobbyMessage) => void): Lo
   return { send: (message) => channel.postMessage(message) };
 }
 
-const SILENT: LobbyChannel = { send: () => {} };
+const SILENT = { send: () => {} };
