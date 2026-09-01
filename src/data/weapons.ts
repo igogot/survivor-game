@@ -307,19 +307,33 @@ export const EMBER: TrailWeaponDef = {
   playerSprite: 'playerEmber',
   sprite: 'ember',
   // Three burns a second. The bar is the runner, the fastest thing in the
-  // horde at 96: it crosses a 30-wide patch in 0.62s, so anything at or under
+  // horde at 96: it crosses a 38-wide patch in 0.79s, so anything at or under
   // half of that catches it twice on the way through.
   cooldown: 0.3,
-  // Per burn, and therefore small: everything standing in the fire takes it,
-  // three times a second, for as long as it stands there.
-  damage: 5,
-  damagePerLevel: 2,
+  /*
+   * Per burn, and measured rather than chosen.
+   *
+   * It started at 5 — arithmetic said the ribbon already put more damage on
+   * the ground per second than the shockwave puts around the player, so a
+   * small number looked right. The stand disagreed twice over. At 5 the trail
+   * killed more than anything else in the game and still cost the run eighty
+   * seconds and half its bosses: it shreds grunts behind a fleeing player and
+   * does nothing about the body that actually reaches them, so every level
+   * spent on it was a level not spent on the ring or the wave.
+   *
+   * The response to fixing that turned out to be a threshold rather than a
+   * slope. Nearly doubling it to 9 bought 21s on twenty-four seeds, against a
+   * standard error of 32 — nothing. 14 bought back the whole gap. Halfway up
+   * a threshold is the same place as the bottom.
+   */
+  damage: 14,
+  damagePerLevel: 6,
   color: 0xff7a3c,
-  radius: 30,
-  radiusPerLevel: 4,
+  radius: 38,
+  radiusPerLevel: 8,
   // Long enough that the ribbon behind a running player is most of a screen,
   // short enough that a player who doubles back finds cold ground.
-  life: 3.2,
+  life: 4,
   spacing: 0.75,
 };
 

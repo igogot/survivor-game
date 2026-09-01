@@ -75,6 +75,10 @@ const PREFERENCE = [
  * not a good player — it cannot plan, and it will happily reverse into a second
  * crowd — but it kites, which is the one skill the genre actually requires, and
  * it is deterministic, so two runs of the same seed are the same run.
+ *
+ * It always opens with the bolt, which is what `new World(seed)` grants. The
+ * opening choice is therefore the one thing in the game no stand here weighs;
+ * see the README for what a one-off probe measured about it.
  */
 export function runBot(seed: number, seconds: number, watch?: (world: World) => void): World {
   const world = new World(seed);
