@@ -395,6 +395,109 @@ describe('lunge spear', () => {
 });
 
 /**
+ * The bolt's extra shots.
+ *
+ * They used to be a fan around one target, and the card that bought them was
+ * really buying a wider cone: two of the three shots sailed past the enemy the
+ * volley was aimed at. Each shot now picks its own enemy, so the thing the
+ * tests have to hold is that a volley never spends two shots on one body and
+ * never fires at a body twice as far away as one it skipped.
+ */
+describe('auto bolt targeting', () => {
+  /** Every shot the bolt has in the air, by its colour. */
+  function boltShots(world: World) {
+    return world.projectiles.filter((projectile) => projectile.color === BOLT.color);
+  }
+
+  /** Which of `enemies` each shot is pointed at, by angle. */
+  function aimedAt(world: World, enemies: readonly Enemy[]): Enemy[] {
+    const player = world.player;
+    return boltShots(world).map((shot) => {
+      const angle = Math.atan2(shot.vy, shot.vx);
+      let best = enemies[0];
+      let closest = Infinity;
+      for (const enemy of enemies) {
+        const to = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+        const gap = Math.abs(Math.atan2(Math.sin(to - angle), Math.cos(to - angle)));
+        if (gap < closest) {
+          closest = gap;
+          best = enemy;
+        }
+      }
+      expect(closest, 'a shot pointed at nothing').toBeLessThan(0.01);
+      return best;
+    });
+  }
+
+  it('shoots the nearest enemy with the one projectile it starts with', () => {
+    const world = new World(11);
+    const near = placeEnemy(world, 60, 0);
+    placeEnemy(world, 0, 200);
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(boltShots(world)).toHaveLength(1);
+    expect(aimedAt(world, world.enemies)).toEqual([near]);
+  });
+
+  it('spends each extra projectile on another enemy, nearest first', () => {
+    const world = new World(11);
+    applyUpgrade(world, 'multishot');
+    applyUpgrade(world, 'multishot');
+
+    const first = placeEnemy(world, 50, 0);
+    const second = placeEnemy(world, 0, 70);
+    const third = placeEnemy(world, -90, 0);
+    const tooFar = placeEnemy(world, 0, -(BOLT.range + 50));
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    const targets = aimedAt(world, world.enemies);
+    expect(targets).toHaveLength(3);
+    expect(new Set(targets).size, 'two shots on one body').toBe(3);
+    expect(targets).toContain(first);
+    expect(targets).toContain(second);
+    expect(targets).toContain(third);
+    expect(targets).not.toContain(tooFar);
+  });
+
+  /**
+   * The deliberate cost of aiming each shot: a thin field is a weaker volley.
+   * The old fan always fired everything it had, at empty ground if need be.
+   */
+  it('fires only as many shots as there are enemies to shoot', () => {
+    const world = new World(11);
+    applyUpgrade(world, 'multishot');
+    applyUpgrade(world, 'multishot');
+
+    placeEnemy(world, 40, 0);
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(weaponState(world, 'bolt').projectiles).toBe(3);
+    expect(boltShots(world)).toHaveLength(1);
+  });
+
+  /**
+   * An empty field must not spend the volley, or a wave arriving one tick after
+   * a wasted shot walks in free.
+   */
+  it('keeps the shot loaded while there is nothing in range', () => {
+    const world = new World(11);
+    placeEnemy(world, BOLT.range + 100, 0);
+    rebuildGrid(world);
+
+    weaponSystem(world, DT);
+
+    expect(boltShots(world)).toHaveLength(0);
+    expect(weaponState(world, 'bolt').cooldown).toBeLessThanOrEqual(0);
+  });
+});
+
+/**
  * The world hands out an Auto Bolt on construction, so a harpoon test that
  * looked at `world.projectiles[0]` would be reading the bolt's shot. Colour is
  * how a projectile says which weapon fired it.

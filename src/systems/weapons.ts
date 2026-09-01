@@ -94,25 +94,66 @@ export function grantWeapon(world: World, defId: string): void {
   world.weapons.push(createWeaponState(defId));
 }
 
+/**
+ * The enemies a volley is currently aimed at.
+ *
+ * Module-level so a volley allocates nothing, and emptied again before the
+ * function returns: these are pooled bodies, and a reference left here would
+ * keep a corpse alive for the rest of the run.
+ */
+const VOLLEY: (Enemy | null)[] = [];
+
+/**
+ * One shot per enemy, at the nearest ones.
+ *
+ * The extra shots used to be a fan around a single target — the same enemy
+ * shot at from three angles, which mostly meant two shots sailing past it.
+ * Aiming each one at its own target spends them all on something, and it is
+ * what the card says: a second shot is a second enemy, not a wider cone.
+ *
+ * A thinner field is therefore a weaker volley, deliberately. With one enemy in
+ * range the weapon fires once however many projectiles it owns, because there
+ * is nothing else to fire at — and a lone enemy is not the situation the card
+ * was bought for.
+ *
+ * An empty field spends nothing at all: the cooldown is only set once there is
+ * something to shoot, so the bolt is loaded the moment a wave arrives.
+ */
 function stepBolt(world: World, def: BoltWeaponDef, state: WeaponState, dt: number): void {
   state.cooldown -= dt;
   if (state.cooldown > 0) return;
 
-  const target = findNearestEnemy(world, def.range);
-  if (target === null) return;
+  const count = state.projectiles;
+  let aimed = 0;
+
+  while (aimed < count) {
+    const target = findNearestEnemy(world, def.range, VOLLEY, aimed);
+    if (target === null) break;
+    VOLLEY[aimed++] = target;
+  }
+
+  if (aimed === 0) return;
 
   const player = world.player;
   state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
-
-  const baseAngle = Math.atan2(target.y - player.y, target.x - player.x);
-  const count = state.projectiles;
   const damage = weaponDamage(def, state) * player.stats.damageMul;
 
-  for (let i = 0; i < count; i++) {
-    // Fan the shots symmetrically around the aim direction.
-    const offset = (i - (count - 1) / 2) * def.spread;
-    fire(world, def, state, baseAngle + offset, damage, state.pierce);
+  for (let i = 0; i < aimed; i++) {
+    const target = VOLLEY[i];
+    if (target === null) continue;
+    fire(
+      world,
+      def,
+      state,
+      Math.atan2(target.y - player.y, target.x - player.x),
+      damage,
+      state.pierce,
+    );
   }
+
+  // The bodies go back to the pool the moment they die; nothing of them should
+  // outlive the volley that aimed at them.
+  for (let i = 0; i < aimed; i++) VOLLEY[i] = null;
 }
 
 function stepOrbit(world: World, def: OrbitWeaponDef, state: WeaponState, dt: number): void {
@@ -346,8 +387,21 @@ function fire(
 /**
  * Runs once per shot rather than per frame, so scanning the cells inside the
  * weapon's range is cheap enough to keep it simple.
+ *
+ * `taken` is the enemies already claimed by this volley, and `takenCount` how
+ * many of them count — the array outlives the call and its tail is stale. A
+ * plain scan per shot rather than one sorted pass: a volley is a handful of
+ * shots and the crowd is hundreds deep, so a few more passes over it cost less
+ * than ordering it, and nothing has to be allocated to hold the order.
  */
-function findNearestEnemy(world: World, range: number): Enemy | null {
+const NOBODY: readonly (Enemy | null)[] = [];
+
+function findNearestEnemy(
+  world: World,
+  range: number,
+  taken: readonly (Enemy | null)[] = NOBODY,
+  takenCount = 0,
+): Enemy | null {
   const { player, grid, enemies, scratch } = world;
   grid.query(player.x, player.y, range, scratch);
 
@@ -357,6 +411,15 @@ function findNearestEnemy(world: World, range: number): Enemy | null {
   for (let i = 0; i < scratch.length; i++) {
     const enemy = enemies[scratch[i]];
     if (enemy === undefined || enemy.hp <= 0) continue;
+
+    let claimed = false;
+    for (let j = 0; j < takenCount; j++) {
+      if (taken[j] === enemy) {
+        claimed = true;
+        break;
+      }
+    }
+    if (claimed) continue;
 
     const distance = dist2(player.x, player.y, enemy.x, enemy.y);
     if (distance < nearestDistance) {
