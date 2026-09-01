@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { SPRITE_DRAWERS, SPRITE_SPECS, emberRadius, packFrames } from '../src/render/atlas';
+import {
+  EMBER_FRAMES,
+  EMBER_GRID,
+  SPRITE_DRAWERS,
+  SPRITE_SPECS,
+  emberCellFits,
+  emberFramePixels,
+  packFrames,
+} from '../src/render/atlas';
 import type { Frame } from '../src/render/atlas';
 
 function overlaps(a: Frame, b: Frame): boolean {
@@ -113,45 +121,97 @@ describe('sprite catalogue', () => {
  * The one drawn shape that makes a promise about the simulation.
  *
  * A patch of burning ground damages its full radius, and this project's rule is
- * that a weapon hits where it is drawn. The tongues therefore only ever go
- * inward: a crest that overshot would paint fire on ground that does not burn,
- * which is the blade ring's old lie in a different shape. Nothing else would
- * catch it — an atlas frame is pixels, and pixels have no test.
+ * that a weapon hits where it is drawn. The fire may therefore never be painted
+ * past the circle it burns — a lit cell is a square of paint, so it is the
+ * corner of the cell that has to be inside and not its middle. Nothing else
+ * would catch a stray pixel: an atlas frame is pixels, and pixels have no test.
  */
-describe('the ember outline', () => {
-  const SAMPLES = 4096;
-  const radii = Array.from({ length: SAMPLES }, (_, i) => emberRadius((i * Math.PI * 2) / SAMPLES));
+describe('the ember frames', () => {
+  const frames = EMBER_FRAMES.map((_, index) => emberFramePixels(index));
+  const middle = EMBER_GRID / 2;
 
-  it('never reaches past what the patch burns', () => {
-    for (const radius of radii) expect(radius).toBeLessThanOrEqual(1);
+  /** How far the middle of a cell sits from the middle of the frame. */
+  function reach(col: number, row: number): number {
+    return Math.hypot(col + 0.5 - middle, row + 0.5 - middle);
+  }
+
+  function lit(rows: readonly string[]): { col: number; row: number; mark: string }[] {
+    const cells: { col: number; row: number; mark: string }[] = [];
+    rows.forEach((line, row) => {
+      for (let col = 0; col < line.length; col++) {
+        if (line[col] !== '.') cells.push({ col, row, mark: line[col] });
+      }
+    });
+    return cells;
+  }
+
+  it('has a frame for every name the renderer cycles', () => {
+    expect(EMBER_FRAMES.length).toBeGreaterThan(1);
+
+    for (const [index, name] of EMBER_FRAMES.entries()) {
+      expect(emberFramePixels(index), name).toHaveLength(EMBER_GRID);
+      expect(SPRITE_DRAWERS[name], name).toBeTypeOf('function');
+      expect(
+        SPRITE_SPECS.some((spec) => spec.name === name),
+        `${name} is cycled but never packed`,
+      ).toBe(true);
+    }
   });
 
-  it('reaches the edge somewhere, or the fire falls short of its own burn', () => {
-    expect(Math.max(...radii)).toBeGreaterThan(0.999);
+  it('is a square grid of three kinds of cell and nothing else', () => {
+    for (const rows of frames) {
+      for (const line of rows) {
+        expect(line).toHaveLength(EMBER_GRID);
+        expect(line).toMatch(/^[#+.]+$/);
+      }
+    }
+  });
+
+  it('never paints past what the patch burns', () => {
+    frames.forEach((rows, index) => {
+      for (const cell of lit(rows)) {
+        expect(
+          emberCellFits(cell.col, cell.row),
+          `frame ${index} lights (${cell.col}, ${cell.row}) outside the burn`,
+        ).toBe(true);
+      }
+    });
   });
 
   /**
-   * The shape has to be tongues rather than a wobble — that is the whole
-   * difference from what it replaced. Deep troughs are what makes a tongue a
-   * tongue; too deep and a lone patch stops covering the ground it burns.
+   * The other end of the same promise. Fire drawn well inside its own radius
+   * would be honest and useless: the ribbon would look narrower than the ground
+   * it kills on, and the player would walk enemies through fire they cannot see.
    */
-  it('cuts deep enough to read as tongues and no deeper', () => {
-    const lowest = Math.min(...radii);
-    expect(lowest).toBeLessThan(0.6);
-    expect(lowest).toBeGreaterThan(0.45);
+  it('reaches the edge of what it burns', () => {
+    frames.forEach((rows, index) => {
+      const farthest = Math.max(...lit(rows).map((cell) => reach(cell.col, cell.row)));
+      expect(farthest, `frame ${index}`).toBeGreaterThan(middle - 1.6);
+    });
   });
 
-  it('closes on itself, so the outline has no seam', () => {
-    expect(emberRadius(0)).toBeCloseTo(emberRadius(Math.PI * 2), 10);
+  it('has a hot middle and a cooler edge', () => {
+    frames.forEach((rows, index) => {
+      const marks = lit(rows);
+      expect(marks.filter((cell) => cell.mark === '#').length, `frame ${index}`).toBeGreaterThan(20);
+      expect(marks.filter((cell) => cell.mark === '+').length, `frame ${index}`).toBeGreaterThan(20);
+
+      // The hot cells are the middle of the fire, not scattered through it.
+      const hot = marks.filter((cell) => cell.mark === '#');
+      const outermostHot = Math.max(...hot.map((cell) => reach(cell.col, cell.row)));
+      const outermostDim = Math.max(
+        ...marks.filter((cell) => cell.mark === '+').map((cell) => reach(cell.col, cell.row)),
+      );
+      expect(outermostHot, `frame ${index}`).toBeLessThan(outermostDim);
+    });
   });
 
   /**
-   * Turned by its own position, so a shape with one axis of symmetry would give
-   * a ribbon of patches that all look alike however they are rotated.
+   * Four identical frames are a still picture with extra steps, and that is
+   * exactly what a careless retune would leave behind.
    */
-  it('is not the same shape read from any two sides', () => {
-    const half = SAMPLES / 2;
-    const mirrored = radii.slice(0, half).map((radius, i) => Math.abs(radius - radii[i + half]));
-    expect(Math.max(...mirrored)).toBeGreaterThan(0.1);
+  it('shows a different picture in every frame', () => {
+    const seen = new Set(frames.map((rows) => rows.join('|')));
+    expect(seen.size).toBe(frames.length);
   });
 });

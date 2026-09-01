@@ -12,6 +12,7 @@ import {
   weaponById,
 } from '../data/weapons';
 import { FLASH_TIME } from '../systems/damage';
+import { EMBER_FRAMES } from './atlas';
 import { GRID_TEXTURE_SIZE, createTextures } from './textures';
 import type { TextureSet } from './textures';
 import type { SpriteName } from '../data/sprites';
@@ -33,8 +34,14 @@ const PLAYER_COLOR = 0x6ee7a0;
  */
 const FLAME_ALPHA = 0.42;
 
-/** Radians of turn per world unit, to break up the ribbon. See `drawFlames`. */
-const FLAME_TURN = 0.05;
+/**
+ * Seconds one ember frame is held.
+ *
+ * Nine a second: fast enough to read as fire rather than as a slideshow, slow
+ * enough that a single frame is on screen for more than one drawn frame at
+ * sixty hertz, which is what keeps it from turning into a blur.
+ */
+const EMBER_FRAME_TIME = 0.11;
 
 /** Diameter of the mark left where a click sent the player, in world units. */
 const MARKER_SIZE = 26;
@@ -266,24 +273,41 @@ export class GameRenderer {
    * while still burning its full width would be the blade ring's old lie in a
    * different shape.
    *
-   * Each patch is turned by its own position. The frame has a wobbling edge so
-   * a ribbon does not read as a row of circles, and without the rotation that
-   * wobble would line up between neighbours and read as a scallop instead. The
-   * angle is a pure function of where the patch lies, so it costs the world
-   * nothing to store and the simulation no random draw — which matters, because
+   * Two things stop a ribbon from reading as a row of identical blobs, and
+   * both are pure functions of where a patch lies: which of the four frames it
+   * starts on, and which quarter turn it is drawn at. Neither costs the world
+   * anything to store and neither takes a random draw — which matters, because
    * a draw here would move every seed in the balance table.
+   *
+   * Quarter turns and not the free angle this used to use. The frame is pixel
+   * art now, and pixel art turned by an arbitrary angle stops being pixel art:
+   * the grid smears into a gradient. A quarter turn maps whole cells onto whole
+   * cells, so four of them are four sharp pictures rather than one soft one.
+   *
+   * The flicker runs on `world.time` rather than a wall clock, so it stops with
+   * the run: fire dancing over a paused game is a game that looks like it is
+   * still going.
    */
   private drawFlames(world: World): void {
     const flames = world.flames;
     this.resize(this.flameSprites, this.flameLayer, flames.length, this.textures.sprites.ember);
 
+    const step = Math.floor(world.time / EMBER_FRAME_TIME);
+
     for (let i = 0; i < flames.length; i++) {
       const flame = flames[i];
       const sprite = this.flameSprites[i];
 
+      // Two readings of the same position, kept apart on purpose: one key for
+      // both would tie a patch's frame to its rotation, and the ribbon would
+      // show four combinations instead of sixteen.
+      const phase = hash(flame.x * 0.17 + flame.y * 0.53) % EMBER_FRAMES.length;
+      const turn = hash(flame.x * 0.41 + flame.y * 0.29) % 4;
+
+      sprite.texture = this.textures.sprites[EMBER_FRAMES[(phase + step) % EMBER_FRAMES.length]];
       sprite.position.set(flame.x, flame.y);
       fit(sprite, flame.radius * 2);
-      sprite.rotation = (flame.x + flame.y) * FLAME_TURN;
+      sprite.rotation = turn * (Math.PI / 2);
       sprite.tint = this.tintFor('ember', flame.color);
       // Fading out is how a patch says it is nearly spent, and the only warning
       // a player gets that the ground behind them has gone cold.
@@ -532,6 +556,16 @@ export class GameRenderer {
       pool[i].visible = i < needed;
     }
   }
+}
+
+/**
+ * A small whole number from a coordinate, for picking a frame or a turn.
+ *
+ * A patch never moves, so the answer is fixed for its whole life — the fire
+ * flickers because the clock advances, not because the ground wanders.
+ */
+function hash(value: number): number {
+  return Math.abs(Math.round(value));
 }
 
 /**
