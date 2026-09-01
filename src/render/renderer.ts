@@ -20,6 +20,9 @@ import type { World } from '../world/world';
 
 const GEM_SIZE = 11;
 
+/** The player's own green, worn by the figure and by the mark it was sent to. */
+const PLAYER_COLOR = 0x6ee7a0;
+
 /** Diameter of the mark left where a click sent the player, in world units. */
 const MARKER_SIZE = 26;
 
@@ -96,15 +99,13 @@ export class GameRenderer {
     // change it.
     this.playerSprite = new Sprite(this.textures.sprites.playerBolt);
     this.playerSprite.anchor.set(0.5);
-    // Artwork carries its own colour; only the white shapes need tinting into it.
-    this.playerSprite.tint = this.variantTint(0x6ee7a0);
 
     this.markerSprite = new Sprite(this.textures.sprites.ring);
     this.markerSprite.anchor.set(0.5);
     // Kept faint on purpose: it is a note about the ground, and the player has
     // a horde to read. Tinted unconditionally — this is interface, not an
     // entity, so it stays the same colour whatever artwork is loaded.
-    this.markerSprite.tint = 0x6ee7a0;
+    this.markerSprite.tint = PLAYER_COLOR;
     this.markerSprite.alpha = 0.4;
     this.markerSprite.visible = false;
     fit(this.markerSprite, MARKER_SIZE);
@@ -147,6 +148,10 @@ export class GameRenderer {
     this.background.tilePosition.set(cameraX % GRID_TEXTURE_SIZE, cameraY % GRID_TEXTURE_SIZE);
 
     this.playerSprite.texture = this.textures.sprites[world.player.sprite];
+    // Tinted here beside the frame rather than once at startup: which figure
+    // the player is depends on the weapon the run opened with, and whether a
+    // figure wants a tint is a property of the frame it was built from.
+    this.playerSprite.tint = this.tintFor(world.player.sprite, PLAYER_COLOR);
     fit(this.playerSprite, CONFIG.player.radius * 2);
     this.playerSprite.position.set(playerX, playerY);
     this.playerSprite.alpha = world.player.invuln > 0 ? 0.45 : 1;
@@ -214,7 +219,7 @@ export class GameRenderer {
       sprite.texture = this.textures.sprites[enemy.sprite];
       sprite.position.set(lerp(enemy.px, enemy.x, alpha), lerp(enemy.py, enemy.y, alpha));
       fit(sprite, enemy.radius * 2);
-      sprite.tint = this.variantTint(enemy.color);
+      sprite.tint = this.tintFor(enemy.sprite, enemy.color);
     }
 
     this.drawFlashes(world, alpha);
@@ -259,14 +264,16 @@ export class GameRenderer {
   }
 
   /**
-   * The tint a sprite should carry.
+   * The tint a frame should carry.
    *
    * Drawn shapes are white masks and become their colour by being tinted.
-   * Artwork already is its colour, and tinting it would only darken it, so it
-   * is left alone.
+   * Artwork already is its colour, and tinting it could only darken it, so it
+   * is left alone. Which of the two a frame is depends on the frame and not on
+   * the run: the shockwave, the lance and the harpoon stay drawn even when the
+   * sheet loaded, and each of them used to need its own exception here.
    */
-  private variantTint(color: number): number {
-    return this.textures.artwork ? 0xffffff : color;
+  private tintFor(name: SpriteName, color: number): number {
+    return this.textures.masked(name) ? color : 0xffffff;
   }
 
   private drawProjectiles(world: World, alpha: number): void {
@@ -291,7 +298,7 @@ export class GameRenderer {
       fit(sprite, projectile.radius * 2);
       // The blade points up in the sheet; turn it to face where it is going.
       sprite.rotation = Math.atan2(projectile.vy, projectile.vx) + Math.PI / 2;
-      sprite.tint = this.variantTint(projectile.color);
+      sprite.tint = this.tintFor(projectile.sprite, projectile.color);
     }
   }
 
@@ -307,10 +314,11 @@ export class GameRenderer {
       // Worth telling apart by shape rather than by tint: a colour difference
       // is the first thing lost in a crowd, and it is lost entirely once the
       // sprites carry their own colour.
-      sprite.texture = rich ? this.textures.sprites.gemRich : this.textures.sprites.gem;
+      const frame: SpriteName = rich ? 'gemRich' : 'gem';
+      sprite.texture = this.textures.sprites[frame];
       sprite.position.set(lerp(gem.px, gem.x, alpha), lerp(gem.py, gem.y, alpha));
       fit(sprite, GEM_SIZE);
-      sprite.tint = this.variantTint(rich ? 0xffd166 : 0x66d9ff);
+      sprite.tint = this.tintFor(frame, rich ? 0xffd166 : 0x66d9ff);
     }
   }
 
@@ -325,7 +333,7 @@ export class GameRenderer {
 
       sprite.position.set(effect.x, effect.y);
       fit(sprite, radius * 2);
-      sprite.tint = effect.color;
+      sprite.tint = this.tintFor('ring', effect.color);
       // Fades as it expands, so the burst reads as one motion.
       sprite.alpha = Math.max(0, effect.life / effect.maxLife);
     }
@@ -369,7 +377,7 @@ export class GameRenderer {
         fit(sprite, radius * 2);
         // Spinning with the ring, which is the whole read on the weapon.
         sprite.rotation = a;
-        sprite.tint = this.variantTint(def.color);
+        sprite.tint = this.tintFor('orb', def.color);
       }
     }
   }
@@ -417,11 +425,7 @@ export class GameRenderer {
         length / sprite.texture.width,
         (thickness * 2) / sprite.texture.height,
       );
-      // Not `variantTint`: that leaves artwork alone because artwork carries its
-      // own colour, and the lance has none — it is a drawn mask whichever
-      // texture set loaded, so it is always the one that has to be tinted. The
-      // shockwave ring is the same case and does the same thing.
-      sprite.tint = def.color;
+      sprite.tint = this.tintFor('spear', def.color);
       // Fades over the thrust rather than blinking out, so a fast spear reads
       // as a rhythm instead of a strobe.
       sprite.alpha = state.swing / def.swingTime;
@@ -451,6 +455,10 @@ export class GameRenderer {
  *
  * Reading the size off the texture rather than from a constant means artwork
  * can change frame sizes without every call site having to agree on a number.
+ *
+ * Square frames only, which is everything a circle is fitted into. The lance
+ * is the one frame that is not square, and it is also the one sprite that sets
+ * its own scale, because what it has to match is a thrust rather than a body.
  */
 function fit(sprite: Sprite, diameter: number): void {
   sprite.scale.set(diameter / sprite.texture.width);

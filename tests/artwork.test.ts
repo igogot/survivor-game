@@ -4,16 +4,21 @@ import { SPRITE_DRAWERS, SPRITE_SPECS } from '../src/render/atlas';
 import type { SpriteName } from '../src/data/sprites';
 
 /**
- * The sprites with no artwork behind them.
+ * The sprites with no artwork behind them, and why each one has none.
  *
  * A shockwave is an expanding outline and a dungeon tileset has no such thing.
  * The lance is worse: it is the one frame stretched to fit its own reach, and a
  * 16px icon smeared eight times along one axis reads as a smudge rather than as
- * a weapon. Both keep the shapes this project draws for them. Listing them here
- * rather than allowing any gap is the point — a sprite that quietly lost its
- * art would otherwise look like a deliberate choice.
+ * a weapon. The harpoon is neither — the sheet has spikes and one of them was
+ * used. It reads as a larger bolt, because the bolt is a dagger from the same
+ * sheet and both are grey on brown, and at ten pixels against eighteen that is
+ * the entire silhouette. Drawn, the spike is a white mask and takes the
+ * weapon's own green, which no tile could have given it.
+ *
+ * Listing them here rather than allowing any gap is the point — a sprite that
+ * quietly lost its art would otherwise look like a deliberate choice.
  */
-const DRAWN_ONLY: readonly SpriteName[] = ['ring', 'spear'];
+const DRAWN_ONLY: readonly SpriteName[] = ['ring', 'spear', 'harpoon'];
 
 describe('sprite artwork', () => {
   it('gives every sprite either a tile or a deliberate exemption', () => {
@@ -83,7 +88,10 @@ describe('sprite artwork', () => {
    */
   it('sizes every frame to a whole number of source tiles', () => {
     for (const spec of SPRITE_SPECS) {
-      expect(spec.size % TILE_SIZE, `${spec.name} is ${spec.size}px`).toBe(0);
+      expect(spec.size % TILE_SIZE, `${spec.name} is ${spec.size}px tall`).toBe(0);
+      expect((spec.width ?? spec.size) % TILE_SIZE, `${spec.name} is ${spec.width}px wide`).toBe(
+        0,
+      );
     }
   });
 });
