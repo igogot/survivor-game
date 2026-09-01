@@ -13,10 +13,12 @@ import {
 } from '../data/weapons';
 import { FLASH_TIME } from '../systems/damage';
 import { EMBER_FRAMES } from './atlas';
+import { bodyMotion } from './liveliness';
+import type { BodyMotion } from './liveliness';
 import { GRID_TEXTURE_SIZE, createTextures } from './textures';
 import type { TextureSet } from './textures';
 import type { SpriteName } from '../data/sprites';
-import type { MoveTarget, Player } from '../world/types';
+import type { Enemy, MoveTarget, Player } from '../world/types';
 import type { World } from '../world/world';
 
 const GEM_SIZE = 11;
@@ -249,8 +251,23 @@ export class GameRenderer {
 
       sprite.texture = this.textures.sprites[player.sprite];
       sprite.tint = this.tintFor(player.sprite, PLAYER_COLOR);
-      fit(sprite, CONFIG.player.radius * 2);
-      sprite.position.set(lerp(player.px, player.x, alpha), lerp(player.py, player.y, alpha));
+      // Keyed on the index rather than an id, which a player has no need of:
+      // the list is stable for a whole run, and all four have to want is a
+      // phase of their own so a party does not march in step.
+      place(
+        sprite,
+        lerp(player.px, player.x, alpha),
+        lerp(player.py, player.y, alpha),
+        CONFIG.player.radius * 2,
+        bodyMotion(
+          world.time,
+          i,
+          player.x - player.px,
+          player.y - player.py,
+          player.stats.moveSpeed,
+          CONFIG.player.radius,
+        ),
+      );
       sprite.alpha = player.invuln > 0 ? 0.45 : 1;
     }
   }
@@ -351,8 +368,13 @@ export class GameRenderer {
       // Every frame comes from the same source texture, so swapping the frame
       // per enemy costs nothing: the layer still batches into one draw call.
       sprite.texture = this.textures.sprites[enemy.sprite];
-      sprite.position.set(lerp(enemy.px, enemy.x, alpha), lerp(enemy.py, enemy.y, alpha));
-      fit(sprite, enemy.radius * 2);
+      place(
+        sprite,
+        lerp(enemy.px, enemy.x, alpha),
+        lerp(enemy.py, enemy.y, alpha),
+        enemy.radius * 2,
+        motionFor(world.time, enemy),
+      );
       sprite.tint = this.tintFor(enemy.sprite, enemy.color);
     }
 
@@ -390,8 +412,17 @@ export class GameRenderer {
       const sprite = this.flashSprites[next++];
       sprite.blendMode = 'add';
       sprite.texture = this.textures.sprites[enemy.sprite];
-      sprite.position.set(lerp(enemy.px, enemy.x, alpha), lerp(enemy.py, enemy.y, alpha));
-      fit(sprite, enemy.radius * 2);
+      // The same bounce the body underneath is taking. `motionFor` is a pure
+      // function of the entity and the clock, so asking twice in one frame
+      // gives the same answer twice — and a flash that did not ask would sit a
+      // few pixels off whatever it is meant to be brightening.
+      place(
+        sprite,
+        lerp(enemy.px, enemy.x, alpha),
+        lerp(enemy.py, enemy.y, alpha),
+        enemy.radius * 2,
+        motionFor(world.time, enemy),
+      );
       // Fades over the flash's own lifetime so a hit reads as a pulse.
       sprite.alpha = Math.min(1, enemy.flash / FLASH_TIME);
     }
@@ -626,4 +657,43 @@ function hash(value: number): number {
  */
 function fit(sprite: Sprite, diameter: number): void {
   sprite.scale.set(diameter / sprite.texture.width);
+}
+
+/**
+ * `fit`, plus the bounce — position and both scales in one call.
+ *
+ * Kept apart from `fit` rather than folded into it because most of what this
+ * renderer draws must not bob: a gem lying on the floor, a blade on its ring,
+ * a shockwave that has to stay exactly the size of the damage it did. Only the
+ * things with legs get this one.
+ */
+function place(
+  sprite: Sprite,
+  x: number,
+  y: number,
+  diameter: number,
+  motion: BodyMotion,
+): void {
+  const base = diameter / sprite.texture.width;
+  sprite.position.set(x + motion.offsetX, y + motion.offsetY);
+  sprite.scale.set(base * motion.scaleX, base * motion.scaleY);
+}
+
+/**
+ * How an enemy is bouncing this instant.
+ *
+ * The ground it covered last tick is the gap between its position and its
+ * previous one, which is the same pair the renderer interpolates between — so
+ * the pace driving the animation is measured from exactly the movement being
+ * drawn, rather than from what the definition says the creature can do.
+ */
+function motionFor(time: number, enemy: Enemy): BodyMotion {
+  return bodyMotion(
+    time,
+    enemy.id,
+    enemy.x - enemy.px,
+    enemy.y - enemy.py,
+    enemy.speed,
+    enemy.radius,
+  );
 }
