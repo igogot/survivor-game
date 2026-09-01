@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import {
   BOARD_SIZE,
+  BOARD_SIZES,
+  boardFor,
   MAX_NAME_LENGTH,
   MAX_RUN_MS,
   bossCeiling,
@@ -36,6 +38,7 @@ function score(over: Partial<Score> = {}): Score {
     bosses: 1,
     weapon: 'bolt',
     seed: 42,
+    party: 1,
     ...over,
   };
 }
@@ -263,6 +266,7 @@ describe('what the bounds must never refuse', () => {
       const world = runBot(seed, 720);
       const played: Score = {
         name: 'bot',
+        party: 1,
         timeMs: Math.round(world.time * 1000),
         kills: world.kills,
         level: world.level,
@@ -293,5 +297,58 @@ describe('what the bounds must never refuse', () => {
     expect(killCeiling(0)).toBeGreaterThan(0);
     expect(levelCeiling(0)).toBe(1);
     expect(bossCeiling(0)).toBe(0);
+  });
+});
+
+describe('two boards', () => {
+  /**
+   * The reason they are separate at all. A party meets the same crowd with
+   * several people shooting at it, so a solo time and a party time measure
+   * different things — ranked together, one of the two boards stops meaning
+   * anything whichever way it falls.
+   */
+  it('sorts a run by how many people played it', () => {
+    expect(boardFor(1)).toBe('solo');
+    expect(boardFor(2)).toBe('party');
+    expect(boardFor(4)).toBe('party');
+  });
+
+  it('keeps fifty on the party board and a hundred on the solo one', () => {
+    expect(BOARD_SIZES.solo).toBe(100);
+    expect(BOARD_SIZES.party).toBe(50);
+  });
+
+  it('refuses a party nobody could have assembled', () => {
+    expect(faultInScore(score({ party: 0 }))).toBe('party');
+    expect(faultInScore(score({ party: 99 }))).toBe('party');
+    expect(faultInScore(score({ party: 1.5 }))).toBe('party');
+  });
+
+  it('accepts every size a lobby can seat', () => {
+    for (const party of [1, 2, 3, 4]) {
+      expect(faultInScore(score({ party }))).toBeNull();
+    }
+  });
+
+  /**
+   * The coupling worth pinning. `perPlayerArrivals` splits a party's
+   * multiplier between more bodies arriving and tougher ones; at 0 a party
+   * meets a solo player's crowd with more health in it, so the kill ceiling
+   * does not move. If that exponent is ever raised this bound has to follow,
+   * or the board starts refusing honest party runs.
+   */
+  it('bounds a party by what the spawner actually delivers', () => {
+    const solo = killCeiling(600_000, 1);
+    const four = killCeiling(600_000, 4);
+
+    if (CONFIG.spawn.perPlayerArrivals === 0) {
+      expect(four).toBe(solo);
+    } else {
+      expect(four).toBeGreaterThan(solo);
+    }
+  });
+
+  it('still refuses an impossible party run', () => {
+    expect(faultInScore(score({ party: 4, kills: 10_000_000 }))).toBe('kills');
   });
 });

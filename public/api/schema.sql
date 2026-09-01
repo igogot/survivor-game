@@ -126,3 +126,44 @@ CREATE TABLE IF NOT EXISTS room_mail (
   -- And the one the sweep runs.
   KEY expiry (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- The party board, top fifty.
+--
+-- A second table rather than a column on `scores`, for two reasons. The first
+-- is that these are not comparable runs: a party meets the same crowd with
+-- several people shooting at it, so a solo time and a party time measure
+-- different things and ranking them together would make one of the boards
+-- meaningless whichever way it fell.
+--
+-- The second is that `scores` is already live with real rows in it. Adding a
+-- board this way is a migration that only creates, and one that only creates
+-- cannot half-apply and take the existing board down with it.
+--
+-- Ownership is *not* duplicated. `owners` and `tokens` are keyed by name and
+-- know nothing about boards, so somebody who holds `Kira` holds it on both —
+-- which is the point, since it is one person either way.
+CREATE TABLE IF NOT EXISTS party_scores (
+  id          INT UNSIGNED     NOT NULL AUTO_INCREMENT,
+  name        VARCHAR(18)      NOT NULL,
+  time_ms     INT UNSIGNED     NOT NULL,
+  kills       INT UNSIGNED     NOT NULL,
+  level       SMALLINT UNSIGNED NOT NULL,
+  bosses      SMALLINT UNSIGNED NOT NULL,
+  weapon      VARCHAR(16)      NOT NULL DEFAULT '',
+  -- How many people played it. Always at least two, or the row belongs on the
+  -- other table.
+  party       TINYINT UNSIGNED NOT NULL,
+  -- Kept, but it does not promise what the solo table's does.
+  --
+  -- There a seed is an invitation: the simulation is deterministic, so ?seed=
+  -- replays the row and you can go and look at it. Here it cannot be. The same
+  -- seed played by one person is a different run — a different horde, since
+  -- enemy health follows the party's size — so this identifies the run rather
+  -- than reproducing it. Said out loud because the column looks identical to
+  -- the one next door and would otherwise be read as the same offer.
+  seed        INT UNSIGNED     NOT NULL,
+  created_at  DATETIME         NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_name (name),
+  KEY rank_order (time_ms DESC, bosses DESC, kills DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

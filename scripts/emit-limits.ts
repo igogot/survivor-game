@@ -22,7 +22,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CONFIG } from '../src/config';
 import {
+  BOARD_SIZES,
   BOARD_SIZE,
+  MAX_PARTY,
   MAX_NAME_LENGTH,
   MAX_RUN_MS,
   bossCeiling,
@@ -40,6 +42,16 @@ const limits = {
   // Stamped so a mismatch between the game and the API is visible rather than
   // silent: the client sends this and the server refuses a different one.
   boardSize: BOARD_SIZE,
+  boardSizes: BOARD_SIZES,
+  maxParty: MAX_PARTY,
+  /*
+   * How a party's multiplier is split between arrivals and health.
+   *
+   * The API needs it to bound a party's kills, and it is a tuning knob rather
+   * than a constant — sending it means the endpoint follows the game instead
+   * of carrying a copy that goes stale the first time it moves.
+   */
+  perPlayerArrivals: CONFIG.spawn.perPlayerArrivals,
   maxNameLength: MAX_NAME_LENGTH,
   maxRunMs: MAX_RUN_MS,
   bossIntervalSeconds: CONFIG.boss.interval,

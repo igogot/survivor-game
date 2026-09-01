@@ -27,9 +27,45 @@ export interface Score {
   readonly bosses: number;
   /** Which weapon the run opened with, so the board says how it was won. */
   readonly weapon: string;
-  /** The run's seed, so any entry on the board can be replayed with `?seed=`. */
+  /**
+   * The run's seed.
+   *
+   * On a solo row this is an invitation: the simulation is deterministic, so
+   * `?seed=` replays the entry and it becomes a thing you can go and look at
+   * rather than a number to take on faith. A party row cannot offer that — the
+   * same seed played alone is a different run, because enemy health follows
+   * the party's size — so there it identifies the run without reproducing it.
+   */
   readonly seed: number;
+  /**
+   * How many people played it. One for a solo run.
+   *
+   * The roster the run started with rather than who was still standing at the
+   * end: a party of four that lost two people still set a party-of-four
+   * record, and scoring it as a pair would flatter it.
+   */
+  readonly party: number;
 }
+
+/**
+ * Which board a run belongs on.
+ *
+ * Two tables rather than one with a column, because they are not comparable.
+ * A party meets the same crowd with several people shooting at it, so a solo
+ * time and a party time measure different things — ranking them together would
+ * make one of the two boards meaningless whichever way it fell.
+ */
+export type BoardKind = 'solo' | 'party';
+
+export function boardFor(party: number): BoardKind {
+  return party > 1 ? 'party' : 'solo';
+}
+
+/** How many entries each board keeps. */
+export const BOARD_SIZES: Readonly<Record<BoardKind, number>> = {
+  solo: 100,
+  party: 50,
+};
 
 /**
  * A run, plus the proof that this player is allowed to be that name.
@@ -44,7 +80,12 @@ export interface SubmittedScore extends Score {
   readonly token: string;
 }
 
-/** How many entries the board keeps. Everything below this rank is forgotten. */
+/**
+ * How many entries the solo board keeps.
+ *
+ * Kept as its own name because it is the default everywhere a board size is
+ * not stated — see `BOARD_SIZES` for the party's fifty.
+ */
 export const BOARD_SIZE = 100;
 
 /** Longest name the board will take, in characters. */
@@ -214,9 +255,24 @@ function isNameCharacter(point: number): boolean {
  * played better than anybody here has managed, or it becomes a rule that a
  * good player runs into.
  */
-export function killCeiling(timeMs: number): number {
+export function killCeiling(timeMs: number, party = 1): number {
   const seconds = timeMs / 1000;
   const minutes = seconds / 60;
+
+  /*
+   * What a party changes about the bound, which today is nothing.
+   *
+   * `CONFIG.spawn.perPlayerArrivals` splits a party's multiplier between more
+   * bodies arriving and tougher ones, and it currently sits at 0 — four
+   * players meet a solo player's crowd with four times the health in it. Same
+   * arrivals means the same ceiling on kills, which is what lets one set of
+   * limits serve both boards.
+   *
+   * Derived rather than assumed, because that exponent is a tuning knob. If it
+   * is ever raised, a party really does meet more bodies, and a bound that had
+   * quietly hardcoded 1 would start refusing honest party runs.
+   */
+  const arrivals = Math.pow(Math.max(1, party), CONFIG.spawn.perPlayerArrivals);
 
   // The biggest batch the spawner will ever deliver at this point in the run,
   // arriving as often as it is allowed to.
@@ -230,7 +286,7 @@ export function killCeiling(timeMs: number): number {
   const spawned = perSecond * seconds * SPLIT_ALLOWANCE;
 
   // Everything alive at the bell could still be killed on the last tick.
-  return Math.ceil(spawned + CONFIG.spawn.maxEnemies + KILL_SLACK);
+  return Math.ceil((spawned + CONFIG.spawn.maxEnemies) * arrivals + KILL_SLACK);
 }
 
 /** The shortest gap `spawnInterval` can return, whatever the minute. */
@@ -292,6 +348,7 @@ export function bossCeiling(timeMs: number): number {
 /** Why a submission was refused, or null when it looks like a real run. */
 export type ScoreFault =
   | 'name'
+  | 'party'
   | 'time'
   | 'kills'
   | 'level'
@@ -317,8 +374,9 @@ export function faultInScore(score: Score): ScoreFault | null {
 
   if (cleanName(score.name) !== score.name) return 'name';
 
+  if (!Number.isInteger(score.party) || score.party < 1 || score.party > MAX_PARTY) return 'party';
   if (score.timeMs < 0 || score.timeMs > MAX_RUN_MS) return 'time';
-  if (score.kills < 0 || score.kills > killCeiling(score.timeMs)) return 'kills';
+  if (score.kills < 0 || score.kills > killCeiling(score.timeMs, score.party)) return 'kills';
   if (score.level < 1 || score.level > levelCeiling(score.kills)) return 'level';
   if (score.bosses < 0 || score.bosses > bossCeiling(score.timeMs)) return 'bosses';
 
@@ -334,3 +392,13 @@ export function faultInScore(score: Score): ScoreFault | null {
  * itself when the window loses focus.
  */
 export const MAX_RUN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The largest party the board will believe.
+ *
+ * The lobby seats four. This is deliberately not read from a lobby constant:
+ * a board holds runs from every version that ever played, so a row recorded by
+ * a future build with room for six must not become unreadable the moment it
+ * arrives — it just has to be a number somebody could have played with.
+ */
+export const MAX_PARTY = 8;

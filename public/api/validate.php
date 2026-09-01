@@ -137,7 +137,7 @@ function ceilingFrom(array $samples, float $x): float
  */
 function faultInRun(array $body, array $limits): ?string
 {
-    foreach (['timeMs', 'kills', 'level', 'bosses', 'seed'] as $key) {
+    foreach (['timeMs', 'kills', 'level', 'bosses', 'seed', 'party'] as $key) {
         // A float that happens to be whole is still a client that rounded
         // somewhere it should not have, and letting it through means two
         // clients can disagree about the same run.
@@ -160,11 +160,27 @@ function faultInRun(array $body, array $limits): ?string
     $kills = (int) $body['kills'];
     $level = (int) $body['level'];
     $bosses = (int) $body['bosses'];
+    $party = (int) $body['party'];
+
+    if ($party < 1 || $party > (int) $limits['maxParty']) {
+        return 'party';
+    }
 
     if ($timeMs < 0 || $timeMs > (int) $limits['maxRunMs']) {
         return 'time';
     }
-    if ($kills < 0 || $kills > ceilingFrom($limits['killCeiling'], $timeMs / 1000)) {
+    /*
+     * A party's allowance for kills.
+     *
+     * `perPlayerArrivals` splits a party's multiplier between more bodies
+     * arriving and tougher ones, and it sits at 0 today — four players meet a
+     * solo player's crowd with four times the health in it. Same arrivals
+     * means the same ceiling, which is what lets one set of limits serve both
+     * boards. Read from the limits file rather than assumed, so raising that
+     * exponent moves this with it instead of refusing honest party runs.
+     */
+    $arrivals = pow($party, (float) $limits['perPlayerArrivals']);
+    if ($kills < 0 || $kills > ceilingFrom($limits['killCeiling'], $timeMs / 1000) * $arrivals) {
         return 'kills';
     }
     if ($level < 1 || $level > ceilingFrom($limits['levelCeiling'], $kills)) {
