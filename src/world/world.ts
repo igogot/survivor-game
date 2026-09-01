@@ -3,7 +3,6 @@ import { Pool } from '../core/pool';
 import { Rng } from '../core/rng';
 import { SpatialGrid } from './grid';
 import { STARTER_WEAPON_ID, createWeaponState, starterWeapon } from '../data/weapons';
-import { xpForLevel } from '../systems/progression';
 import type { SpoilDef } from '../data/spoils';
 import type { Chest, Effect, Enemy, Flame, Gem, Player, Projectile } from './types';
 
@@ -72,6 +71,26 @@ export class World {
   /** Elapsed run time in seconds. */
   time = 0;
   kills = 0;
+
+  /**
+   * The experience bar, and it is one bar for everybody.
+   *
+   * Levels are the run's rather than any player's: the bar fills from every gem
+   * anybody collects, and when it fills *everyone still standing* gains a
+   * level. What each of them then spends it on is their own — the cards, the
+   * stacks and the weapons stay per player, which is where a party gets to be
+   * four builds instead of four copies.
+   *
+   * The cost of a level scales with how many people are filling the bar, so a
+   * pair take twice as long to level as a solo player and a four does four
+   * times. Without that a party would be four times the collection rate against
+   * a single-player curve, and would outrun the difficulty curve inside two
+   * minutes. See `xpForNextLevel`, which derives the figure rather than storing
+   * it — the share count changes when somebody falls, and a stored target would
+   * be the thing that quietly went stale.
+   */
+  level = 1;
+  xp = 0;
 
   spawnTimer = 0;
   /** Whether a boss is on the field right now. Cleared when it dies. */
@@ -163,9 +182,6 @@ function createPlayer(starterId: string): Player {
     px: 0,
     py: 0,
     hp: CONFIG.player.maxHp,
-    level: 1,
-    xp: 0,
-    xpToNext: xpForLevel(1),
     invuln: 0,
     stats: {
       maxHp: CONFIG.player.maxHp,

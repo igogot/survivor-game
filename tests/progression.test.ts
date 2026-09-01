@@ -22,11 +22,11 @@ describe('xpForLevel', () => {
 describe('progressionSystem', () => {
   it('converts banked xp into levels and queues one choice each', () => {
     const world = new World(1);
-    world.players[0].xp = xpForLevel(1) + xpForLevel(2);
+    world.xp = xpForLevel(1) + xpForLevel(2);
 
     progressionSystem(world);
 
-    expect(world.players[0].level).toBe(3);
+    expect(world.level).toBe(3);
     expect(world.players[0].pendingLevels).toBe(2);
     expect(world.phase).toBe('levelup');
     expect(world.players[0].offered.length).toBeGreaterThan(0);
@@ -34,19 +34,19 @@ describe('progressionSystem', () => {
 
   it('leaves the remainder banked toward the next level', () => {
     const world = new World(1);
-    world.players[0].xp = xpForLevel(1) + 3;
+    world.xp = xpForLevel(1) + 3;
 
     progressionSystem(world);
 
-    expect(world.players[0].level).toBe(2);
-    expect(world.players[0].xp).toBe(3);
+    expect(world.level).toBe(2);
+    expect(world.xp).toBe(3);
   });
 });
 
 describe('applyUpgrade', () => {
   it('resumes the run once the last queued level is spent', () => {
     const world = new World(2);
-    world.players[0].xp = xpForLevel(1);
+    world.xp = xpForLevel(1);
     progressionSystem(world);
 
     applyUpgrade(world, world.players[0], world.players[0].offered[0].id);
@@ -58,7 +58,7 @@ describe('applyUpgrade', () => {
 
   it('offers the next choice while levels remain queued', () => {
     const world = new World(2);
-    world.players[0].xp = xpForLevel(1) + xpForLevel(2);
+    world.xp = xpForLevel(1) + xpForLevel(2);
     progressionSystem(world);
 
     applyUpgrade(world, world.players[0], world.players[0].offered[0].id);

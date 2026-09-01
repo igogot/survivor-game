@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
+import { xpForNextLevel } from '../src/systems/progression';
 import { TAU } from '../src/core/math';
 import { BOSS, enemyById } from '../src/data/enemies';
 import { SPOILS, SPOIL_CATEGORIES } from '../src/data/spoils';
@@ -436,7 +437,7 @@ describe('the chest and the level-up screen', () => {
     const world = new World(27);
     play(world, CONFIG.chest.firstAt + 1);
 
-    world.players[0].xp = world.players[0].xpToNext;
+    world.xp = xpForNextLevel(world);
     walkIntoChest(world);
 
     expect(world.phase).toBe('chest');

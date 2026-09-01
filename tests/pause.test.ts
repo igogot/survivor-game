@@ -55,7 +55,7 @@ describe('pauseRun', () => {
   /** Otherwise pausing would be a way to skip the choice and keep playing. */
   it('gives the level-up choice back instead of swallowing it', () => {
     const world = new World(3);
-    world.players[0].xp = xpForLevel(1);
+    world.xp = xpForLevel(1);
     progressionSystem(world);
     expect(world.phase).toBe('levelup');
 

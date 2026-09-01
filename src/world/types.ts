@@ -68,9 +68,6 @@ export interface Player {
   px: number;
   py: number;
   hp: number;
-  level: number;
-  xp: number;
-  xpToNext: number;
   /** Seconds of invulnerability left after the last hit. */
   invuln: number;
   stats: PlayerStats;

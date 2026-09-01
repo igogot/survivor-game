@@ -378,7 +378,7 @@ async function main(): Promise<void> {
     }
 
     if (world.phase === 'dead') {
-      resultScreen.show(world, me());
+      resultScreen.show(world);
     } else {
       resultScreen.hide();
     }

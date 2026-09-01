@@ -6,7 +6,7 @@ import { contactSystem } from '../src/systems/contact';
 import { damagePlayer } from '../src/systems/damage';
 import { movementSystem } from '../src/systems/movement';
 import { pickupSystem } from '../src/systems/pickup';
-import { applyUpgrade, progressionSystem } from '../src/systems/progression';
+import { applyUpgrade, progressionSystem, xpForLevel, xpForNextLevel } from '../src/systems/progression';
 import { reapSystem } from '../src/systems/reap';
 import { spawnEnemyAt } from '../src/systems/spawn';
 import { weaponSystem } from '../src/systems/weapons';
@@ -230,14 +230,15 @@ describe('who takes the hit and who takes the gem', () => {
   });
 
   /**
-   * A gem goes to whoever is nearest and to nobody else. Two players both
-   * pulling on one would drag it at twice the magnet speed toward the point
-   * between them, and both collecting it would be XP the horde never paid for.
+   * A gem is fetched by whoever is nearest and by nobody else. Two players
+   * both pulling on one would drag it at twice the magnet speed toward the
+   * point between them, and both collecting it would be XP the horde never
+   * paid for. What it pays into is the party's bar, not the collector's.
    */
-  it('gives a gem to the nearer player, once', () => {
+  it('lets the nearer player fetch a gem, once, into the shared bar', () => {
     const world = party(12, 2);
-    const near = place(world, 0, 0, 0);
-    const far = place(world, 1, 900, 0);
+    place(world, 0, 0, 0);
+    place(world, 1, 900, 0);
 
     const gem = world.gemPool.obtain();
     gem.x = 10;
@@ -249,9 +250,84 @@ describe('who takes the hit and who takes the gem', () => {
 
     pickupSystem(world, DT);
 
-    expect(near.xp).toBe(3);
-    expect(far.xp).toBe(0);
+    expect(world.xp).toBe(3);
     expect(world.gems).toHaveLength(0);
+  });
+});
+
+/**
+ * One bar for the party, and a level off it for everybody standing.
+ *
+ * The cost scales with how many are filling it, so a party is not four times
+ * the collection rate against a solo curve. What each of them spends the level
+ * on stays their own — that is where four players are four builds rather than
+ * four copies.
+ */
+describe('the shared experience bar', () => {
+  it('charges one player’s price per player filling it', () => {
+    expect(xpForNextLevel(party(30, 1))).toBe(xpForLevel(1));
+    expect(xpForNextLevel(party(30, 2))).toBe(xpForLevel(1) * 2);
+    expect(xpForNextLevel(party(30, 4))).toBe(xpForLevel(1) * 4);
+  });
+
+  it('levels everybody at once when it fills', () => {
+    const world = party(31, 4);
+    world.xp = xpForNextLevel(world);
+
+    progressionSystem(world);
+
+    expect(world.level).toBe(2);
+    for (const player of world.players) {
+      expect(player.pendingLevels).toBe(1);
+    }
+  });
+
+  /** Two players fill twice the bar, so one player's worth is not enough. */
+  it('does not level a pair on one player’s worth of gems', () => {
+    const world = party(32, 2);
+    world.xp = xpForLevel(1);
+
+    progressionSystem(world);
+
+    expect(world.level).toBe(1);
+    expect(world.players[0].pendingLevels).toBe(0);
+  });
+
+  /**
+   * A corpse has nothing to spend a card with, and no longer counts toward the
+   * price of one. The share they were carrying is gone, so the bar the
+   * survivors are filling gets shorter — which can finish it on the spot, and
+   * that is the right reading rather than an edge case to guard.
+   */
+  it('stops charging for the dead, and stops paying them', () => {
+    const world = party(33, 2);
+    const fallen = world.players[0];
+
+    world.xp = xpForLevel(1);
+    progressionSystem(world);
+    expect(world.level).toBe(1);
+
+    fallen.hp = 0;
+    progressionSystem(world);
+
+    expect(world.level).toBe(2);
+    expect(fallen.pendingLevels).toBe(0);
+    expect(world.players[1].pendingLevels).toBe(1);
+  });
+
+  /** The levels are shared; what they buy is not. */
+  it('keeps one player’s picks off another’s build', () => {
+    const world = party(34, 2);
+    world.xp = xpForNextLevel(world);
+    progressionSystem(world);
+
+    applyUpgrade(world, world.players[0], 'damage');
+
+    expect(world.players[0].stacks.get('damage')).toBe(1);
+    expect(world.players[1].stacks.get('damage')).toBeUndefined();
+    expect(world.players[0].stats.damageMul).toBeGreaterThan(
+      world.players[1].stats.damageMul,
+    );
   });
 });
 
@@ -294,16 +370,19 @@ describe('a run with more than one life in it', () => {
    * One menu at a time, and it belongs to somebody in particular. `choosing`
    * is what says who, and spending the level has to spend theirs.
    */
-  it('opens the level-up screen for the player who earned it', () => {
+  it('opens the level-up screen for one player at a time', () => {
     const world = party(15, 2);
-    world.players[1].xp = 10_000;
+    world.xp = 10_000;
 
     progressionSystem(world);
 
     expect(world.phase).toBe('levelup');
-    expect(world.choosing).toBe(1);
-    expect(world.players[1].offered.length).toBeGreaterThan(0);
-    expect(world.players[0].offered).toHaveLength(0);
+    expect(world.choosing).toBe(0);
+    expect(world.players[0].offered.length).toBeGreaterThan(0);
+    // Owed the same level, and queued behind them rather than shown a second
+    // menu on top of the first.
+    expect(world.players[1].offered).toHaveLength(0);
+    expect(world.players[1].pendingLevels).toBeGreaterThan(0);
   });
 });
 
@@ -339,9 +418,11 @@ describe('a party stepped through a real run', () => {
 
     expect(world.kills).toBeGreaterThan(0);
     expect(world.enemies.length).toBeGreaterThan(0);
-    // Every player is doing something: earning XP and firing their own weapon.
+    // The party is levelling off one bar, and every one of them is spending
+    // those levels on their own build.
+    expect(world.level).toBeGreaterThan(1);
     for (const player of world.players) {
-      expect(player.level, player.starterId).toBeGreaterThan(1);
+      expect(player.stacks.size, player.starterId).toBeGreaterThan(0);
     }
     // The boss is not part of this window, so nothing here should have spawned
     // one — the run is still the horde.

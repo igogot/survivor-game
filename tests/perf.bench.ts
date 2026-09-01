@@ -474,7 +474,7 @@ it('simulates identically whichever implementation is used', () => {
       for (let i = 0; i < 240; i++) tick(world, 300, i);
       return {
         kills: world.kills,
-        xp: world.players[0].xp,
+        xp: world.xp,
         gems: world.gems.length,
         enemies: world.enemies.length,
       };

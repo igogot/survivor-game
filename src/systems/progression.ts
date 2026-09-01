@@ -1,4 +1,5 @@
 import { DESIGNED_UPGRADES, FALLBACK_UPGRADES, UPGRADES } from '../data/upgrades';
+import { isAlive } from '../world/party';
 import { NOBODY } from '../world/world';
 import { healPlayer } from './damage';
 import { grantWeapon } from './weapons';
@@ -7,7 +8,7 @@ import type { Player } from '../world/types';
 import type { World } from '../world/world';
 
 /**
- * XP required to go from `level` to `level + 1`.
+ * XP one player would need to go from `level` to `level + 1`.
  *
  * Quadratic rather than exponential: levels should keep arriving all run, just
  * more slowly, because each one is a decision point and the run stops being fun
@@ -18,29 +19,61 @@ export function xpForLevel(level: number): number {
 }
 
 /**
- * Converts accumulated XP into levels and pauses the run when somebody has an
- * upgrade to pick. Multiple levels gained in one tick queue up in
- * `pendingLevels` and are offered one after another.
+ * What the shared bar costs right now: one player's worth per player filling
+ * it.
  *
- * XP is banked for every player, and then at most one menu opens — the first
- * player in the list who is owed a level. That the run freezes behind it is a
- * leftover from there being only one player to freeze it for, and it is the
- * next thing to go: with four of them, one person reading cards must not stop
- * the other three's world. The banking is already per player, so what changes
- * is where the menu lives, not how levels are earned.
+ * Derived rather than stored, and that is the whole reason it is a function. A
+ * party of four that loses one becomes a party of three, and three people
+ * should not go on paying a four's price for a level only three of them will
+ * get. A stored target would have to be recomputed by whoever handles a death,
+ * which is exactly the sort of bookkeeping that gets forgotten once and then
+ * lies about the bar for the rest of the run.
+ *
+ * Falling below the current XP is not a problem to guard against: the bar is
+ * simply full, and `progressionSystem` hands out the level on the next tick.
+ * Somebody dying can therefore level the survivors, which is the right reading
+ * of it — the share they were carrying is gone.
+ *
+ * With one player it is `xpForLevel(level)` multiplied by one, so every solo
+ * run is exactly the run it was.
+ */
+export function xpForNextLevel(world: World): number {
+  let sharers = 0;
+  for (let i = 0; i < world.players.length; i++) {
+    if (isAlive(world.players[i])) sharers++;
+  }
+
+  // A wiped party has no share count and no more ticks coming; answering with
+  // one player's price keeps the HUD from dividing by nothing on the way out.
+  return xpForLevel(world.level) * Math.max(1, sharers);
+}
+
+/**
+ * Converts the party's accumulated XP into levels and pauses the run when
+ * somebody has an upgrade to pick.
+ *
+ * One bar, one level, and everybody standing gets it. Then at most one menu
+ * opens — the first player in the list who is owed a card — and the rest queue
+ * in their own `pendingLevels` until it is their turn. That the run freezes
+ * behind each of them is a leftover from there being only one player to freeze
+ * it for, and it is the next thing to go: with four of them, one person reading
+ * cards must not stop the other three's world.
  */
 export function progressionSystem(world: World): void {
   const players = world.players;
 
-  for (let i = 0; i < players.length; i++) {
-    const player = players[i];
+  let cost = xpForNextLevel(world);
+  while (world.xp >= cost) {
+    world.xp -= cost;
+    world.level++;
 
-    while (player.xp >= player.xpToNext) {
-      player.xp -= player.xpToNext;
-      player.level++;
-      player.xpToNext = xpForLevel(player.level);
-      player.pendingLevels++;
+    // Everyone still standing, and only them. A level is a card to pick, and a
+    // corpse has nothing to pick it with.
+    for (let i = 0; i < players.length; i++) {
+      if (isAlive(players[i])) players[i].pendingLevels++;
     }
+
+    cost = xpForNextLevel(world);
   }
 
   if (world.phase !== 'playing') return;

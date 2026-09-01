@@ -1,5 +1,6 @@
 import { CONFIG } from '../config';
 import { weaponById } from '../data/weapons';
+import { xpForNextLevel } from '../systems/progression';
 import { edgeMark } from './offscreen';
 import type { SpritePainter } from './starters';
 import type { Enemy, Player } from '../world/types';
@@ -96,10 +97,12 @@ export class Hud {
 
     const player = view;
 
-    this.level.textContent = `LV ${player.level}`;
+    this.level.textContent = `LV ${world.level}`;
     // Clamped: a tab returning from the background must not teleport the drain.
     this.updateHealth(player, Math.min(elapsed, 0.1));
-    this.xpFill.style.width = `${percent(player.xp, player.xpToNext)}%`;
+    // One bar for the party, so it is read off the run and not off the
+    // viewer — see `World.level`.
+    this.xpFill.style.width = `${percent(world.xp, xpForNextLevel(world))}%`;
 
     // Unclamped: the run has no end for it to stop at.
     this.timer.textContent = formatTime(world.time);

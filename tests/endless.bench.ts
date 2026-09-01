@@ -77,7 +77,7 @@ it('plays a long run on every seed', () => {
         `${world.time.toFixed(0)}s`.padStart(5),
         (alive ? 'alive' : 'died').padStart(9),
         String(world.bossesKilled).padStart(8),
-        String(world.players[0].level).padStart(8),
+        String(world.level).padStart(8),
         String(world.kills).padStart(10),
         String(sample.hits).padStart(7),
         (lateMinutes > 0 ? (sample.lateHits / lateMinutes).toFixed(1) : '-').padStart(10),

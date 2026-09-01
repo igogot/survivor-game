@@ -10,12 +10,15 @@ import type { World } from '../world/world';
  * Gems never collide with anything, so they skip the grid entirely — a linear
  * scan over a few hundred of them is cheaper than the bookkeeping would be.
  *
- * A gem belongs to whoever is nearest, and only to them. The alternative —
+ * A gem is pulled by whoever is nearest, and only by them. The alternative —
  * every player pulling on every gem — makes a gem between two of them travel at
  * twice the magnet speed toward nobody in particular, and a gem picked up twice
- * would be XP the horde never paid for. Nearest also settles the harder
- * question by default: XP is not shared, so whoever does the walking gets the
- * levels.
+ * would be XP the horde never paid for.
+ *
+ * What it pays into is the *party's* bar rather than the collector's. Nearest
+ * decides who does the fetching, not who profits: levels arrive for everybody
+ * at once, so nobody is punished for guarding a flank while somebody else walks
+ * the field. See `World.level`.
  *
  * A harvest widens one player's radius enormously for a few seconds. Nothing
  * else about the pass changes: the gems still fly in and are still collected on
@@ -59,7 +62,7 @@ export function pickupSystem(world: World, dt: number): void {
     }
 
     if (distanceSq <= collectRadiusSq) {
-      owner.xp += gem.value;
+      world.xp += gem.value;
       gems[i] = gems[gems.length - 1];
       gems.pop();
       world.gemPool.release(gem);
