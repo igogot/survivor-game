@@ -4,7 +4,8 @@ import { SPRITE_NAMES, spriteIndex } from '../src/data/sprites';
 import { SPRITE_SPECS } from '../src/render/atlas';
 import { VIEW_RADIUS, applySnapshot, encodeSnapshot } from '../src/net/snapshot';
 import { applyUpgrade } from '../src/systems/progression';
-import { rollEnemyDef, spawnEnemy } from '../src/systems/spawn';
+import { ENEMIES } from '../src/data/enemies';
+import { rollEnemyDef, spawnEnemy, spawnEnemyAt } from '../src/systems/spawn';
 import { stepWorld } from '../src/world/step';
 import { World } from '../src/world/world';
 import { runBot } from './bot';
@@ -228,6 +229,68 @@ describe('what is deliberately left out', () => {
   });
 });
 
+/**
+ * A snapshot cut for one machine rather than for the party.
+ *
+ * Cut around the party, every guest is sent every other guest's screen — three
+ * quarters of it ground they cannot see. Cut around what they are looking at, it
+ * is one screen's worth however far apart everybody has wandered.
+ */
+describe('a snapshot cut for one pair of eyes', () => {
+  function twoCrowds(): World {
+    const host = new World(21, ['bolt', 'bolt']);
+    host.players[0].x = 0;
+    host.players[1].x = 6000;
+
+    for (let i = 0; i < 40; i++) {
+      spawnEnemyAt(host, ENEMIES[0], 1, i * 5, 0);
+      spawnEnemyAt(host, ENEMIES[0], 1, 6000 + i * 5, 0);
+    }
+    return host;
+  }
+
+  it('carries only what that end can see', () => {
+    const host = twoCrowds();
+
+    const near = new World(host.seed);
+    applySnapshot(near, encodeSnapshot(host, { x: 6000, y: 0 }));
+
+    expect(near.enemies).toHaveLength(40);
+    for (const enemy of near.enemies) {
+      expect(enemy.x).toBeGreaterThan(5000);
+    }
+  });
+
+  it('carries both crowds when nobody in particular is looking', () => {
+    const host = twoCrowds();
+    expect(received(host).enemies).toHaveLength(80);
+  });
+
+  /**
+   * Every player travels whatever the focus is. The roster, the health bars and
+   * the spectator camera all need everybody, and four people are a couple of
+   * hundred bytes — what is worth culling is the six hundred bodies.
+   */
+  it('carries every player even from the other side of the map', () => {
+    const host = twoCrowds();
+
+    const near = new World(host.seed);
+    applySnapshot(near, encodeSnapshot(host, { x: 6000, y: 0 }));
+
+    expect(near.players).toHaveLength(2);
+    expectPlaced(near.players[0].x, 0, 'the distant player');
+  });
+
+  it('is smaller than the one cut for everybody', () => {
+    const host = twoCrowds();
+
+    const forOne = encodeSnapshot(host, { x: 6000, y: 0 }).byteLength;
+    const forAll = encodeSnapshot(host).byteLength;
+
+    expect(forOne).toBeLessThan(forAll);
+  });
+});
+
 describe('a snapshot as a stream of them', () => {
   /**
    * A snapshot is the whole picture rather than a patch, which is what makes
@@ -300,7 +363,8 @@ describe('what a snapshot costs', () => {
     }
     for (let tick = 0; tick < 60; tick++) stepWorld(host, DT);
 
-    const bytes = encodeSnapshot(host).byteLength;
+    const eyes = host.players[0];
+    const bytes = encodeSnapshot(host, { x: eyes.x, y: eyes.y }).byteLength;
     const perSecond = (bytes * 20) / 1024;
 
     console.log(

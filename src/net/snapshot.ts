@@ -39,7 +39,7 @@ import type { World } from '../world/world';
  */
 
 /**
- * How far from the nearest player something has to be to be left out.
+ * How far from what somebody is looking at something has to be to be left out.
  *
  * A screen is about twelve hundred units across at this zoom, so this is a
  * screen and a half in every direction — enough that nothing pops into
@@ -195,11 +195,36 @@ class Reader {
  */
 const SCRATCH = new Uint8Array(64 * 1024);
 
-/** Whether anything at `x, y` is close enough to somebody to be worth sending. */
-function visible(world: World, x: number, y: number): boolean {
-  const players = world.players;
+/** A place a snapshot is cut around. See `encodeSnapshot`. */
+export interface Focus {
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * Whether anything at `x, y` is close enough to be worth sending.
+ *
+ * Measured against one place when there is one, and against every player when
+ * there is not. The difference is the whole of this change: a snapshot cut
+ * around the party is as big as the party is spread, and each guest is sent all
+ * of it — three quarters of which is somewhere they cannot see. Cut around what
+ * *they* are looking at, it is one screen's worth however far apart everybody
+ * has wandered.
+ *
+ * The fallback is not dead code: a solo run and every test that asks for "the
+ * world" wants the whole of it, and having no focus is the honest way to say
+ * so.
+ */
+function visible(world: World, focus: Focus | null, x: number, y: number): boolean {
   const reach = VIEW_RADIUS * VIEW_RADIUS;
 
+  if (focus !== null) {
+    const dx = focus.x - x;
+    const dy = focus.y - y;
+    return dx * dx + dy * dy <= reach;
+  }
+
+  const players = world.players;
   for (let i = 0; i < players.length; i++) {
     const dx = players[i].x - x;
     const dy = players[i].y - y;
@@ -209,13 +234,27 @@ function visible(world: World, x: number, y: number): boolean {
   return false;
 }
 
-export function encodeSnapshot(world: World): Uint8Array {
+/**
+ * The world as one machine needs to see it.
+ *
+ * `focus` is where that machine is looking — which is not always where its
+ * player is standing, because a downed player watches a teammate from across
+ * the map and needs that teammate's surroundings rather than their own corpse's.
+ * The caller works it out; see `viewedBy`.
+ *
+ * Every player is always sent whatever the focus is. The roster, the health
+ * bars and the spectator camera all need everybody, and four players is a
+ * couple of hundred bytes — the thing worth culling is the six hundred bodies
+ * and the hundreds of gems, not the four people.
+ */
+export function encodeSnapshot(world: World, focus: Focus | null = null): Uint8Array {
   const out = new Writer(SCRATCH);
 
-  // The origin every position below is measured from. Rounded to whole units
-  // so that a still world encodes to the same bytes twice running.
-  const originX = Math.round(world.players[0]?.x ?? 0);
-  const originY = Math.round(world.players[0]?.y ?? 0);
+  // The origin every position below is measured from: where this machine is
+  // looking, so the offsets after it are as small as they can be. Rounded to
+  // whole units so that a still world encodes to the same bytes twice running.
+  const originX = Math.round(focus?.x ?? world.players[0]?.x ?? 0);
+  const originY = Math.round(focus?.y ?? world.players[0]?.y ?? 0);
   out.f32(originX);
   out.f32(originY);
 
@@ -267,7 +306,7 @@ export function encodeSnapshot(world: World): Uint8Array {
     let sent = 0;
     for (let i = 0; i < enemies.length; i++) {
       const enemy = enemies[i];
-      if (!visible(world, enemy.x, enemy.y)) continue;
+      if (!visible(world, focus, enemy.x, enemy.y)) continue;
 
       out.i16(relX(enemy.x));
       out.i16(relY(enemy.y));
@@ -285,7 +324,7 @@ export function encodeSnapshot(world: World): Uint8Array {
   out.at16(() => {
     let sent = 0;
     for (const shot of projectiles) {
-      if (!visible(world, shot.x, shot.y)) continue;
+      if (!visible(world, focus, shot.x, shot.y)) continue;
 
       out.i16(relX(shot.x));
       out.i16(relY(shot.y));
@@ -302,7 +341,7 @@ export function encodeSnapshot(world: World): Uint8Array {
   out.at16(() => {
     let sent = 0;
     for (const gem of world.gems) {
-      if (!visible(world, gem.x, gem.y)) continue;
+      if (!visible(world, focus, gem.x, gem.y)) continue;
 
       out.i16(relX(gem.x));
       out.i16(relY(gem.y));
@@ -315,6 +354,8 @@ export function encodeSnapshot(world: World): Uint8Array {
   out.at16(() => {
     let sent = 0;
     for (const effect of world.effects) {
+      if (!visible(world, focus, effect.x, effect.y)) continue;
+
       out.i16(relX(effect.x));
       out.i16(relY(effect.y));
       out.u16(effect.radius * POSITION_SCALE);
@@ -330,7 +371,7 @@ export function encodeSnapshot(world: World): Uint8Array {
   out.at16(() => {
     let sent = 0;
     for (const flame of world.flames) {
-      if (!visible(world, flame.x, flame.y)) continue;
+      if (!visible(world, focus, flame.x, flame.y)) continue;
 
       out.i16(relX(flame.x));
       out.i16(relY(flame.y));
