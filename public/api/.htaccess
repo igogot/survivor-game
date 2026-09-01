@@ -1,6 +1,7 @@
 # Everything in here that is not the endpoint itself is off limits over HTTP.
 #
-# scores.php is served. Nothing else in this directory should ever be fetched:
+# The endpoints are served - scores.php, account.php, room.php. Nothing else
+# in this directory should ever be fetched:
 # the schema describes the tables, the example names the settings, and
 # config.php holds the database password. PHP reads config.php off the disk, so
 # denying it here costs the API nothing — `require` is a filesystem read, not a

@@ -99,3 +99,30 @@ CREATE TABLE IF NOT EXISTS tokens (
   UNIQUE KEY uniq_token (token_hash),
   KEY by_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- The waiting room's post box.
+--
+-- Not a lobby and not a game server: a queue of little messages keyed by a team
+-- code, so that a code reaches further than one browser. Between windows of one
+-- browser `BroadcastChannel` carries these and this table is never touched;
+-- between two houses something has to hold a message until the other side asks,
+-- and on hosting with no long-lived process the only thing that can is a table.
+--
+-- Everything in it is disposable. `room.php` deletes anything older than a
+-- quarter of an hour on every write, because a scheduler is not something
+-- shared hosting reliably has, and a queue that is only ever appended to fills
+-- up quietly for a year and then loudly.
+CREATE TABLE IF NOT EXISTS room_mail (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  code       CHAR(6)         NOT NULL,
+  -- Who sent it, so a reader can be given everything except their own: a
+  -- broadcast that came back would double every roster and every line of chat.
+  sender     VARCHAR(24)     NOT NULL,
+  payload    VARCHAR(4096)   NOT NULL,
+  created_at DATETIME        NOT NULL,
+  PRIMARY KEY (id),
+  -- The one query this table answers: everything in a room after a cursor.
+  KEY room_since (code, id),
+  -- And the one the sweep runs.
+  KEY expiry (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

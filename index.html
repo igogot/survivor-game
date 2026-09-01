@@ -203,6 +203,20 @@
         font-variant-numeric: tabular-nums;
       }
 
+      #link {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 12px;
+        color: #ff9f6b;
+        max-width: 420px;
+      }
+
+      #link .advice {
+        color: var(--muted);
+      }
+
       #downed {
         margin-top: 8px;
         display: flex;
@@ -1295,6 +1309,11 @@
            is true for the whole minute, and somebody who looked away for ten
            seconds should not have missed it. -->
       <div id="downed"></div>
+
+      <!-- What the peer-to-peer layer has to say, and only when it has anything.
+           WebRTC fails silently, and silence in a waiting room is
+           indistinguishable from a broken game. -->
+      <div id="link" hidden></div>
     </div>
 
     <div id="warning" hidden data-i18n="hud.bossWarning">BOSS INCOMING</div>
@@ -1558,7 +1577,8 @@
           </div>
           <p class="hint keys-only" id="chat-hint"></p>
 
-          <p class="hint" data-i18n="room.notYet">The team gathers, but the run is not networked yet.</p>
+          <button class="action" type="button" id="room-begin"></button>
+          <p class="hint" id="room-begin-hint"></p>
           <button class="action action--quiet" type="button" id="room-leave" data-i18n="room.leave">
             Leave the team
           </button>

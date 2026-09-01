@@ -45,6 +45,24 @@ export const CHAT_HISTORY = 50;
 
 export type LobbyPhase = 'idle' | 'hosting' | 'joining' | 'joined' | 'error';
 
+/**
+ * The run a lobby turned into.
+ *
+ * Handed to whoever is listening the moment the host presses start, and it is
+ * everything a machine needs to join the same world: the seed it is built from,
+ * the roster in seat order, and which of those seats is this machine's.
+ */
+export interface LobbyStart {
+  readonly seed: number;
+  readonly members: readonly string[];
+  readonly seat: number;
+  readonly hosting: boolean;
+  /** The room, because signalling is addressed within one. */
+  readonly code: string;
+  /** This machine's own id, which is how the other end will name it. */
+  readonly self: string;
+}
+
 /** Why a join did not happen, in the terms a player would put it. */
 export type LobbyError = 'notFound' | 'full' | 'closed';
 
@@ -54,7 +72,43 @@ export type LobbyMessage =
   | { readonly kind: 'full'; readonly code: string; readonly to: string }
   | { readonly kind: 'bye'; readonly code: string; readonly from: string }
   | { readonly kind: 'closed'; readonly code: string }
-  | { readonly kind: 'chat'; readonly code: string; readonly from: string; readonly text: string };
+  | { readonly kind: 'chat'; readonly code: string; readonly from: string; readonly text: string }
+  | {
+      readonly kind: 'begin';
+      readonly code: string;
+      readonly seed: number;
+      readonly members: readonly string[];
+    }
+  /*
+   * Two browsers introducing themselves.
+   *
+   * These ride the lobby's channel and are none of the lobby's business — see
+   * the note on `receive`. They are addressed, which nothing else here is: an
+   * offer is for one person, and a room of four would otherwise have everybody
+   * answering everybody.
+   */
+  | {
+      readonly kind: 'offer';
+      readonly code: string;
+      readonly from: string;
+      readonly to: string;
+      readonly sdp: string;
+    }
+  | {
+      readonly kind: 'answer';
+      readonly code: string;
+      readonly from: string;
+      readonly to: string;
+      readonly sdp: string;
+    }
+  | {
+      readonly kind: 'ice';
+      readonly code: string;
+      readonly from: string;
+      readonly to: string;
+      readonly candidate: string;
+      readonly mid: string | null;
+    };
 
 /**
  * One thing somebody said.
@@ -68,6 +122,19 @@ export interface ChatLine {
   readonly seat: number;
   readonly text: string;
   readonly mine: boolean;
+}
+
+/**
+ * The three that are an introduction rather than a room.
+ *
+ * Named as their own type so `webrtc.ts` can take one and know what it has:
+ * narrowing the whole union again inside every branch there would be the same
+ * check written twice with two chances to disagree.
+ */
+export type SignalMessage = Extract<LobbyMessage, { kind: 'offer' | 'answer' | 'ice' }>;
+
+export function isSignal(message: LobbyMessage): message is SignalMessage {
+  return message.kind === 'offer' || message.kind === 'answer' || message.kind === 'ice';
 }
 
 export interface LobbyState {
@@ -98,11 +165,37 @@ export class Lobby {
    * `random` makes codes and identities. Both are handed in so that a test can
    * run two lobbies against a shared array and know what code it will get.
    */
+  /**
+   * Called once, on everybody, when the host starts the run.
+   *
+   * A callback rather than a phase, because starting is not a state a lobby
+   * sits in — it is the moment the lobby stops being the thing in charge and
+   * hands over to a session.
+   */
+  onStart: ((start: LobbyStart) => void) | null = null;
+
   constructor(
     private readonly send: (message: LobbyMessage) => void,
     private readonly random: () => number,
   ) {
     this.self = makeMemberId(random);
+  }
+
+  /**
+   * Turns the room into a run.
+   *
+   * Only the host may, and only with somebody else in the room: a team of one
+   * is a solo run with extra steps, and the opening screen already has one of
+   * those. The seed travels so that everybody's world is built the same way —
+   * only the host steps it, but a guest whose `World` disagreed about which
+   * weapons exist would draw the wrong figures.
+   */
+  begin(): void {
+    if (this.phase !== 'hosting' || this.members.length < 2) return;
+
+    const seed = Math.floor(this.random() * 0xffffffff);
+    this.send({ kind: 'begin', code: this.code, seed, members: this.members });
+    this.start(seed, this.members);
   }
 
   state(): LobbyState {
@@ -226,6 +319,22 @@ export class Lobby {
       case 'closed':
         if (!this.hosting) this.fail('closed');
         break;
+      case 'begin':
+        // Only from a room this lobby is a guest in, and only for somebody it
+        // has a seat for. A host ignores it: it already started itself.
+        if (!this.hosting && message.members.includes(this.self)) {
+          this.start(message.seed, message.members);
+        }
+        break;
+      // Signalling shares this channel because it needs the same reach and the
+      // same room, and it would be a second delivery mechanism for no gain. The
+      // lobby has nothing to say about it: who is connecting to whom is
+      // `webrtc.ts`'s business, and a state machine that also tracked peer
+      // connections would be two features wearing one name.
+      case 'offer':
+      case 'answer':
+      case 'ice':
+        break;
       case 'chat':
         // Only from somebody sitting in this room, and never the echo of one's
         // own words. A line from a stranger who happens to know the code is the
@@ -275,6 +384,17 @@ export class Lobby {
 
     this.members = without;
     this.send({ kind: 'roster', code: this.code, members: this.members });
+  }
+
+  private start(seed: number, members: readonly string[]): void {
+    this.onStart?.({
+      seed,
+      members,
+      seat: members.indexOf(this.self),
+      hosting: this.hosting,
+      code: this.code,
+      self: this.self,
+    });
   }
 
   private remember(from: string, text: string): void {

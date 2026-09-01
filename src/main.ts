@@ -5,7 +5,6 @@ import { autoPauseDisabled } from './dev/flags';
 import { Input } from './core/input';
 import { TouchInput } from './core/touch-input';
 import { GameRenderer } from './render/renderer';
-import { STARTER_WEAPON_ID } from './data/weapons';
 import { applyStaticText } from './i18n';
 import { getLang, initLang } from './i18n/lang';
 import { OFFERS_PER_LEVEL, applyUpgrade } from './systems/progression';
@@ -13,7 +12,8 @@ import { takeSpoil } from './systems/chests';
 import { mountLanguageSwitch } from './ui/language';
 import { HttpAccounts } from './net/accounts';
 import { HttpLeaderboard } from './net/leaderboard';
-import { Hud } from './ui/hud';
+import { Hud, requireElement } from './ui/hud';
+import { t } from './i18n';
 import { AccountScreen } from './ui/account';
 import { RecordsScreen, SubmitStrip } from './ui/records';
 import {
@@ -30,6 +30,15 @@ import { starterChoices } from './ui/starters';
 import { canPause, pauseRun, resumeRun } from './world/pause';
 import { stepWorld } from './world/step';
 import { World } from './world/world';
+import { GuestSession, HostSession } from './net/session';
+import { dedupe, nonce, openGameChannel } from './net/channel';
+import type { Envelope } from './net/mailbox';
+import { PeerMesh } from './net/webrtc';
+import { shouldSwapHost } from './net/diagnosis';
+import type { NetMessage } from './net/session';
+import { STARTER_WEAPON_ID } from './data/weapons';
+import type { Session } from './net/session';
+import type { LobbyStart } from './net/lobby';
 import { isAlive, nextLiving, viewedBy } from './world/party';
 import type { Player } from './world/types';
 
@@ -83,7 +92,7 @@ async function main(): Promise<void> {
 
   /** The name this run was put on the board under, if it was. */
   let placedAs: string | undefined;
-  const startScreen = new StartScreen(startRun, renderer.paintSprite);
+  const startScreen = new StartScreen(startRun, renderer.paintSprite, startTeamRun);
 
   /** The weapons on offer, in the order their cards and their keys appear. */
   const starters = starterChoices();
@@ -91,6 +100,12 @@ async function main(): Promise<void> {
   // One source of rules, printed into the briefing, the pause screen and the
   // result screen. Put on the page by `relabel` below, once there is a world
   // for it to sync the overlays against.
+
+  const linkPanel = requireElement('link');
+  /** The roster, in seat order, so a link can be named as a player number. */
+  let roster: readonly string[] = [];
+  let hostingRun = false;
+  const memberSeat = (member: string): number => roster.indexOf(member);
 
   const pauseButton = document.getElementById('pause-button');
   pauseButton?.addEventListener('click', togglePause);
@@ -117,6 +132,28 @@ async function main(): Promise<void> {
   let world = newWorld();
 
   /**
+   * The other machines, or null when there are none.
+   *
+   * Solo is the absence of this rather than a special case of it: with no
+   * session the loop below is exactly the loop this game has always had, which
+   * is what keeps every measured table in the README about the same code.
+   */
+  let net: Session | null = null;
+
+  /** The peer connections this machine holds, or null outside a team run. */
+  let mesh: PeerMesh | null = null;
+
+  /**
+   * Everything arriving from anybody, heard once.
+   *
+   * Both transports carry every message, so a second window on this machine
+   * hears each of them twice. Most of what a session does is idempotent and
+   * would not care — but spending a level is not, and a duplicated pick would
+   * take two cards for one level.
+   */
+  const deliver = dedupe<NetMessage>((message) => net?.receive(world, message));
+
+  /**
    * The player at this keyboard.
    *
    * A function rather than a binding because `world` is replaced on restart,
@@ -125,7 +162,7 @@ async function main(): Promise<void> {
    * participant would have to change and nothing else.
    */
   function me(): Player {
-    return world.players[0];
+    return world.players[net?.guest === true ? net.seat : 0];
   }
 
   /** The player whose level-up menu is up, or null when nobody's is. */
@@ -214,6 +251,61 @@ async function main(): Promise<void> {
     syncOverlays();
   }
 
+  /**
+   * Begins a run the lobby put together.
+   *
+   * Everybody builds the same world from the same seed — only the host steps
+   * it, but a guest whose world disagreed about which weapons exist would draw
+   * the wrong figures — and then the two roles part company: the host plays,
+   * and a guest becomes a screen with a mailbox behind it.
+   */
+  function startTeamRun(start: LobbyStart): void {
+    picking = false;
+    placedAs = undefined;
+    roster = start.members;
+    hostingRun = start.hosting;
+    world = new World(start.seed, start.members.map(() => STARTER_WEAPON_ID));
+
+    // Two ways to reach the others, and both are used. The local one carries a
+    // second window on this machine and costs nothing; the peer connections
+    // carry another house. A message arriving twice is dropped by its nonce.
+    const local = openGameChannel<Envelope<NetMessage>>((message) => deliver(message));
+    mesh?.close();
+    mesh = new PeerMesh(
+      start.self,
+      start.code,
+      (message) => startScreen.signalling.signal(message),
+      (message) => deliver(message),
+      showLinks,
+    );
+    startScreen.signalling.onSignal = (message) => mesh?.receive(message);
+
+    // The host calls; a guest waits to be called. Whoever makes the offer also
+    // makes the data channel, and two of those is one too many.
+    if (start.hosting) {
+      for (const member of start.members) mesh.invite(member);
+    }
+
+    const channel = {
+      send: (message: NetMessage) => {
+        const wrapped: Envelope<NetMessage> = { n: nonce(), m: message };
+        local.send(wrapped);
+        mesh?.broadcast(wrapped);
+      },
+    };
+
+    net = start.hosting
+      ? new HostSession(channel, start.members)
+      : new GuestSession(channel, start.members[start.seat], start.seat);
+    showLinks();
+
+    input.clearPressed();
+    touch.reset();
+    clicks.reset();
+    loop.resync();
+    syncOverlays();
+  }
+
   function tick(dt: number): void {
     // Read the phase once. Branching on `world.phase` directly would let the
     // compiler narrow it for the rest of the block, and the systems below
@@ -289,17 +381,37 @@ async function main(): Promise<void> {
       // inside `steeringSystem` rather than half-obeyed here.
       // A downed player steers nothing and orders nothing. What their mouse
       // does instead is move the camera along the team — see `watching`.
-      if (isAlive(me())) {
-        const order = clicks.consume();
-        if (order !== null) me().moveTarget = renderer.screenToWorld(order.x, order.y);
+      const alive = isAlive(me());
+      const order = alive ? clicks.consume() : null;
+      const intent = alive ? combinedIntent() : { x: 0, y: 0 };
+      if (net?.guest === true) {
+        // A guest changes nothing here. It says what its hands are doing and
+        // waits to be told what happened — the world it holds is a mailbox.
+        if (alive) {
+          net.sendInput(
+            intent.x,
+            intent.y,
+            order === null ? null : renderer.screenToWorld(order.x, order.y),
+          );
+        } else if (clicks.consumePrimary()) {
+          net.watchNext();
+        }
+        return;
+      }
 
-        const intent = combinedIntent();
+      if (alive) {
+        if (order !== null) me().moveTarget = renderer.screenToWorld(order.x, order.y);
         me().intentX = intent.x;
         me().intentY = intent.y;
       } else if (clicks.consumePrimary()) {
         me().watching = nextLiving(world, me().watching);
       }
+
+      // Every guest's hand, written where the local input layer just wrote
+      // this machine's. Both have to land before the world moves.
+      if (net !== null && !net.guest) net.applyInputs(world);
       stepWorld(world, dt);
+      if (net !== null && !net.guest) net.publish(world, dt);
       syncOverlays();
       return;
     }
@@ -422,6 +534,9 @@ async function main(): Promise<void> {
    * seed with this weapon rather than silently ignoring one of the two.
    */
   function startRun(weaponId: string): void {
+    mesh?.close();
+    mesh = null;
+    net = null;
     picking = false;
     placedAs = undefined;
     world = newWorld(weaponId);
@@ -448,6 +563,47 @@ async function main(): Promise<void> {
     pauseGame();
   }
 
+  /**
+   * Says what the peer-to-peer layer is doing, and only when it has something
+   * to say.
+   *
+   * WebRTC fails silently, and silence in a waiting room is indistinguishable
+   * from a broken game. It cannot always be fixed — two machines behind
+   * symmetric NAT genuinely cannot reach each other without a relay this
+   * project does not run — but a player who is told *why* can do something
+   * about it, and one who is not decides the game is broken.
+   */
+  function showLinks(): void {
+    const reports = mesh?.report() ?? [];
+    const lines: HTMLElement[] = [];
+
+    for (const link of reports) {
+      if (link.state === 'open') continue;
+
+      const line = document.createElement('div');
+      const who = t('hud.player', { n: 1 + Math.max(0, memberSeat(link.member)) });
+
+      if (link.state === 'connecting') line.textContent = t('link.connecting');
+      else if (link.diagnosis !== null) line.textContent = t(`link.${link.diagnosis}`, { who });
+      lines.push(line);
+
+      if (link.diagnosis !== null) {
+        const advice = document.createElement('div');
+        advice.className = 'advice';
+        advice.textContent = shouldSwapHost(
+          { everConnected: false, sawPublicAddress: true, heardFromPeer: true, hosting: hostingRun },
+          link.diagnosis,
+        )
+          ? t('link.swapHost')
+          : t('link.tryAgain');
+        lines.push(advice);
+      }
+    }
+
+    linkPanel.replaceChildren(...lines);
+    linkPanel.hidden = lines.length === 0;
+  }
+
   function draw(alpha: number): void {
     // Whose eyes: their own while they are standing, and a teammate's while
     // they are not. One answer for the camera and the bars alike, so a
@@ -463,7 +619,11 @@ async function main(): Promise<void> {
     const player = chooser();
     if (player === null) return;
 
-    applyUpgrade(world, player, id);
+    // On a guest a pick is a request, not a change: the host owns the world and
+    // the cards were its roll. The menu closes when the snapshot saying so
+    // arrives, which is the same rule every other thing on screen follows.
+    if (net?.guest === true) net.pick(id);
+    else applyUpgrade(world, player, id);
     // Otherwise a still-held number key would immediately eat the next offer.
     input.clearPressed();
     // Only the click: a right button still down goes on steering, which is the
@@ -483,7 +643,8 @@ async function main(): Promise<void> {
     const player = chooser();
     if (player === null) return;
 
-    takeSpoil(world, player, id);
+    if (net?.guest === true) net.takeSpoil(id);
+    else takeSpoil(world, player, id);
     input.clearPressed();
     clicks.clearPending();
     syncOverlays();
