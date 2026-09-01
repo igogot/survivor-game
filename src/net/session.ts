@@ -1,5 +1,5 @@
 import { applySnapshot, encodeSnapshot } from './snapshot';
-import { nextLiving } from '../world/party';
+import { nextLiving, viewedBy } from '../world/party';
 import { takeSpoil } from '../systems/chests';
 import { applyUpgrade } from '../systems/progression';
 import type { World } from '../world/world';
@@ -43,7 +43,16 @@ export const SNAPSHOT_HZ = 20;
 const HOST_SEAT = 0;
 
 export type NetMessage =
-  | { readonly kind: 'snapshot'; readonly bytes: Uint8Array }
+  /**
+   * Addressed, unlike everything else here.
+   *
+   * Each guest is sent a different snapshot — cut around what that guest is
+   * looking at rather than around the party — so a snapshot has to say who it
+   * is for. It matters even on one machine: the local channel is a broadcast,
+   * and without a name on it every window would apply every other window's view
+   * of the world.
+   */
+  | { readonly kind: 'snapshot'; readonly to: string; readonly bytes: Uint8Array }
   | {
       readonly kind: 'input';
       readonly from: string;
@@ -73,6 +82,8 @@ export class HostSession {
 
   /** Which player each lobby member drives, by the id the lobby gave them. */
   private readonly seats: ReadonlyMap<string, number>;
+  /** The guests, in seat order, so a snapshot can be cut for each of them. */
+  private readonly guests: readonly string[];
 
   /**
    * The last thing each guest said their hands were doing.
@@ -93,6 +104,7 @@ export class HostSession {
     members: readonly string[],
   ) {
     this.seats = new Map(members.map((member, seat) => [member, seat]));
+    this.guests = members.filter((_, seat) => seat !== HOST_SEAT);
   }
 
   /**
@@ -166,7 +178,20 @@ export class HostSession {
   }
 
   /**
-   * Sends the world, at most `SNAPSHOT_HZ` times a second.
+   * Sends each guest their own view of the world, at most `SNAPSHOT_HZ` times a
+   * second.
+   *
+   * One snapshot per guest rather than one for everybody, and that is a trade
+   * made deliberately: the host pays to encode it N times, and every guest
+   * stops paying for the parts of the world they cannot see. A party that stays
+   * together sends much the same thing either way; a party that spreads out is
+   * where the old arrangement went wrong, because each guest was being sent
+   * three other screens' worth of horde.
+   *
+   * What it is cut around is what that guest is *looking at*, which is not
+   * always where their player is standing — a downed player watching a teammate
+   * from across the map needs the teammate's surroundings. `viewedBy` answers
+   * exactly that question and is the same one the camera asks.
    *
    * Called every tick and mostly does nothing, which is cheaper than a second
    * timer and keeps the rate tied to simulation time rather than to wall clock:
@@ -178,7 +203,19 @@ export class HostSession {
     if (this.due > 0) return;
 
     this.due += 1 / SNAPSHOT_HZ;
-    this.channel.send({ kind: 'snapshot', bytes: encodeSnapshot(world) });
+
+    for (const guest of this.guests) {
+      const seat = this.seats.get(guest);
+      const player = seat === undefined ? undefined : world.players[seat];
+      if (player === undefined) continue;
+
+      const eyes = viewedBy(world, player);
+      this.channel.send({
+        kind: 'snapshot',
+        to: guest,
+        bytes: encodeSnapshot(world, { x: eyes.x, y: eyes.y }),
+      });
+    }
   }
 }
 
@@ -198,13 +235,15 @@ export class GuestSession {
 
   constructor(
     private readonly channel: NetChannel,
-    private readonly self: string,
+    readonly self: string,
     /** Which player in the world is this machine's. */
     readonly seat: number,
   ) {}
 
   receive(world: World, message: NetMessage): void {
-    if (message.kind !== 'snapshot') return;
+    // Addressed, so a broadcast carrying somebody else's view of the world goes
+    // past without being applied.
+    if (message.kind !== 'snapshot' || message.to !== this.self) return;
     applySnapshot(world, message.bytes);
   }
 

@@ -112,6 +112,42 @@ describe('what a guest sees', () => {
   });
 });
 
+describe('a snapshot with a name on it', () => {
+  /**
+   * Each guest is sent a different world — cut around what they are looking at
+   * — so a snapshot has to say who it is for. It matters even on one machine:
+   * the local channel is a broadcast, and without the name every window would
+   * apply every other window's view.
+   */
+  it('is addressed, and ignored by anybody else', () => {
+    const net = wire(53, ['a', 'b', 'c']);
+    net.play(0.2);
+
+    const snapshots = net.sent.filter((message) => message.kind === 'snapshot');
+    expect(snapshots.length).toBeGreaterThan(0);
+    // One per guest, never one for the host.
+    expect(new Set(snapshots.map((message) => (message as { to: string }).to))).toEqual(
+      new Set(['b', 'c']),
+    );
+  });
+
+  it('does not apply one meant for somebody else', () => {
+    const net = wire(54, ['a', 'b']);
+    net.play(0.5);
+    const known = net.guestWorld.time;
+
+    const someoneElse = net.sent.find((message) => message.kind === 'snapshot');
+    expect(someoneElse).toBeDefined();
+    if (someoneElse === undefined || someoneElse.kind !== 'snapshot') return;
+
+    net.play(1);
+    net.guest.receive(net.guestWorld, { ...someoneElse, to: 'not-me' });
+
+    // Whatever the stale snapshot said, it was not applied over the fresh one.
+    expect(net.guestWorld.time).toBeGreaterThan(known);
+  });
+});
+
 describe('what a guest may do', () => {
   it('drives the player it owns', () => {
     const net = wire(45, ['a', 'b']);
