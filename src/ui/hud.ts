@@ -1,5 +1,7 @@
 import { CONFIG } from '../config';
 import { weaponById } from '../data/weapons';
+import { edgeMark } from './offscreen';
+import type { SpritePainter } from './starters';
 import type { Enemy, Player } from '../world/types';
 import type { World } from '../world/world';
 
@@ -17,6 +19,23 @@ const HP_PER_SEGMENT = 25;
 const LOW_HP = 0.3;
 /** Time constant of the trailing chunk, in seconds. */
 const GHOST_TAU = 0.35;
+
+/** How far the chest pointer stays clear of the edge of the glass, in pixels. */
+const MARKER_INSET = 56;
+/**
+ * How far it stays clear of the top, where the HUD is.
+ *
+ * The health bar, the level badge and the stat row all live in that strip, and
+ * a marker sitting on them is unreadable twice over. Everything else the HUD
+ * puts on the glass is either transparent to it or in a corner.
+ */
+const MARKER_TOP_INSET = 110;
+/** Smallest region the marker will be confined to, so a tiny window still works. */
+const MARKER_MIN_REACH = 24;
+/** How far the arrow sits from the middle of the badge it points away from. */
+const ARROW_REACH = 26;
+/** Side of the chest icon painted into the pointer, matching its atlas frame. */
+const MARKER_ART_SIZE = 48;
 
 export class Hud {
   private readonly level = requireElement('level');
@@ -36,6 +55,8 @@ export class Hud {
   private readonly boss = requireElement('boss');
   private readonly bossFill = requireElement('boss-fill');
   private readonly warning = requireElement('warning');
+  private readonly chestMarker = requireElement('chest-marker');
+  private readonly chestArrow = requireElement('chest-arrow');
 
   /** Exponential moving average — a raw per-frame value is unreadable. */
   private smoothedFps = 60;
@@ -44,6 +65,24 @@ export class Hud {
   /** Where the trailing chunk of the HP bar currently sits, as a percentage. */
   private ghost = 100;
   private lastMaxHp = 0;
+
+  /**
+   * Painted once, from the same source the atlas uses.
+   *
+   * The pointer shows the chest itself rather than a symbol standing in for
+   * one, so there is nothing to learn: whatever is at the end of the arrow is
+   * what the arrow is drawn as.
+   */
+  constructor(paint: SpritePainter) {
+    const icon = requireElement('chest-icon');
+    if (!(icon instanceof HTMLCanvasElement)) return;
+    // Sized here rather than in the markup, and painted at the frame's own
+    // size to be scaled down by CSS: the artwork is 16px pixel art, and
+    // letting a canvas do the scaling would blur it.
+    icon.width = MARKER_ART_SIZE;
+    icon.height = MARKER_ART_SIZE;
+    paint('chest', icon);
+  }
 
   update(world: World): void {
     const now = performance.now();
@@ -75,6 +114,47 @@ export class Hud {
     this.fps.textContent = `${Math.round(this.smoothedFps)} fps`;
 
     this.updateBoss(world);
+    this.updateChest(world);
+  }
+
+  /**
+   * Points at the chest for as long as there is one.
+   *
+   * Hidden while the chest is on screen, because then the chest is the marker.
+   * The camera is centred on the player and never rotates, so the direction on
+   * screen is the direction in the world and this needs nothing from the
+   * renderer — just the two positions and the size of the window.
+   */
+  private updateChest(world: World): void {
+    const chest = world.chest;
+    if (chest === null) {
+      this.chestMarker.hidden = true;
+      return;
+    }
+
+    const zoom = CONFIG.camera.zoom;
+    const halfWidth = window.innerWidth / 2;
+    const halfHeight = window.innerHeight / 2;
+    const reach = (half: number, inset: number): number =>
+      Math.max(MARKER_MIN_REACH, half - inset);
+
+    const mark = edgeMark((chest.x - world.player.x) * zoom, (chest.y - world.player.y) * zoom, {
+      left: reach(halfWidth, MARKER_INSET),
+      right: reach(halfWidth, MARKER_INSET),
+      top: reach(halfHeight, MARKER_TOP_INSET),
+      bottom: reach(halfHeight, MARKER_INSET),
+    });
+
+    this.chestMarker.hidden = mark.onScreen;
+    if (mark.onScreen) return;
+
+    // Half its own size back, so the badge is centred on the point rather than
+    // hanging off it — the offset is measured to the middle of the marker.
+    this.chestMarker.style.transform =
+      `translate(calc(-50% + ${mark.x}px), calc(-50% + ${mark.y}px))`;
+    // Rotated first, so the arrow is then pushed out along its own axis and
+    // ends up beyond the badge pointing the way the player has to walk.
+    this.chestArrow.style.transform = `rotate(${mark.angle}rad) translateX(${ARROW_REACH}px)`;
   }
 
   private updateHealth(player: Player, dt: number): void {

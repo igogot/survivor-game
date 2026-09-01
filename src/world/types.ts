@@ -17,6 +17,20 @@ export interface MoveTarget {
   y: number;
 }
 
+/**
+ * A chest waiting to be walked into, in world units.
+ *
+ * The only thing in the game that stays where it was put. It carries no
+ * `px`/`py` because it never moves, and no contents because what is inside is
+ * rolled when it is opened rather than when it is placed — a chest the player
+ * can see is a chest whose spoils have not been decided yet, which is what
+ * stops the same seed from being read off the arrow.
+ */
+export interface Chest {
+  x: number;
+  y: number;
+}
+
 export interface PlayerStats {
   maxHp: number;
   moveSpeed: number;

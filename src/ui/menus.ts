@@ -1,8 +1,9 @@
 import { formatTime, requireElement } from './hud';
-import { describeOffer } from './offers';
+import { describeOffer, describeSpoil } from './offers';
 import { renderHelp } from './help';
 import { cssColor, starterChoices } from './starters';
 import type { SpritePainter, StarterChoice } from './starters';
+import type { SpoilDef } from '../data/spoils';
 import type { UpgradeDef } from '../data/upgrades';
 import type { World } from '../world/world';
 
@@ -191,6 +192,72 @@ export class UpgradeMenu {
 
       card.append(top, name, description, stackLine);
       card.addEventListener('click', () => this.onPick(offer.id));
+      this.cards.append(card);
+    });
+
+    this.root.hidden = false;
+  }
+
+  hide(): void {
+    this.root.hidden = true;
+  }
+}
+
+/**
+ * The chest screen.
+ *
+ * Deliberately built out of the same cards as the level-up menu — same size,
+ * same digits, same shape — because it is the same gesture and a second visual
+ * language would be one more thing to learn mid-run. What differs is what the
+ * cards say: a badge naming which of the three questions each one answers, and
+ * a line saying it is spent on the spot.
+ *
+ * Rebuilt on each show like the level-up menu, and for the same reason: what
+ * is inside is rolled when the chest is opened, so there is nothing to keep.
+ */
+export class ChestMenu {
+  private readonly root = requireElement('chest');
+  private readonly cards = requireElement('chest-cards');
+
+  constructor(private readonly onTake: (id: string) => void) {}
+
+  show(spoils: readonly SpoilDef[]): void {
+    this.cards.replaceChildren();
+
+    spoils.forEach((spoil, index) => {
+      const label = describeSpoil(spoil);
+
+      const card = document.createElement('button');
+      card.className = 'card card--spoil';
+      card.type = 'button';
+
+      const top = document.createElement('span');
+      top.className = 'card-top';
+
+      const key = document.createElement('span');
+      key.className = 'key';
+      key.textContent = String(index + 1);
+
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = label.badge;
+
+      top.append(key, badge);
+
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = spoil.name;
+
+      const description = document.createElement('div');
+      description.className = 'desc';
+      description.textContent = spoil.description;
+
+      const note = document.createElement('div');
+      note.className = 'stacks';
+      note.textContent = label.note;
+
+      card.append(top, name, description, note);
+      card.addEventListener('click', () => this.onTake(spoil.id));
       this.cards.append(card);
     });
 

@@ -40,6 +40,15 @@ const FLAME_TURN = 0.05;
 const MARKER_SIZE = 26;
 
 /**
+ * The gold a chest and everything pointing at it are drawn in.
+ *
+ * Only reached when the artwork failed and the frame is a white mask — the
+ * sheet's own chest is already this colour. The HUD pointer and the spoil
+ * cards repeat it in CSS, which is the one copy that cannot be shared.
+ */
+const CHEST_COLOR = 0xffd166;
+
+/**
  * Ceiling on the backing-store scale.
  *
  * A phone reporting `devicePixelRatio` 3 asks for nine times the fragments of a
@@ -78,6 +87,7 @@ export class GameRenderer {
 
   private playerSprite!: Sprite;
   private markerSprite!: Sprite;
+  private chestSprite!: Sprite;
   private readonly enemySprites: Sprite[] = [];
   private readonly flashSprites: Sprite[] = [];
   private readonly projectileSprites: Sprite[] = [];
@@ -125,15 +135,29 @@ export class GameRenderer {
     this.markerSprite.visible = false;
     fit(this.markerSprite, MARKER_SIZE);
 
+    this.chestSprite = new Sprite(this.textures.sprites.chest);
+    this.chestSprite.anchor.set(0.5);
+    // Per frame rather than per run: the chest comes out of the sheet when
+    // there is one, so `tintFor` leaves it alone, and paints the drawn box
+    // gold when there is not.
+    this.chestSprite.tint = this.tintFor('chest', CHEST_COLOR);
+    this.chestSprite.visible = false;
+    fit(this.chestSprite, CONFIG.chest.radius * 2);
+
     // The move marker sits under everything, gems included: it must never hide
     // something the player has to see. Then the burning ground, which is
     // ground — it must not cover a gem lying in it or an enemy walking through
-    // it. Then gems, then the horde. Shockwaves draw over the horde or the
-    // crowd would swallow them; the player and their blades stay on top of
-    // both.
+    // it. Then the chest, which stands on that ground rather than being it: a
+    // flame patch swallowing the one thing the player is walking towards would
+    // cost more than a chest hiding a patch of fire. Both stay under the horde,
+    // because a crowd standing on the chest is information — it says what the
+    // trip is going to cost. Then gems, then the horde. Shockwaves draw over
+    // the horde or the crowd would swallow them; the player and their blades
+    // stay on top of both.
     this.camera.addChild(
       this.markerSprite,
       this.flameLayer,
+      this.chestSprite,
       this.gemLayer,
       this.enemyLayer,
       this.flashLayer,
@@ -179,6 +203,13 @@ export class GameRenderer {
     const target = world.moveTarget;
     this.markerSprite.visible = target !== null;
     if (target !== null) this.markerSprite.position.set(target.x, target.y);
+
+    // Drawn straight from its position with no interpolation: it is the one
+    // thing in the world that does not move, so there is nothing between two
+    // ticks to interpolate.
+    const chest = world.chest;
+    this.chestSprite.visible = chest !== null;
+    if (chest !== null) this.chestSprite.position.set(chest.x, chest.y);
 
     this.drawFlames(world);
     this.drawEnemies(world, alpha);

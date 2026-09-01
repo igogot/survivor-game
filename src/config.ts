@@ -55,6 +55,60 @@ export const CONFIG = {
     magnetSpeed: 280,
   },
 
+  /**
+   * The only thing in the world that is not the player, the horde or what the
+   * horde drops.
+   *
+   * One chest exists at a time and it never expires, so the arrow pointing at
+   * it is a standing offer rather than something that can be missed. Reaching
+   * it is the cost: it is placed behind the player, which is the ground they
+   * have already crossed and the crowd they have already outrun.
+   */
+  chest: {
+    /** Seconds before the first one is placed. */
+    firstAt: 75,
+    /** Seconds from one being opened to the next being placed. */
+    interval: 150,
+    /** How far from the player one appears. Roughly five seconds of running. */
+    distance: 900,
+    /** Half-width of the arc behind the player it is placed in, in radians. */
+    spread: 1.2,
+    /**
+     * How far a chest may fall behind before it is put down again, closer.
+     *
+     * A chest can be outrun — it is placed behind and the player is faster
+     * than everything chasing them — and one left far enough back blocks every
+     * later chest for the rest of the run, because the next is not scheduled
+     * until this one is taken. The stand found that with the bot, on the base
+     * before the spear and the harpoon: a seed that spent 69% of its run with
+     * a chest lying 6628 units away, two collected in twelve minutes, level 10
+     * where the same seed used to reach 29. This guard is what stops that
+     * being reproducible now.
+     *
+     * Put down again rather than taken away, because nothing was spent and the
+     * offer should still stand. Twice the walk, so an honest detour never sees
+     * it move.
+     */
+    abandonAt: 1800,
+    /** Drawn size, and half of what it takes to walk into one. */
+    radius: 18,
+    /** What a mend restores, as a fraction of maximum health. */
+    mendFraction: 0.5,
+    /** How far a harvest reaches for the gems the player left behind. */
+    harvestRadius: 1200,
+    /** Seconds a harvest keeps pulling. */
+    harvestTime: 4,
+    /**
+     * How fast a harvested gem travels, in units per second.
+     *
+     * Faster than the ordinary magnet because it has to cross `harvestRadius`
+     * inside `harvestTime` even while the player runs the other way. A pull
+     * that expires mid-flight would quietly deliver less than the card
+     * promises, which is the one thing a one-use reward may not do.
+     */
+    harvestSpeed: 800,
+  },
+
   spawn: {
     /** Enemies appear on a ring this far out, always off-screen. */
     ringRadius: 780,

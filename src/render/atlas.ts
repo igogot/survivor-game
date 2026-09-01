@@ -483,6 +483,28 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     polygon(ctx, size, 6, 2);
   },
 
+  /*
+   * A box, its lid seam, and the latch holding the two together.
+   *
+   * The seam is cut out and the latch drawn back over it, rather than the
+   * latch being drawn on top of an unbroken box: a mask has one colour, so the
+   * only way to show a line is to remove it, and the only way to interrupt
+   * that line is to put the mask back.
+   */
+  chest: (ctx, size) => {
+    const inset = size * 0.13;
+    const width = size - inset * 2;
+    const top = size * 0.2;
+
+    ctx.fillStyle = WHITE;
+    ctx.beginPath();
+    ctx.roundRect(inset, top, width, size - top - inset, size * 0.1);
+    ctx.fill();
+
+    carve(ctx, () => ctx.fillRect(inset, size * 0.46, width, size * 0.07));
+    ctx.fillRect(size / 2 - size * 0.08, size * 0.38, size * 0.16, size * 0.24);
+  },
+
   // Stroked just inside the frame, so scaling the sprite to `radius * 2` puts
   // the outer edge of the stroke exactly on the shockwave's radius.
   ring: (ctx, size) => {
@@ -517,6 +539,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'ember', size: 64 },
   { name: 'gem', size: 32 },
   { name: 'gemRich', size: 32 },
+  { name: 'chest', size: 48 },
   { name: 'ring', size: 96 },
 ];
 

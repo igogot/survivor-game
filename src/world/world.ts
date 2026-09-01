@@ -4,16 +4,27 @@ import { Rng } from '../core/rng';
 import { SpatialGrid } from './grid';
 import { STARTER_WEAPON_ID, createWeaponState, starterWeapon } from '../data/weapons';
 import { xpForLevel } from '../systems/progression';
+import type { SpoilDef } from '../data/spoils';
 import type { UpgradeDef } from '../data/upgrades';
-import type { Effect, Enemy, Flame, Gem, MoveTarget, Player, Projectile, WeaponState } from './types';
+import type {
+  Chest,
+  Effect,
+  Enemy,
+  Flame,
+  Gem,
+  MoveTarget,
+  Player,
+  Projectile,
+  WeaponState,
+} from './types';
 
-export type Phase = 'playing' | 'levelup' | 'paused' | 'dead';
+export type Phase = 'playing' | 'levelup' | 'chest' | 'paused' | 'dead';
 
 /**
  * The phases a run can be paused from, and therefore returned to. A finished
  * run is already stopped, so pausing one would mean nothing.
  */
-export type ResumablePhase = 'playing' | 'levelup';
+export type ResumablePhase = 'playing' | 'levelup' | 'chest';
 
 /**
  * The entire game state. Deliberately free of any Pixi, DOM or timing import —
@@ -100,6 +111,27 @@ export class World {
   pendingLevels = 0;
   offered: UpgradeDef[] = [];
   readonly stacks = new Map<string, number>();
+
+  /**
+   * The chest waiting on the ground, or null when there is none.
+   *
+   * One at a time, by the type rather than by a rule somebody has to remember.
+   * It never expires: the arrow on the HUD points at it until it is taken, so
+   * it is a standing offer rather than something a player can be too slow for.
+   */
+  chest: Chest | null = null;
+  /** Seconds until the next chest is placed. Only counts down while there is none. */
+  chestTimer: number = CONFIG.chest.firstAt;
+  /** What the open chest is offering. Only meaningful while the phase is 'chest'. */
+  spoils: SpoilDef[] = [];
+  /**
+   * Seconds left on a harvest.
+   *
+   * On the world rather than on the player because it is not a stat: nothing
+   * stacks it, nothing multiplies it, and it belongs to the run the way the
+   * spawn timer does.
+   */
+  harvest = 0;
 
   nextEntityId = 1;
 
