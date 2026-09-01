@@ -61,61 +61,154 @@ type Draw = (ctx: CanvasRenderingContext2D, width: number, height: number) => vo
 const WHITE = '#ffffff';
 
 /**
- * Where the ember's edge sits at one angle, as a fraction of its radius.
+ * The ember, drawn as pixels instead of as a curve.
  *
- * Pulled out of the drawer so the rule can be tested without a canvas: the
- * result is never above 1, which is what "the fire never reaches past what it
- * burns" means in code.
+ * Everything else on screen is 16px pixel art blown up four times, and a
+ * smooth polar outline sat against it as the one thing in the game with no
+ * pixels in it. These are the same 16 by 16 the sheet's tiles are, so the fire
+ * is made of the same size of pixel as the crab standing in it.
  *
- * Three waves whose frequencies share no common factor, so the tongues never
- * line up into a pattern the eye can finish. The amplitudes add to `EMBER_REACH`
- * and `EMBER_FLOOR` is what is left of the radius underneath them; together
- * they come to exactly 1.
+ * `#` is the hot middle and `+` the cooler edge — the tileset outlines every
+ * sprite in a darker shade of itself, and a mask can do the same by painting
+ * the rim at part alpha. `.` is nothing.
+ *
+ * Four frames, cycled by the renderer. A patch of fire that holds still is a
+ * stain, which is what one frame always looked like however it was shaped.
  */
-const EMBER_WAVES: readonly (readonly [number, number, number])[] = [
-  [0.18, 5, 0],
-  [0.1, 8, 2.1],
-  [0.06, 13, 0.7],
+const EMBER_GRID = 16;
+
+/** How much of the tint the cooler rim keeps. */
+const EMBER_DIM = 0.55;
+
+const EMBER_PIXELS: readonly (readonly string[])[] = [
+  [
+    '................',
+    '................',
+    '...+++..+++.....',
+    '..++++++++++....',
+    '..++###+###+....',
+    '...+#######+....',
+    '...+########+++.',
+    '..++#########++.',
+    '..+##########++.',
+    '..++########+++.',
+    '...++######+....',
+    '....+###+##++...',
+    '....++##++++....',
+    '....++++..+.....',
+    '.....++.........',
+    '................',
+  ],
+  [
+    '................',
+    '................',
+    '.....+++...+....',
+    '.....+#+++++++..',
+    '.....+##+###++..',
+    '.+++++######++..',
+    '.++#########+...',
+    '.++########++...',
+    '..++########++..',
+    '...+########++..',
+    '...+######++++..',
+    '...++#+####.....',
+    '...+++.+##++....',
+    '.......++++.....',
+    '........+++.....',
+    '................',
+  ],
+  [
+    '................',
+    '.......+++......',
+    '.......++++.....',
+    '....+.+###+.....',
+    '...++++###+++...',
+    '..++########++..',
+    '...+#########+..',
+    '...++#######++..',
+    '..+########++...',
+    '.++#########++..',
+    '.++#########++..',
+    '..++++###+##++..',
+    '.....++#++++++..',
+    '......+++.......',
+    '.......+........',
+    '................',
+  ],
+  [
+    '................',
+    '................',
+    '...++++..+++....',
+    '...++##+++++....',
+    '...++######++...',
+    '....+######+++..',
+    '..+++########++.',
+    '..+##########++.',
+    '..+##########++.',
+    '..++########++..',
+    '...++######+....',
+    '....+######+....',
+    '...++##+++++....',
+    '....+++..+++....',
+    '.....+..........',
+    '................',
+  ],
 ];
-const EMBER_REACH = 0.34;
-const EMBER_FLOOR = 0.66;
 
 /**
- * The largest value the waves actually reach together.
+ * The frames of the flicker, in the order they are shown.
  *
- * Not the sum of the amplitudes: three cosines at different phases never crest
- * at the same angle, so the sum overstates the real peak by about a fourteenth
- * — and that fourteenth is the difference between fire that touches the ground
- * it burns and fire that stops short of it everywhere. Measured here rather
- * than written down, because a written-down number is exactly what goes stale
- * when somebody retunes the waves above.
+ * Exported so the renderer cycles the list the atlas actually built rather than
+ * a second list that could fall out of step with it.
  */
-const EMBER_PEAK = ((): number => {
-  const steps = 2048;
-  let peak = 0;
-  for (let i = 0; i < steps; i++) {
-    const angle = (i * TAU) / steps;
-    let wave = 0;
-    for (const [amplitude, frequency, phase] of EMBER_WAVES) {
-      wave += amplitude * Math.cos(frequency * angle + phase);
+export const EMBER_FRAMES: readonly SpriteName[] = ['ember', 'ember2', 'ember3', 'ember4'];
+
+/**
+ * Which cells a frame may light.
+ *
+ * A patch burns its full radius and this project's rule is that a weapon hits
+ * where it is drawn, so the fire may never reach past the circle it burns. On
+ * a pixel grid that has to be measured to the corner of a cell and not to its
+ * middle: a lit cell is a square of paint, and half of it hanging outside the
+ * circle is paint outside the circle. `tests/atlas.test.ts` holds every frame
+ * to this, because a frame is pixels and pixels have no test of their own.
+ */
+export function emberCellFits(col: number, row: number): boolean {
+  const middle = EMBER_GRID / 2;
+  let farthest = 0;
+  for (const x of [col, col + 1]) {
+    for (const y of [row, row + 1]) {
+      farthest = Math.max(farthest, Math.hypot(x - middle, y - middle));
     }
-    peak = Math.max(peak, wave);
   }
-  return peak;
-})();
+  return farthest <= middle;
+}
 
-export function emberRadius(angle: number): number {
-  let wave = 0;
-  for (const [amplitude, frequency, phase] of EMBER_WAVES) {
-    wave += amplitude * Math.cos(frequency * angle + phase);
+/** The frames as the tests read them: one string per row, top to bottom. */
+export function emberFramePixels(index: number): readonly string[] {
+  return EMBER_PIXELS[index] ?? [];
+}
+
+export { EMBER_GRID };
+
+function paintEmber(ctx: CanvasRenderingContext2D, size: number, index: number): void {
+  const frame = EMBER_PIXELS[index];
+  const cell = size / EMBER_GRID;
+
+  ctx.save();
+  ctx.fillStyle = WHITE;
+  for (let row = 0; row < EMBER_GRID; row++) {
+    const line = frame[row];
+    for (let col = 0; col < EMBER_GRID; col++) {
+      const mark = line[col];
+      if (mark === '.') continue;
+      ctx.globalAlpha = mark === '#' ? 1 : EMBER_DIM;
+      // Whole cells, so the frame scales up with hard edges rather than a
+      // gradient — the thing that makes it read as pixel art at all.
+      ctx.fillRect(col * cell, row * cell, cell, cell);
+    }
   }
-
-  // Crests pulled to points, troughs left round and shallow. Fire licks outward
-  // and pools at the base; a curve symmetric about its own mean does neither,
-  // which is the whole difference from the seven-lobed wobble this replaced.
-  const unit = wave / EMBER_PEAK;
-  const shaped = unit >= 0 ? Math.pow(unit, 2.2) * EMBER_REACH : wave * 0.4;
-  return EMBER_FLOOR + shaped;
+  ctx.restore();
 }
 
 /**
@@ -519,26 +612,10 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
    * the neighbouring patches, which sit three quarters of a radius away; the
    * only exposed rim in the game is the newest patch, under the player's feet.
    */
-  ember: (ctx, size) => {
-    const centre = size / 2;
-    const outer = size / 2 - 1;
-    // Enough segments that a tongue's point is a point rather than a facet at
-    // the size a patch is actually drawn.
-    const steps = 288;
-
-    ctx.fillStyle = WHITE;
-    ctx.beginPath();
-    for (let i = 0; i < steps; i++) {
-      const angle = (i * TAU) / steps;
-      const radius = outer * emberRadius(angle);
-      const x = centre + Math.cos(angle) * radius;
-      const y = centre + Math.sin(angle) * radius;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
-  },
+  ember: (ctx, size) => paintEmber(ctx, size, 0),
+  ember2: (ctx, size) => paintEmber(ctx, size, 1),
+  ember3: (ctx, size) => paintEmber(ctx, size, 2),
+  ember4: (ctx, size) => paintEmber(ctx, size, 3),
 
   gem: (ctx, size) => {
     ctx.fillStyle = WHITE;
@@ -606,6 +683,9 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'orb', size: 32 },
   { name: 'spear', size: 32, width: 192 },
   { name: 'ember', size: 64 },
+  { name: 'ember2', size: 64 },
+  { name: 'ember3', size: 64 },
+  { name: 'ember4', size: 64 },
   { name: 'gem', size: 32 },
   { name: 'gemRich', size: 32 },
   { name: 'chest', size: 48 },
