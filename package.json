@@ -7,10 +7,12 @@
   "scripts": {
     "start": "vite --open",
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "limits": "vite-node scripts/emit-limits.ts",
+    "build": "tsc --noEmit && npm run limits && vite build && vite-node scripts/scrub-dist.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:api": "php tests/api.php",
     "test:watch": "vitest",
     "balance": "vitest run --config vitest.balance.config.ts",
     "endless": "vitest run --config vitest.endless.config.ts",

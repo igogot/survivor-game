@@ -50,6 +50,11 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           server-dir: ${{ secrets.FTP_SERVER_DIR }}
           local-dir: ./dist/
+          # The credentials file lives only on the host. This action deletes
+          # remote files it cannot see locally, so without this line the first
+          # deploy after setting the board up would take the board down.
+          exclude: |
+            **/api/config.php
           # Encrypted FTP. If the run fails with a TLS or AUTH error, this
           # server does not offer it — change ftps to ftp and rotate the
           # password afterwards, since plain FTP sends it in the clear.

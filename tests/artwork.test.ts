@@ -20,7 +20,15 @@ import type { SpriteName } from '../src/data/sprites';
  * Listing them here rather than allowing any gap is the point — a sprite that
  * quietly lost its art would otherwise look like a deliberate choice.
  */
-const DRAWN_ONLY: readonly SpriteName[] = ['ring', 'spear', 'harpoon', 'ember'];
+const DRAWN_ONLY: readonly SpriteName[] = [
+  'ring',
+  'spear',
+  'harpoon',
+  'ember',
+  'ember2',
+  'ember3',
+  'ember4',
+];
 
 describe('sprite artwork', () => {
   it('gives every sprite either a tile or a deliberate exemption', () => {

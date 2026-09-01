@@ -51,8 +51,16 @@ export type SpriteName =
    * is why it is the one frame in the atlas wider than it is tall.
    */
   | 'spear'
-  /** One patch of burning ground. A trail is a few dozen of these overlapping. */
+  /**
+   * One patch of burning ground. A trail is a few dozen of these overlapping.
+   *
+   * Four frames rather than one, cycled by the renderer: fire that holds still
+   * is a stain, and a stain is what a single frame was. See `EMBER_FRAMES`.
+   */
   | 'ember'
+  | 'ember2'
+  | 'ember3'
+  | 'ember4'
   | 'gem'
   /** A pickup worth more than one XP, told apart by frame rather than by tint. */
   | 'gemRich'
