@@ -10,8 +10,8 @@ const DT = 1 / CONFIG.tickRate;
 /** Walks the world forward so there is something to freeze. */
 function play(world: World, seconds: number): void {
   for (let i = 0; i < Math.round(seconds * CONFIG.tickRate); i++) {
-    world.intentX = 1;
-    world.intentY = 0;
+    world.players[0].intentX = 1;
+    world.players[0].intentY = 0;
     stepWorld(world, DT);
   }
 }
@@ -23,7 +23,7 @@ describe('pauseRun', () => {
 
     const time = world.time;
     const enemies = world.enemies.length;
-    const x = world.player.x;
+    const x = world.players[0].x;
     expect(enemies).toBeGreaterThan(0);
 
     pauseRun(world);
@@ -35,7 +35,7 @@ describe('pauseRun', () => {
     // freezing it is what keeps a pause from making the next minute harder.
     expect(world.time).toBe(time);
     expect(world.enemies.length).toBe(enemies);
-    expect(world.player.x).toBe(x);
+    expect(world.players[0].x).toBe(x);
   });
 
   it('returns to playing on resume', () => {
@@ -55,20 +55,20 @@ describe('pauseRun', () => {
   /** Otherwise pausing would be a way to skip the choice and keep playing. */
   it('gives the level-up choice back instead of swallowing it', () => {
     const world = new World(3);
-    world.player.xp = xpForLevel(1);
+    world.players[0].xp = xpForLevel(1);
     progressionSystem(world);
     expect(world.phase).toBe('levelup');
 
-    const offered = world.offered;
-    const pending = world.pendingLevels;
+    const offered = world.players[0].offered;
+    const pending = world.players[0].pendingLevels;
 
     pauseRun(world);
     expect(world.phase).toBe('paused');
 
     resumeRun(world);
     expect(world.phase).toBe('levelup');
-    expect(world.offered).toBe(offered);
-    expect(world.pendingLevels).toBe(pending);
+    expect(world.players[0].offered).toBe(offered);
+    expect(world.players[0].pendingLevels).toBe(pending);
   });
 
   it('refuses to pause a finished run', () => {

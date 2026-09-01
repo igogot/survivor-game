@@ -3,6 +3,7 @@ import { describeOffer } from './offers';
 import { renderHelp } from './help';
 import { cssColor, starterChoices } from './starters';
 import type { SpritePainter, StarterChoice } from './starters';
+import type { Player } from '../world/types';
 import type { UpgradeDef } from '../data/upgrades';
 import type { World } from '../world/world';
 
@@ -287,13 +288,13 @@ export class ResultScreen {
     this.againButton.addEventListener('click', onRestart);
   }
 
-  show(world: World): void {
+  show(world: World, view: Player): void {
     this.title.textContent = 'You Died';
     this.subtitle.textContent = resultSubtitle(world.bossesKilled);
 
     this.time.textContent = formatTime(world.time);
     this.kills.textContent = String(world.kills);
-    this.level.textContent = String(world.player.level);
+    this.level.textContent = String(view.level);
     this.bosses.textContent = String(world.bossesKilled);
 
     this.root.hidden = false;

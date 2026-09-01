@@ -1,0 +1,114 @@
+import type { Player } from './types';
+import type { World } from './world';
+
+/**
+ * The questions that had exactly one answer while there was exactly one player.
+ *
+ * "Which player does this enemy walk toward", "where does the spawn ring go",
+ * "how far is too far to keep a body alive" — every one of them used to read
+ * `world.player` and be done. With a party they are decisions, and putting them
+ * here rather than inlining an answer in each system is what makes them
+ * decisions that can be found and changed together.
+ */
+
+/** A player still standing. The dead are not targets and not anchors. */
+export function isAlive(player: Player): boolean {
+  return player.hp > 0;
+}
+
+/** Whether the run is still going, i.e. anybody is left to play it. */
+export function anyAlive(world: World): boolean {
+  return world.players.some(isAlive);
+}
+
+/**
+ * The living player nearest a point, or null when the party is wiped.
+ *
+ * Nearest rather than anything cleverer, and that is a choice worth naming: it
+ * is the rule that makes splitting up strong, because a party spread over four
+ * corners is four separate horde-halves that never meet. Whether it stays the
+ * rule is a question for the four-player stand, and this is the one place that
+ * has to change when the answer comes back.
+ */
+export function nearestPlayer(world: World, x: number, y: number): Player | null {
+  const players = world.players;
+
+  let nearest: Player | null = null;
+  let nearestDistance = Infinity;
+
+  for (let i = 0; i < players.length; i++) {
+    const player = players[i];
+    if (!isAlive(player)) continue;
+
+    const dx = player.x - x;
+    const dy = player.y - y;
+    const distance = dx * dx + dy * dy;
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearest = player;
+    }
+  }
+
+  return nearest;
+}
+
+/** Squared distance from a point to the nearest living player, or Infinity. */
+export function nearestPlayerDistanceSq(world: World, x: number, y: number): number {
+  const nearest = nearestPlayer(world, x, y);
+  if (nearest === null) return Infinity;
+
+  const dx = nearest.x - x;
+  const dy = nearest.y - y;
+  return dx * dx + dy * dy;
+}
+
+/**
+ * Where the party is and where it is going, as one point and one direction.
+ *
+ * The spawner needs both: it puts enemies on a ring around the player and
+ * biases two thirds of them into the direction of travel. With four of them
+ * there is no single position and no single heading, so this averages the
+ * living ones.
+ *
+ * A centroid is the crude answer and deliberately the first one: it keeps a
+ * party that stays together behaving exactly as one player did, and it makes a
+ * party that scatters share one wave instead of each summoning their own. What
+ * it does badly is the scattered case — the ring can land in the middle of
+ * nobody — and that is a thing to measure rather than to pre-empt.
+ *
+ * With one player the sums are divided by one, so every number that comes out
+ * of here is bit-for-bit what `world.player` used to give.
+ */
+export interface PartyAnchor {
+  x: number;
+  y: number;
+  headingX: number;
+  headingY: number;
+}
+
+const EMPTY: PartyAnchor = { x: 0, y: 0, headingX: 0, headingY: 0 };
+
+export function partyAnchor(world: World): PartyAnchor {
+  const players = world.players;
+
+  let count = 0;
+  let x = 0;
+  let y = 0;
+  let headingX = 0;
+  let headingY = 0;
+
+  for (let i = 0; i < players.length; i++) {
+    const player = players[i];
+    if (!isAlive(player)) continue;
+
+    count++;
+    x += player.x;
+    y += player.y;
+    headingX += player.headingX;
+    headingY += player.headingY;
+  }
+
+  if (count === 0) return EMPTY;
+
+  return { x: x / count, y: y / count, headingX: headingX / count, headingY: headingY / count };
+}

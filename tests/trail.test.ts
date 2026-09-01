@@ -22,12 +22,12 @@ const ENEMY_RADIUS = 10;
  */
 function trailWorld(seed: number, levels = 1): World {
   const world = new World(seed);
-  for (let i = 0; i < levels; i++) grantWeapon(world, 'ember');
+  for (let i = 0; i < levels; i++) grantWeapon(world.players[0], 'ember');
   return world;
 }
 
 function state(world: World): WeaponState {
-  const found = world.weapons.find((weapon) => weapon.defId === 'ember');
+  const found = world.players[0].weapons.find((weapon) => weapon.defId === 'ember');
   if (found === undefined) throw new Error('world has no ember trail');
   return found;
 }
@@ -57,7 +57,7 @@ function placeEnemy(world: World, x: number, y: number): Enemy {
 
 /** Walks the player `distance` along +x in one hop, then runs the weapon. */
 function walk(world: World, distance: number): void {
-  world.player.x += distance;
+  world.players[0].x += distance;
   weaponSystem(world, DT);
 }
 
@@ -123,7 +123,7 @@ describe('laying the trail', () => {
     const laid = world.flames[0].radius;
     expect(laid).toBe(trailRadius(EMBER, state(world)));
 
-    grantWeapon(world, 'ember');
+    grantWeapon(world.players[0], 'ember');
     expect(trailRadius(EMBER, state(world))).toBeGreaterThan(laid);
     expect(world.flames[0].radius).toBe(laid);
   });
@@ -179,8 +179,8 @@ describe('burning', () => {
     // Five patches laid on top of each other, by walking a ring smaller than
     // one patch: every one of them covers the origin.
     for (let i = 0; i < 5; i++) {
-      world.player.x = Math.cos((i * Math.PI * 2) / 5) * spacing * 0.4;
-      world.player.y = Math.sin((i * Math.PI * 2) / 5) * spacing * 0.4;
+      world.players[0].x = Math.cos((i * Math.PI * 2) / 5) * spacing * 0.4;
+      world.players[0].y = Math.sin((i * Math.PI * 2) / 5) * spacing * 0.4;
       // Far enough from the previous patch to lay a new one, close enough that
       // all five still reach the origin.
       state(world).trailX = 1e6;
@@ -191,7 +191,7 @@ describe('burning', () => {
     const enemy = placeEnemy(world, 0, 0);
     rebuildGrid(world);
 
-    const burn = weaponDamage(EMBER, state(world)) * world.player.stats.damageMul;
+    const burn = weaponDamage(EMBER, state(world)) * world.players[0].stats.damageMul;
     state(world).cooldown = 0;
     weaponSystem(world, DT);
 
@@ -222,7 +222,7 @@ describe('burning', () => {
 
   function burnDamage(levels: number, damageMul: number): number {
     const world = trailWorld(9, levels);
-    world.player.stats.damageMul = damageMul;
+    world.players[0].stats.damageMul = damageMul;
     walk(world, trailSpacing(EMBER, state(world)));
 
     const enemy = placeEnemy(world, world.flames[0].x, 0);
@@ -252,8 +252,8 @@ describe('the burn cannot be crossed', () => {
         const world = trailWorld(10, level);
 
         for (let i = 0; i < spreads; i++) {
-          world.pendingLevels = 1;
-          applyUpgrade(world, 'ember-spread');
+          world.players[0].pendingLevels = 1;
+          applyUpgrade(world, world.players[0], 'ember-spread');
         }
 
         // 1.0x global attack speed is the worst case: Quick Hands and White
@@ -274,9 +274,9 @@ describe('the burn cannot be crossed', () => {
     const world = trailWorld(11);
     const base = trailRadius(EMBER, state(world));
 
-    grantWeapon(world, 'ember');
-    world.pendingLevels = 1;
-    applyUpgrade(world, 'ember-spread');
+    grantWeapon(world.players[0], 'ember');
+    world.players[0].pendingLevels = 1;
+    applyUpgrade(world, world.players[0], 'ember-spread');
 
     expect(trailRadius(EMBER, state(world))).toBeGreaterThan(base);
   });
@@ -336,7 +336,7 @@ describe('patches on the ground', () => {
     weaponSystem(world, DT);
 
     expect(world.flames).toHaveLength(MAX_FLAMES);
-    expect(state(world).trailX).toBe(world.player.x);
+    expect(state(world).trailX).toBe(world.players[0].x);
   });
 });
 
@@ -348,10 +348,10 @@ describe('patches on the ground', () => {
 describe('the trail inside a run', () => {
   it('is laid, burnt and cleared over a stepped run without touching the pool twice', () => {
     const world = trailWorld(15);
-    world.player.x = 0;
+    world.players[0].x = 0;
 
     for (let tick = 0; tick < 600; tick++) {
-      world.player.x += (CONFIG.player.moveSpeed * DT) / 2;
+      world.players[0].x += (CONFIG.player.moveSpeed * DT) / 2;
       weaponSystem(world, DT);
       trailSystem(world, DT);
     }

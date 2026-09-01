@@ -4,8 +4,7 @@ import { Rng } from '../core/rng';
 import { SpatialGrid } from './grid';
 import { STARTER_WEAPON_ID, createWeaponState, starterWeapon } from '../data/weapons';
 import { xpForLevel } from '../systems/progression';
-import type { UpgradeDef } from '../data/upgrades';
-import type { Effect, Enemy, Flame, Gem, MoveTarget, Player, Projectile, WeaponState } from './types';
+import type { Effect, Enemy, Flame, Gem, Player, Projectile } from './types';
 
 export type Phase = 'playing' | 'levelup' | 'paused' | 'dead';
 
@@ -15,17 +14,27 @@ export type Phase = 'playing' | 'levelup' | 'paused' | 'dead';
  */
 export type ResumablePhase = 'playing' | 'levelup';
 
+/** Nobody is on the level-up screen. See `World.choosing`. */
+export const NOBODY = -1;
+
 /**
  * The entire game state. Deliberately free of any Pixi, DOM or timing import —
  * a `World` can be stepped in Node, which is what lets the simulation tests run
  * without a browser and what keeps rendering a pure read of this object.
+ *
+ * It holds a *list* of players, and that list is the seam between the field and
+ * the people standing on it. The horde, the gems, the fire on the ground, the
+ * clock and the run's PRNG are shared; everything that belongs to one person
+ * lives on their `Player`. No system reaches for "the player" any more, which
+ * is what makes four of them a matter of building the world differently rather
+ * than of changing the rules.
  */
 export class World {
   readonly seed: number;
   readonly rng: Rng;
   readonly grid = new SpatialGrid(CONFIG.grid.cellSize);
 
-  readonly player: Player;
+  readonly players: Player[] = [];
   readonly enemies: Enemy[] = [];
   readonly projectiles: Projectile[] = [];
   readonly gems: Gem[] = [];
@@ -39,39 +48,26 @@ export class World {
   readonly effectPool = new Pool<Effect>(createEffect, 16);
   readonly flamePool = new Pool<Flame>(createFlame, 64);
 
-  /** Weapons the player owns, in the order they were acquired. */
-  readonly weapons: WeaponState[] = [];
-
   phase: Phase = 'playing';
   /**
    * Where to go when the pause lifts. Only meaningful while paused — pausing on
    * the level-up screen has to give the choice back rather than drop it.
    */
   resumeTo: ResumablePhase = 'playing';
+
+  /**
+   * Index of the player whose level-up screen is up, or `NOBODY`.
+   *
+   * An index rather than a reference, so a world stays a plain bag of data that
+   * could be serialised whole. It is also what gives `phase === 'levelup'` a
+   * meaning once there is more than one player: somebody in particular is
+   * choosing, and the menu has to show their cards and spend their level.
+   */
+  choosing: number = NOBODY;
+
   /** Elapsed run time in seconds. */
   time = 0;
   kills = 0;
-
-  /** Movement intent for this tick, written by the input layer or a test. */
-  intentX = 0;
-  intentY = 0;
-
-  /**
-   * Where a click told the player to walk, or null when nobody has ordered one.
-   *
-   * Kept beside the intent rather than folded into it because the two answer
-   * different questions: the intent is this tick, the order outlives it. The
-   * steering system turns one into the other, and a hand on the keys cancels
-   * it — see `steeringSystem`.
-   */
-  moveTarget: MoveTarget | null = null;
-
-  /**
-   * Smoothed movement direction. The spawner reads it to put enemies in the
-   * player's path, so it has to survive the player tapping a key for one tick.
-   */
-  headingX = 0;
-  headingY = 0;
 
   spawnTimer = 0;
   /** Whether a boss is on the field right now. Cleared when it dies. */
@@ -96,11 +92,6 @@ export class World {
    */
   hordeResumesAt = 0;
 
-  /** Levels gained but not yet spent on an upgrade. */
-  pendingLevels = 0;
-  offered: UpgradeDef[] = [];
-  readonly stacks = new Map<string, number>();
-
   nextEntityId = 1;
 
   /**
@@ -116,45 +107,63 @@ export class World {
    */
   readonly scratch: number[] = [];
 
-  /** The weapon this run opened with. Every run is played as one of them. */
-  readonly starterId: string;
-
-  constructor(seed: number, starterId: string = STARTER_WEAPON_ID) {
+  /**
+   * `starters` is one weapon id per player, so its length is how many players
+   * the run has. A bare `new World(seed)` is still a solo run opening with the
+   * bolt, which is what every stand in this project measures.
+   */
+  constructor(seed: number, starters: string | readonly string[] = STARTER_WEAPON_ID) {
     this.seed = seed;
     this.rng = new Rng(seed);
 
-    // Resolved once, here, so nothing downstream has to cope with an id that
-    // names no weapon: the player would be granted nothing and stand there
-    // unarmed while the horde arrived.
-    const starter = starterWeapon(starterId);
-    this.starterId = starter.id;
-
-    this.player = {
-      sprite: starter.playerSprite,
-      x: 0,
-      y: 0,
-      px: 0,
-      py: 0,
-      hp: CONFIG.player.maxHp,
-      level: 1,
-      xp: 0,
-      xpToNext: xpForLevel(1),
-      invuln: 0,
-      stats: {
-        maxHp: CONFIG.player.maxHp,
-        moveSpeed: CONFIG.player.moveSpeed,
-        damageMul: 1,
-        attackSpeedMul: 1,
-        pickupRadius: CONFIG.player.pickupRadius,
-      },
-    };
-
-    this.weapons.push(createWeaponState(starter.id));
+    const ids = typeof starters === 'string' ? [starters] : starters;
+    for (const id of ids) this.players.push(createPlayer(id));
   }
 
   nextDamageEvent(): number {
     return ++this.damageEvent;
   }
+}
+
+/**
+ * One player, armed and standing at the origin.
+ *
+ * The weapon is resolved here so that nothing downstream has to cope with an id
+ * that names none: the player would be granted nothing and stand there unarmed
+ * while the horde arrived.
+ */
+function createPlayer(starterId: string): Player {
+  const starter = starterWeapon(starterId);
+
+  return {
+    sprite: starter.playerSprite,
+    x: 0,
+    y: 0,
+    px: 0,
+    py: 0,
+    hp: CONFIG.player.maxHp,
+    level: 1,
+    xp: 0,
+    xpToNext: xpForLevel(1),
+    invuln: 0,
+    stats: {
+      maxHp: CONFIG.player.maxHp,
+      moveSpeed: CONFIG.player.moveSpeed,
+      damageMul: 1,
+      attackSpeedMul: 1,
+      pickupRadius: CONFIG.player.pickupRadius,
+    },
+    starterId: starter.id,
+    intentX: 0,
+    intentY: 0,
+    moveTarget: null,
+    headingX: 0,
+    headingY: 0,
+    weapons: [createWeaponState(starter.id)],
+    pendingLevels: 0,
+    offered: [],
+    stacks: new Map<string, number>(),
+  };
 }
 
 function createEnemy(): Enemy {

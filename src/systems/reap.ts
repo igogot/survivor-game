@@ -1,6 +1,7 @@
 import { CONFIG } from '../config';
 import { TAU, dist2 } from '../core/math';
 import { enemyById } from '../data/enemies';
+import { nearestPlayerDistanceSq } from '../world/party';
 import { damagePlayer } from './damage';
 import { spawnEffect } from './effects';
 import { bodyCost, defeatBoss, hordeHpScale, spawnEnemyAt } from './spawn';
@@ -16,15 +17,20 @@ import type { World } from '../world/world';
  * broad-phase index is ever invalidated mid-iteration.
  */
 export function reapSystem(world: World): void {
-  const { enemies, player } = world;
+  const { enemies } = world;
   const despawnSq = CONFIG.spawn.despawnRadius * CONFIG.spawn.despawnRadius;
 
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
     const killed = enemy.hp <= 0;
     // The boss chases forever; ordinary enemies left far behind are recycled so
-    // the horde does not grow unbounded when the player keeps running.
-    const strayed = !enemy.boss && dist2(enemy.x, enemy.y, player.x, player.y) > despawnSq;
+    // the horde does not grow unbounded when the players keep running.
+    //
+    // Measured to the *nearest* player and not to any particular one. Against a
+    // scattered party the obvious reading of the old rule deletes the crowd
+    // chasing everybody but the first person in the array, which looks like
+    // enemies vanishing rather than like a bug.
+    const strayed = !enemy.boss && nearestPlayerDistanceSq(world, enemy.x, enemy.y) > despawnSq;
 
     if (!killed && !strayed) continue;
 
@@ -114,11 +120,16 @@ function detonate(world: World, enemy: Enemy): void {
 
   spawnEffect(world, enemy.x, enemy.y, def.detonate.radius, BLAST_LIFE, enemy.color);
 
-  const player = world.player;
+  // Everyone standing in it, not the nearest one: a blast is a place, and two
+  // players who both walked into it have both walked into it.
   const reach = def.detonate.radius + CONFIG.player.radius;
-  if (dist2(enemy.x, enemy.y, player.x, player.y) > reach * reach) return;
+  const players = world.players;
 
-  damagePlayer(world, def.detonate.damage);
+  for (let i = 0; i < players.length; i++) {
+    const player = players[i];
+    if (dist2(enemy.x, enemy.y, player.x, player.y) > reach * reach) continue;
+    damagePlayer(world, player, def.detonate.damage);
+  }
 }
 
 function dropGem(world: World, enemy: Enemy): void {

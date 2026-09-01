@@ -26,7 +26,7 @@ import type {
   SpearWeaponDef,
   TrailWeaponDef,
 } from '../data/weapons';
-import type { Enemy, WeaponState } from '../world/types';
+import type { Enemy, Player, WeaponState } from '../world/types';
 import type { World } from '../world/world';
 
 /**
@@ -40,37 +40,47 @@ import type { World } from '../world/world';
  * weapons is three independent clocks rather than one shared one.
  */
 export function weaponSystem(world: World, dt: number): void {
-  const weapons = world.weapons;
+  const players = world.players;
 
-  for (let i = 0; i < weapons.length; i++) {
-    const state = weapons[i];
-    const def = weaponById(state.defId);
-    if (def === undefined) continue;
+  for (let p = 0; p < players.length; p++) {
+    const player = players[p];
+    // A fallen player stops shooting. Their blades would otherwise keep turning
+    // over a corpse, which is the sort of thing nobody writes down and everybody
+    // notices.
+    if (player.hp <= 0) continue;
 
-    switch (def.kind) {
-      case 'bolt':
-        stepBolt(world, def, state, dt);
-        break;
-      case 'orbit':
-        stepOrbit(world, def, state, dt);
-        break;
-      case 'nova':
-        stepNova(world, def, state, dt);
-        break;
-      case 'spear':
-        stepSpear(world, def, state, dt);
-        break;
-      case 'harpoon':
-        stepHarpoon(world, def, state, dt);
-        break;
-      case 'trail':
-        stepTrail(world, def, state, dt);
-        break;
-      default: {
-        // Exhaustiveness check: adding a weapon kind without a routine here
-        // stops compiling rather than silently doing nothing at runtime.
-        const unhandled: never = def;
-        throw new Error(`Unhandled weapon kind: ${String(unhandled)}`);
+    const weapons = player.weapons;
+
+    for (let i = 0; i < weapons.length; i++) {
+      const state = weapons[i];
+      const def = weaponById(state.defId);
+      if (def === undefined) continue;
+
+      switch (def.kind) {
+        case 'bolt':
+          stepBolt(world, player, def, state, dt);
+          break;
+        case 'orbit':
+          stepOrbit(world, player, def, state, dt);
+          break;
+        case 'nova':
+          stepNova(world, player, def, state, dt);
+          break;
+        case 'spear':
+          stepSpear(world, player, def, state, dt);
+          break;
+        case 'harpoon':
+          stepHarpoon(world, player, def, state, dt);
+          break;
+        case 'trail':
+          stepTrail(world, player, def, state, dt);
+          break;
+        default: {
+          // Exhaustiveness check: adding a weapon kind without a routine here
+          // stops compiling rather than silently doing nothing at runtime.
+          const unhandled: never = def;
+          throw new Error(`Unhandled weapon kind: ${String(unhandled)}`);
+        }
       }
     }
   }
@@ -82,26 +92,31 @@ export function weaponSystem(world: World, dt: number): void {
  * One upgrade card can therefore mean both "new weapon" and "stronger weapon"
  * without the progression system knowing anything about weapons.
  */
-export function grantWeapon(world: World, defId: string): void {
+export function grantWeapon(player: Player, defId: string): void {
   if (weaponById(defId) === undefined) return;
 
-  const owned = world.weapons.find((state) => state.defId === defId);
+  const owned = player.weapons.find((state) => state.defId === defId);
   if (owned !== undefined) {
     owned.level++;
     return;
   }
 
-  world.weapons.push(createWeaponState(defId));
+  player.weapons.push(createWeaponState(defId));
 }
 
-function stepBolt(world: World, def: BoltWeaponDef, state: WeaponState, dt: number): void {
+function stepBolt(
+  world: World,
+  player: Player,
+  def: BoltWeaponDef,
+  state: WeaponState,
+  dt: number,
+): void {
   state.cooldown -= dt;
   if (state.cooldown > 0) return;
 
-  const target = findNearestEnemy(world, def.range);
+  const target = findNearestEnemy(world, player, def.range);
   if (target === null) return;
 
-  const player = world.player;
   state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
 
   const baseAngle = Math.atan2(target.y - player.y, target.x - player.x);
@@ -111,13 +126,17 @@ function stepBolt(world: World, def: BoltWeaponDef, state: WeaponState, dt: numb
   for (let i = 0; i < count; i++) {
     // Fan the shots symmetrically around the aim direction.
     const offset = (i - (count - 1) / 2) * def.spread;
-    fire(world, def, state, baseAngle + offset, damage, state.pierce);
+    fire(world, player, def, state, baseAngle + offset, damage, state.pierce);
   }
 }
 
-function stepOrbit(world: World, def: OrbitWeaponDef, state: WeaponState, dt: number): void {
-  const player = world.player;
-
+function stepOrbit(
+  world: World,
+  player: Player,
+  def: OrbitWeaponDef,
+  state: WeaponState,
+  dt: number,
+): void {
   // The ring keeps turning between damage pulses — it is the weapon's whole
   // visual. The angle is deliberately never wrapped into [0, TAU): the renderer
   // interpolates between `pangle` and `angle`, and a wrap would run that
@@ -151,11 +170,16 @@ function stepOrbit(world: World, def: OrbitWeaponDef, state: WeaponState, dt: nu
   }
 }
 
-function stepNova(world: World, def: NovaWeaponDef, state: WeaponState, dt: number): void {
+function stepNova(
+  world: World,
+  player: Player,
+  def: NovaWeaponDef,
+  state: WeaponState,
+  dt: number,
+): void {
   state.cooldown -= dt;
   if (state.cooldown > 0) return;
 
-  const player = world.player;
   state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
 
   const radius = novaRadius(def, state);
@@ -165,7 +189,13 @@ function stepNova(world: World, def: NovaWeaponDef, state: WeaponState, dt: numb
   spawnEffect(world, player.x, player.y, radius, def.effectLife, def.color);
 }
 
-function stepSpear(world: World, def: SpearWeaponDef, state: WeaponState, dt: number): void {
+function stepSpear(
+  world: World,
+  player: Player,
+  def: SpearWeaponDef,
+  state: WeaponState,
+  dt: number,
+): void {
   // The lance fades on its own clock, so a slow weapon does not leave one
   // hanging on screen until the next thrust.
   if (state.swing > 0) state.swing = Math.max(0, state.swing - dt);
@@ -176,10 +206,9 @@ function stepSpear(world: World, def: SpearWeaponDef, state: WeaponState, dt: nu
   // Nothing in reach means the thrust is not spent: the lance stays cocked and
   // lands the instant something walks into it.
   const length = spearLength(def, state);
-  const target = findNearestEnemy(world, length);
+  const target = findNearestEnemy(world, player, length);
   if (target === null) return;
 
-  const player = world.player;
   state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
   state.angle = Math.atan2(target.y - player.y, target.x - player.x);
   state.swing = def.swingTime;
@@ -204,6 +233,7 @@ function stepSpear(world: World, def: SpearWeaponDef, state: WeaponState, dt: nu
 
 function stepHarpoon(
   world: World,
+  player: Player,
   def: HarpoonWeaponDef,
   state: WeaponState,
   dt: number,
@@ -213,10 +243,9 @@ function stepHarpoon(
 
   // Nothing in range means the shot is not spent. The slowest reload in the
   // game would otherwise be halfway through it when the wave arrives.
-  const target = findHeaviestEnemy(world, def.range);
+  const target = findHeaviestEnemy(world, player, def.range);
   if (target === null) return;
 
-  const player = world.player;
   state.cooldown = weaponCooldown(def, state, player.stats.attackSpeedMul);
 
   const angle = Math.atan2(target.y - player.y, target.x - player.x);
@@ -224,6 +253,7 @@ function stepHarpoon(
   // the wall, so what it passes through on the way is most of what it kills.
   fire(
     world,
+    player,
     def,
     state,
     angle,
@@ -248,8 +278,13 @@ function stepHarpoon(
  * more often, so Light Boots would have been the trail's best damage card by
  * some distance.
  */
-function stepTrail(world: World, def: TrailWeaponDef, state: WeaponState, dt: number): void {
-  const player = world.player;
+function stepTrail(
+  world: World,
+  player: Player,
+  def: TrailWeaponDef,
+  state: WeaponState,
+  dt: number,
+): void {
   const radius = trailRadius(def, state);
   const spacing = trailSpacing(def, state);
 
@@ -281,8 +316,8 @@ function stepTrail(world: World, def: TrailWeaponDef, state: WeaponState, dt: nu
  * escort. Ties break to the nearest, which is what keeps the pick deterministic
  * when a dozen grunts share a spawn's stats.
  */
-function findHeaviestEnemy(world: World, range: number): Enemy | null {
-  const { player, grid, enemies, scratch } = world;
+function findHeaviestEnemy(world: World, player: Player, range: number): Enemy | null {
+  const { grid, enemies, scratch } = world;
   grid.query(player.x, player.y, range, scratch);
 
   const limit = range * range;
@@ -316,13 +351,13 @@ type ProjectileWeaponDef = BoltWeaponDef | HarpoonWeaponDef;
 
 function fire(
   world: World,
+  player: Player,
   def: ProjectileWeaponDef,
   state: WeaponState,
   angle: number,
   damage: number,
   pierce: number,
 ): void {
-  const player = world.player;
   const projectile = spawnProjectile(world);
 
   projectile.x = player.x;
@@ -347,8 +382,8 @@ function fire(
  * Runs once per shot rather than per frame, so scanning the cells inside the
  * weapon's range is cheap enough to keep it simple.
  */
-function findNearestEnemy(world: World, range: number): Enemy | null {
-  const { player, grid, enemies, scratch } = world;
+function findNearestEnemy(world: World, player: Player, range: number): Enemy | null {
+  const { grid, enemies, scratch } = world;
   grid.query(player.x, player.y, range, scratch);
 
   let nearest: Enemy | null = null;

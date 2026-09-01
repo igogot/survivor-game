@@ -1,8 +1,9 @@
 import { CONFIG } from '../config';
 import { MAX_ENEMY_RADIUS } from '../data/enemies';
+import { anyAlive } from '../world/party';
 import { dist2 } from '../core/math';
 import { BROADPHASE_PAD } from './shared';
-import type { Enemy } from '../world/types';
+import type { Enemy, Player } from '../world/types';
 import type { World } from '../world/world';
 
 /**
@@ -29,28 +30,35 @@ export function applyDamage(world: World, enemy: Enemy, amount: number): void {
 }
 
 /**
- * The single place the *player* loses health.
+ * The single place a player loses health.
  *
- * Two things reach them now — a body touching them and a hex landing on them —
- * and both must agree on the invulnerability window and on what happens at
- * zero. The window is the game's damage governor: it is why standing in a
- * crowd of forty is survivable, and routing the horde's projectiles through it
- * rather than around it is what keeps that promise while still letting them
- * land when nothing is close enough to touch.
+ * Three things reach them — a body touching them, a hex landing on them and a
+ * bomber going off under them — and all three must agree on the invulnerability
+ * window and on what happens at zero. The window is the game's damage governor:
+ * it is why standing in a crowd of forty is survivable, and routing the horde's
+ * projectiles through it rather than around it is what keeps that promise while
+ * still letting them land when nothing is close enough to touch.
+ *
+ * The window is per player, which is the only thing it could sensibly be: it is
+ * the grace *this* body was granted for the hit *it* took.
+ *
+ * A run ends when the last player falls, not the first. That is the whole rule
+ * for the moment, and it is a placeholder for a real answer — this game has no
+ * healing, so the first of four to die watches the other three for however long
+ * they last.
  *
  * Returns whether the hit landed, so a caller can tell a blocked hit from one
  * that connected.
  */
-export function damagePlayer(world: World, amount: number): boolean {
-  const player = world.player;
-  if (player.invuln > 0 || amount <= 0) return false;
+export function damagePlayer(world: World, player: Player, amount: number): boolean {
+  if (player.invuln > 0 || amount <= 0 || player.hp <= 0) return false;
 
   player.hp -= amount;
   player.invuln = CONFIG.player.invulnTime;
 
   if (player.hp <= 0) {
     player.hp = 0;
-    world.phase = 'dead';
+    if (!anyAlive(world)) world.phase = 'dead';
   }
 
   return true;

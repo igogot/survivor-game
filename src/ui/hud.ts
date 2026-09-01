@@ -45,13 +45,17 @@ export class Hud {
   private ghost = 100;
   private lastMaxHp = 0;
 
-  update(world: World): void {
+  /**
+   * `view` is the player this screen belongs to. The bars are theirs; the
+   * clock, the kill count and the boss tally are the run's and shared.
+   */
+  update(world: World, view: Player): void {
     const now = performance.now();
     const elapsed = this.lastFrameTime > 0 ? (now - this.lastFrameTime) / 1000 : 0;
     this.lastFrameTime = now;
     if (elapsed > 0) this.smoothedFps += (1 / elapsed - this.smoothedFps) * 0.05;
 
-    const player = world.player;
+    const player = view;
 
     this.level.textContent = `LV ${player.level}`;
     // Clamped: a tab returning from the background must not teleport the drain.
@@ -60,7 +64,7 @@ export class Hud {
 
     // Unclamped: the run has no end for it to stop at.
     this.timer.textContent = formatTime(world.time);
-    this.weapons.textContent = describeWeapons(world);
+    this.weapons.textContent = describeWeapons(view);
     this.kills.textContent = `kills ${world.kills}`;
 
     // Hidden until there is one, otherwise it is a zero the player carries for
@@ -138,10 +142,10 @@ function findBoss(world: World): Enemy | null {
 }
 
 /** Compact loadout readout: `bolt · orbit 3`. Level is omitted at level 1. */
-function describeWeapons(world: World): string {
+function describeWeapons(player: Player): string {
   const parts: string[] = [];
 
-  for (const state of world.weapons) {
+  for (const state of player.weapons) {
     const def = weaponById(state.defId);
     if (def === undefined) continue;
     parts.push(state.level > 1 ? `${def.id} ${state.level}` : def.id);

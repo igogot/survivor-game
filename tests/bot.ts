@@ -92,7 +92,7 @@ export function runBot(seed: number, seconds: number, watch?: (world: World) => 
     if (world.phase === 'dead') break;
 
     if (world.phase === 'levelup') {
-      applyUpgrade(world, choose(world));
+      applyUpgrade(world, world.players[0], choose(world));
       continue;
     }
 
@@ -113,13 +113,13 @@ export function runBot(seed: number, seconds: number, watch?: (world: World) => 
 
 function choose(world: World): string {
   for (const id of PREFERENCE) {
-    if (world.offered.some((offer) => offer.id === id)) return id;
+    if (world.players[0].offered.some((offer) => offer.id === id)) return id;
   }
-  return world.offered[0].id;
+  return world.players[0].offered[0].id;
 }
 
 function steer(world: World, wander: number, pullX: number, pullY: number): void {
-  const player = world.player;
+  const player = world.players[0];
 
   let pushX = 0;
   let pushY = 0;
@@ -203,12 +203,12 @@ function steer(world: World, wander: number, pullX: number, pullY: number): void
   }
 
   const length = Math.hypot(x, y);
-  world.intentX = x / length;
-  world.intentY = y / length;
+  world.players[0].intentX = x / length;
+  world.players[0].intentY = y / length;
 }
 
 function nearestGemDirection(world: World): { x: number; y: number } {
-  const player = world.player;
+  const player = world.players[0];
   const gems = world.gems;
 
   let bestSq = GEM_RADIUS * GEM_RADIUS;

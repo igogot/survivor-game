@@ -1,7 +1,9 @@
 import { CONFIG } from '../config';
 import { TAU } from '../core/math';
 import { BOSS, ENEMIES } from '../data/enemies';
+import { partyAnchor } from '../world/party';
 import type { EnemyDef } from '../data/enemies';
+import type { PartyAnchor } from '../world/party';
 import type { World } from '../world/world';
 
 /**
@@ -150,37 +152,42 @@ export function rollEnemyDef(world: World): EnemyDef {
 }
 
 /**
- * Where on the ring an enemy appears.
+ * Where on the ring an enemy appears, relative to the party's own heading.
  *
- * Most of them are placed in front of the player. A uniformly random ring makes
- * running in one direction a dominant strategy: the player outruns the horde,
- * everything behind them despawns, and the screen empties out. Spawning into
- * the path means running buys distance from *this* crowd, not from the game.
+ * Most of them are placed in front. A uniformly random ring makes running in
+ * one direction a dominant strategy: the players outrun the horde, everything
+ * behind them despawns, and the screen empties out. Spawning into the path
+ * means running buys distance from *this* crowd, not from the game.
  */
-function spawnAngle(world: World): number {
-  const heading = Math.hypot(world.headingX, world.headingY);
+function spawnAngle(world: World, anchor: PartyAnchor): number {
+  const heading = Math.hypot(anchor.headingX, anchor.headingY);
 
-  // Standing still has no "ahead".
+  // Standing still has no "ahead". So has a party pulling in four directions,
+  // whose average heading is nothing much — which is the honest answer rather
+  // than an accident: a group that is not going anywhere together gets a ring.
   if (heading < 0.15 || world.rng.next() >= CONFIG.spawn.aheadBias) {
     return world.rng.next() * TAU;
   }
 
-  const forward = Math.atan2(world.headingY, world.headingX);
+  const forward = Math.atan2(anchor.headingY, anchor.headingX);
   return forward + world.rng.range(-CONFIG.spawn.aheadSpread, CONFIG.spawn.aheadSpread);
 }
 
 export function spawnEnemy(world: World, def: EnemyDef, hpScale: number): void {
   // Spawning on a ring guarantees enemies appear off-screen regardless of
-  // viewport size, so the player never sees one pop into existence.
-  const angle = spawnAngle(world);
+  // viewport size, so nobody ever sees one pop into existence. The ring is hung
+  // on the party rather than on a person — see `partyAnchor` for why that is a
+  // decision and not a detail.
+  const anchor = partyAnchor(world);
+  const angle = spawnAngle(world, anchor);
   const distance = CONFIG.spawn.ringRadius;
 
   spawnEnemyAt(
     world,
     def,
     hpScale,
-    world.player.x + Math.cos(angle) * distance,
-    world.player.y + Math.sin(angle) * distance,
+    anchor.x + Math.cos(angle) * distance,
+    anchor.y + Math.sin(angle) * distance,
   );
 }
 

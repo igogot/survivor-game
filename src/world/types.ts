@@ -1,4 +1,5 @@
 import type { SpriteName } from '../data/sprites';
+import type { UpgradeDef } from '../data/upgrades';
 
 /**
  * Every entity carries `px`/`py`: its position at the end of the previous tick.
@@ -25,6 +26,20 @@ export interface PlayerStats {
   pickupRadius: number;
 }
 
+/**
+ * One player.
+ *
+ * Everything a player is now lives here rather than on the world, including
+ * the things that used to look global because there was only ever one of them:
+ * the intent driving them this tick, the heading the spawner reads, the
+ * standing move order, the weapons they carry and the levels they have yet to
+ * spend. A world holds a list of these, and the systems loop.
+ *
+ * The split is the whole point. `World` is the shared field — the horde, the
+ * gems, the fire on the ground, the clock and the run's PRNG — and a `Player`
+ * is one participant in it. Nothing outside this interface should have to know
+ * how many participants there are.
+ */
 export interface Player {
   /**
    * Which figure the player is, decided by the weapon the run opened with.
@@ -45,6 +60,39 @@ export interface Player {
   /** Seconds of invulnerability left after the last hit. */
   invuln: number;
   stats: PlayerStats;
+
+  /** The weapon this player's run opened with. */
+  readonly starterId: string;
+
+  /** Movement intent for this tick, written by the input layer or a test. */
+  intentX: number;
+  intentY: number;
+
+  /**
+   * Where a click told this player to walk, or null when nobody has ordered
+   * one.
+   *
+   * Kept beside the intent rather than folded into it because the two answer
+   * different questions: the intent is this tick, the order outlives it. The
+   * steering system turns one into the other, and a hand on the keys cancels
+   * it — see `steeringSystem`.
+   */
+  moveTarget: MoveTarget | null;
+
+  /**
+   * Smoothed movement direction. The spawner reads it to put enemies in the
+   * player's path, so it has to survive them tapping a key for one tick.
+   */
+  headingX: number;
+  headingY: number;
+
+  /** Weapons this player owns, in the order they were acquired. */
+  readonly weapons: WeaponState[];
+
+  /** Levels gained but not yet spent on an upgrade. */
+  pendingLevels: number;
+  offered: UpgradeDef[];
+  readonly stacks: Map<string, number>;
 }
 
 export interface Enemy {

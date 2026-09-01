@@ -71,22 +71,22 @@ describe('the bomber', () => {
     const world = new World(1);
     const bomber = place(world, 'bomber', INSIDE, 0);
     bomber.hp = 0;
-    const before = world.player.hp;
+    const before = world.players[0].hp;
 
     reapSystem(world);
 
-    expect(world.player.hp).toBe(before - BLAST.damage);
+    expect(world.players[0].hp).toBe(before - BLAST.damage);
   });
 
   it('costs nothing when it dies out of reach', () => {
     const world = new World(2);
     const bomber = place(world, 'bomber', OUTSIDE, 0);
     bomber.hp = 0;
-    const before = world.player.hp;
+    const before = world.players[0].hp;
 
     reapSystem(world);
 
-    expect(world.player.hp).toBe(before);
+    expect(world.players[0].hp).toBe(before);
   });
 
   it('leaves a ring either way, so the blast is never invisible', () => {
@@ -115,47 +115,47 @@ describe('the bomber', () => {
 
   it('obeys the invulnerability window like everything else', () => {
     const world = new World(5);
-    world.player.invuln = CONFIG.player.invulnTime;
+    world.players[0].invuln = CONFIG.player.invulnTime;
     place(world, 'bomber', INSIDE, 0).hp = 0;
-    const before = world.player.hp;
+    const before = world.players[0].hp;
 
     reapSystem(world);
 
-    expect(world.player.hp).toBe(before);
+    expect(world.players[0].hp).toBe(before);
   });
 
   it('does not go off for an enemy that simply wandered away', () => {
     const world = new World(6);
     // Past the despawn radius and still alive: recycled, not killed.
     place(world, 'bomber', CONFIG.spawn.despawnRadius + 100, 0);
-    const before = world.player.hp;
+    const before = world.players[0].hp;
 
     reapSystem(world);
 
     expect(world.enemies).toHaveLength(0);
     expect(world.effects).toHaveLength(0);
-    expect(world.player.hp).toBe(before);
+    expect(world.players[0].hp).toBe(before);
   });
 
   it('can finish a player who was already hurt', () => {
     const world = new World(7);
-    world.player.hp = 1;
+    world.players[0].hp = 1;
     place(world, 'bomber', INSIDE, 0).hp = 0;
 
     reapSystem(world);
 
-    expect(world.player.hp).toBe(0);
+    expect(world.players[0].hp).toBe(0);
     expect(world.phase).toBe('dead');
   });
 
   it('leaves ordinary deaths silent', () => {
     const world = new World(8);
     place(world, 'grunt', INSIDE, 0).hp = 0;
-    const before = world.player.hp;
+    const before = world.players[0].hp;
 
     reapSystem(world);
 
-    expect(world.player.hp).toBe(before);
+    expect(world.players[0].hp).toBe(before);
     expect(world.effects).toHaveLength(0);
   });
 });

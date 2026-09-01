@@ -38,7 +38,7 @@ function play(seed: number): { world: World; sample: Sample } {
   let lastHp: number = CONFIG.player.maxHp;
 
   const world = runBot(seed, CAP, (w) => {
-    const hp = w.player.hp;
+    const hp = w.players[0].hp;
     // The player loses health only to a contact hit, so a drop between ticks is
     // exactly one hit — no need to reach into the damage system to count them.
     if (hp < lastHp) {
@@ -76,7 +76,7 @@ it('plays a long run on every seed', () => {
         `${world.time.toFixed(0)}s`.padStart(5),
         (alive ? 'alive' : 'died').padStart(9),
         String(world.bossesKilled).padStart(8),
-        String(world.player.level).padStart(8),
+        String(world.players[0].level).padStart(8),
         String(world.kills).padStart(10),
         String(sample.hits).padStart(7),
         (lateMinutes > 0 ? (sample.lateHits / lateMinutes).toFixed(1) : '-').padStart(10),

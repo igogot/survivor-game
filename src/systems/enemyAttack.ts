@@ -1,5 +1,6 @@
 import { spawnProjectile } from './projectiles';
 import { enemyById } from '../data/enemies';
+import { nearestPlayer } from '../world/party';
 import type { Enemy } from '../world/types';
 import type { World } from '../world/world';
 
@@ -33,7 +34,7 @@ export function enemyAttackSystem(world: World, dt: number): void {
 type RangedDef = NonNullable<import('../data/enemies').EnemyDef['ranged']>;
 
 /**
- * Aims where the player is going, not where they are.
+ * Aims where its target is going, not where they are.
  *
  * A hex flies at 205 against a player who moves at up to 275, so a shot at the
  * player's current position misses every time they are moving — the enemy would
@@ -41,12 +42,19 @@ type RangedDef = NonNullable<import('../data/enemies').EnemyDef['ranged']>;
  * the lead assumes the player holds their heading, so turning beats it and
  * running in a straight line does not.
  *
+ * The target is the nearest player, and the lead reads *their* heading rather
+ * than the party's. That matters with more than one: an average of four
+ * headings points nowhere in particular, and a shot led along it would miss
+ * everybody by design instead of by the player's own turn.
+ *
  * The flight time is solved by iterating twice rather than with the quadratic.
  * Two passes land within a few pixels at these speeds, and the intent is a
  * plausible guess by something throwing a bottle, not a firing solution.
  */
 function throwHex(world: World, enemy: Enemy, ranged: RangedDef): void {
-  const player = world.player;
+  const player = nearestPlayer(world, enemy.x, enemy.y);
+  if (player === null) return;
+
   const speed = player.stats.moveSpeed;
 
   let aimX = player.x;
@@ -54,8 +62,8 @@ function throwHex(world: World, enemy: Enemy, ranged: RangedDef): void {
 
   for (let pass = 0; pass < 2; pass++) {
     const flight = Math.hypot(aimX - enemy.x, aimY - enemy.y) / ranged.projectileSpeed;
-    aimX = player.x + world.headingX * speed * flight;
-    aimY = player.y + world.headingY * speed * flight;
+    aimX = player.x + player.headingX * speed * flight;
+    aimY = player.y + player.headingY * speed * flight;
   }
 
   const dx = aimX - enemy.x;

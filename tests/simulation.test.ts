@@ -8,7 +8,7 @@ describe('headless simulation', () => {
 
     expect(world.time).toBeGreaterThan(0);
     expect(world.kills).toBeGreaterThan(0);
-    expect(world.player.level).toBeGreaterThan(1);
+    expect(world.players[0].level).toBeGreaterThan(1);
   });
 
   it('produces an identical run for the same seed', () => {
@@ -16,8 +16,8 @@ describe('headless simulation', () => {
     const second = runHeadless(1337, 60);
 
     expect(first.kills).toBe(second.kills);
-    expect(first.player.level).toBe(second.player.level);
-    expect(first.player.hp).toBe(second.player.hp);
+    expect(first.players[0].level).toBe(second.players[0].level);
+    expect(first.players[0].hp).toBe(second.players[0].hp);
     expect(first.enemies.length).toBe(second.enemies.length);
   });
 
