@@ -1,6 +1,7 @@
 import { CONFIG } from '../config';
 import { MAX_ENEMY_RADIUS } from '../data/enemies';
-import { anyAlive } from '../world/party';
+import { anyAlive, nearestPlayer, nextLiving } from '../world/party';
+import { respawnDelay } from './respawn';
 import { dist2 } from '../core/math';
 import { BROADPHASE_PAD } from './shared';
 import type { Enemy, Player } from '../world/types';
@@ -42,10 +43,10 @@ export function applyDamage(world: World, enemy: Enemy, amount: number): void {
  * The window is per player, which is the only thing it could sensibly be: it is
  * the grace *this* body was granted for the hit *it* took.
  *
- * A run ends when the last player falls, not the first. That is the whole rule
- * for the moment, and it is a placeholder for a real answer — this game has no
- * healing, so the first of four to die watches the other three for however long
- * they last.
+ * A run ends when the last player falls, not the first. Anybody else going down
+ * starts a countdown instead: they watch a teammate until it runs out and come
+ * back beside them. See `respawnSystem` — the wait, the camera and where the
+ * body reappears all live there.
  *
  * Returns whether the hit landed, so a caller can tell a blocked hit from one
  * that connected.
@@ -58,7 +59,19 @@ export function damagePlayer(world: World, player: Player, amount: number): bool
 
   if (player.hp <= 0) {
     player.hp = 0;
-    if (!anyAlive(world)) world.phase = 'dead';
+
+    if (anyAlive(world)) {
+      // Somebody is left, so this is a wait rather than an ending. The camera
+      // starts on whoever is nearest, which is almost always whoever they were
+      // fighting beside — and it is a starting point, not a sentence: the left
+      // mouse button moves it.
+      player.respawnAt = world.time + respawnDelay(world);
+      const nearest = nearestPlayer(world, player.x, player.y);
+      player.watching =
+        nearest === null ? nextLiving(world, 0) : world.players.indexOf(nearest);
+    } else {
+      world.phase = 'dead';
+    }
   }
 
   return true;

@@ -1,5 +1,5 @@
 import { DESIGNED_UPGRADES, FALLBACK_UPGRADES, UPGRADES } from '../data/upgrades';
-import { isAlive, partySize } from '../world/party';
+import { partySize } from '../world/party';
 import { NOBODY } from '../world/world';
 import { healPlayer } from './damage';
 import { grantWeapon } from './weapons';
@@ -60,11 +60,12 @@ export function progressionSystem(world: World): void {
     world.xp -= cost;
     world.level++;
 
-    // Everyone still standing, and only them. A level is a card to pick, and a
-    // corpse has nothing to pick it with.
-    for (let i = 0; i < players.length; i++) {
-      if (isAlive(players[i])) players[i].pendingLevels++;
-    }
+    // Everyone, the downed included. They are not filling the bar — `partySize`
+    // already stopped charging the party for them — but they are coming back,
+    // and a player who spends their wait choosing what to come back as is a
+    // player still in the run. The alternative is somebody returning a minute
+    // behind the build everyone else is on.
+    for (let i = 0; i < players.length; i++) players[i].pendingLevels++;
 
     cost = xpForNextLevel(world);
   }

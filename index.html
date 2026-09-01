@@ -203,6 +203,21 @@
         font-variant-numeric: tabular-nums;
       }
 
+      #downed {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 12px;
+        color: #ff9f6b;
+      }
+
+      /* The line about the viewer's own death reads as instruction rather than
+         as news, so it is the quiet colour the rest of the HUD uses. */
+      #downed .watching {
+        color: var(--muted);
+      }
+
       #boss {
         margin-top: auto;
         align-self: center;
@@ -1129,6 +1144,12 @@
         <div id="boss-name" data-i18n="hud.bossName">THE HORDE'S END</div>
         <div class="bar"><i id="boss-fill"></i></div>
       </div>
+
+      <!-- Who is down and how long they have left, one line each, filled by the
+           HUD. A standing fact rather than a banner that flashes and goes: it
+           is true for the whole minute, and somebody who looked away for ten
+           seconds should not have missed it. -->
+      <div id="downed"></div>
     </div>
 
     <div id="warning" hidden data-i18n="hud.bossWarning">BOSS INCOMING</div>

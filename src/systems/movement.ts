@@ -1,6 +1,6 @@
 import { approach } from '../core/steering';
 import { MAX_ENEMY_RADIUS } from '../data/enemies';
-import { nearestPlayer } from '../world/party';
+import { isAlive, nearestPlayer } from '../world/party';
 import { BROADPHASE_PAD } from './shared';
 import type { World } from '../world/world';
 
@@ -25,6 +25,8 @@ export function steeringSystem(world: World, dt: number): void {
 
   for (let i = 0; i < players.length; i++) {
     const player = players[i];
+    if (!isAlive(player)) continue;
+
     const target = player.moveTarget;
     if (target === null) continue;
 
@@ -57,6 +59,10 @@ export function movementSystem(world: World, dt: number): void {
 
   for (let i = 0; i < players.length; i++) {
     const player = players[i];
+    // A body does not walk. Without this the corpse of a downed player slides
+    // around under whatever the keyboard is still saying, which is what it did
+    // until somebody asked what death looks like.
+    if (!isAlive(player)) continue;
 
     player.px = player.x;
     player.py = player.y;

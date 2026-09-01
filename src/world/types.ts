@@ -70,6 +70,25 @@ export interface Player {
   hp: number;
   /** Seconds of invulnerability left after the last hit. */
   invuln: number;
+
+  /**
+   * Run time at which this player comes back, or 0 while they are standing.
+   *
+   * A death with somebody left alive is a wait rather than an ending, so the
+   * simulation has to hold the wait — see `respawnSystem`.
+   */
+  respawnAt: number;
+
+  /**
+   * Whose shoulder a downed player is looking over, as an index into
+   * `World.players`.
+   *
+   * On the player rather than in the renderer, which is a departure from this
+   * project's rule that a view is nobody's business but the viewer's. It earns
+   * the departure by deciding something: a player comes back beside whoever
+   * they were watching, so where the camera was is where the body appears.
+   */
+  watching: number;
   stats: PlayerStats;
 
   /** The weapon this player's run opened with. */

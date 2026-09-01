@@ -304,12 +304,17 @@ describe('the shared experience bar', () => {
   });
 
   /**
-   * A corpse has nothing to spend a card with, and no longer counts toward the
-   * price of one. The share they were carrying is gone, so the bar the
-   * survivors are filling gets shorter — which can finish it on the spot, and
-   * that is the right reading rather than an edge case to guard.
+   * A corpse no longer counts toward the price of a level: the share they were
+   * carrying is gone, so the bar the survivors are filling gets shorter — which
+   * can finish it on the spot, and that is the right reading rather than an
+   * edge case to guard.
+   *
+   * They are still paid, though, and that half is deliberate. A downed player
+   * is coming back, and one who spent the wait choosing what to come back as is
+   * still in the run; the alternative is somebody returning a minute behind the
+   * build everybody else is on.
    */
-  it('stops charging for the dead, and stops paying them', () => {
+  it('stops charging for the dead, and keeps paying them', () => {
     const world = party(33, 2);
     const fallen = world.players[0];
 
@@ -321,7 +326,7 @@ describe('the shared experience bar', () => {
     progressionSystem(world);
 
     expect(world.level).toBe(2);
-    expect(fallen.pendingLevels).toBe(0);
+    expect(fallen.pendingLevels).toBe(1);
     expect(world.players[1].pendingLevels).toBe(1);
   });
 

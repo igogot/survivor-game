@@ -12,6 +12,9 @@ import type { StringId } from './en';
  * than baked into the sentence.
  */
 export const RU: Record<StringId, string> = {
+  'hud.player': 'Игрок {n}',
+  'hud.down': '{who} выбыл — вернётся через {clock}',
+  'hud.watching': 'смотрим за {who} · левая кнопка переключает',
   'hud.level': 'УР',
   'hud.kills': 'убийств',
   'hud.bosses': 'боссов',

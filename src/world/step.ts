@@ -7,6 +7,7 @@ import { pickupSystem } from '../systems/pickup';
 import { progressionSystem } from '../systems/progression';
 import { projectileSystem } from '../systems/projectiles';
 import { reapSystem } from '../systems/reap';
+import { respawnSystem } from '../systems/respawn';
 import { spawnSystem } from '../systems/spawn';
 import { trailSystem } from '../systems/trail';
 import { weaponSystem } from '../systems/weapons';
@@ -19,14 +20,16 @@ import type { World } from './world';
  * into `world.enemies`, so anything that removes an enemy invalidates it:
  *
  *   1. reap    — remove last tick's dead first, while no index is live
- *   2. spawn   — add new enemies before the grid is built
- *   3. steer   — a standing move order becomes this tick's intent
- *   4. move    — player and enemies advance
- *   5. rebuild — grid now matches the post-movement array exactly
- *   6. combat  — every consumer of the grid runs here, removing nothing;
+ *   2. respawn — bring back whoever is due, before the horde is sized against
+ *                the party they are part of again
+ *   3. spawn   — add new enemies before the grid is built
+ *   4. steer   — a standing move order becomes this tick's intent
+ *   5. move    — players and enemies advance
+ *   6. rebuild — grid now matches the post-movement array exactly
+ *   7. combat  — every consumer of the grid runs here, removing nothing;
  *                the horde throws in this half too, which adds projectiles
  *                but never enemies, so no grid index moves
- *   7. progression — may flip the phase to 'levelup' and pause the run
+ *   8. progression — may flip the phase to 'levelup' and pause the run
  *
  * Cosmetic effects and the burning ground the trail leaves are advanced with
  * the rest of the bookkeeping, after combat has had its chance to lay them.
@@ -48,6 +51,7 @@ export function stepWorld(world: World, dt: number): void {
   world.time += dt;
 
   reapSystem(world);
+  respawnSystem(world);
   spawnSystem(world, dt);
   steeringSystem(world, dt);
   movementSystem(world, dt);

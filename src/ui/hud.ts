@@ -2,6 +2,7 @@ import { CONFIG } from '../config';
 import { weaponById } from '../data/weapons';
 import { t } from '../i18n';
 import { xpForNextLevel } from '../systems/progression';
+import { isAlive } from '../world/party';
 import { edgeMark } from './offscreen';
 import type { SpritePainter } from './starters';
 import type { Enemy, Player } from '../world/types';
@@ -58,6 +59,7 @@ export class Hud {
   private readonly bossFill = requireElement('boss-fill');
   private readonly warning = requireElement('warning');
   private readonly chestMarker = requireElement('chest-marker');
+  private readonly downed = requireElement('downed');
   private readonly chestArrow = requireElement('chest-arrow');
 
   /** Exponential moving average — a raw per-frame value is unreadable. */
@@ -87,10 +89,13 @@ export class Hud {
   }
 
   /**
-   * `view` is the player this screen belongs to. The bars and the arrow are
-   * theirs; the clock, the kill count and the boss tally are the run's.
+   * `view` is whose eyes this screen is using and `self` is who is sitting at
+   * it. They are the same player until that player dies, and after that the
+   * bars belong to whoever is being watched while the notices still belong to
+   * the person watching — which is the whole difference between spectating and
+   * having been replaced.
    */
-  update(world: World, view: Player): void {
+  update(world: World, view: Player, self: Player = view): void {
     const now = performance.now();
     const elapsed = this.lastFrameTime > 0 ? (now - this.lastFrameTime) / 1000 : 0;
     this.lastFrameTime = now;
@@ -124,6 +129,46 @@ export class Hud {
 
     this.updateBoss(world);
     this.updateChest(world, view);
+    this.updateDowned(world, self);
+  }
+
+  /**
+   * Who is down, and for how long.
+   *
+   * One line per fallen player rather than a banner that flashes once: it is
+   * true for the whole minute, and somebody who looked away for ten seconds
+   * should not have missed the only time the game said it. The viewer's own
+   * death gets a second line, because being dead comes with a control nothing
+   * else on the screen has.
+   */
+  private updateDowned(world: World, self: Player): void {
+    const lines: HTMLElement[] = [];
+
+    for (let i = 0; i < world.players.length; i++) {
+      const player = world.players[i];
+      if (isAlive(player)) continue;
+
+      const line = document.createElement('div');
+      line.textContent = t('hud.down', {
+        who: t('hud.player', { n: i + 1 }),
+        clock: formatTime(Math.max(0, player.respawnAt - world.time)),
+      });
+      lines.push(line);
+    }
+
+    if (!isAlive(self)) {
+      const watched = world.players[self.watching];
+      if (watched !== undefined) {
+        const line = document.createElement('div');
+        line.className = 'watching';
+        line.textContent = t('hud.watching', {
+          who: t('hud.player', { n: self.watching + 1 }),
+        });
+        lines.push(line);
+      }
+    }
+
+    this.downed.replaceChildren(...lines);
   }
 
   /**

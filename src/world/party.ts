@@ -48,6 +48,42 @@ export function partySize(world: World): number {
 }
 
 /**
+ * The next living player after `from`, wrapping round.
+ *
+ * What the left mouse button does for somebody watching from the dead, and what
+ * `respawnSystem` falls back on when the player being watched falls too.
+ * Answers `from` when nobody else is standing, which a caller checks for by
+ * asking whether that player is alive.
+ */
+export function nextLiving(world: World, from: number): number {
+  const players = world.players;
+
+  for (let step = 1; step <= players.length; step++) {
+    const index = (from + step) % players.length;
+    if (isAlive(players[index])) return index;
+  }
+
+  return from;
+}
+
+/**
+ * Whose eyes a screen should use for this player.
+ *
+ * Their own while they are standing, and the one they are watching while they
+ * are not. Both the camera and the HUD ask, so that a downed player's screen is
+ * one coherent view of somebody else rather than a camera over there and a
+ * health bar over here.
+ */
+export function viewedBy(world: World, player: Player): Player {
+  if (isAlive(player)) return player;
+
+  const watched = world.players[player.watching];
+  if (watched !== undefined && isAlive(watched)) return watched;
+
+  return nearestPlayer(world, player.x, player.y) ?? player;
+}
+
+/**
  * How much faster the horde arrives, and how much tougher each body is.
  *
  * One multiplier of `partySize` split between the two by

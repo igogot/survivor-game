@@ -26,6 +26,7 @@ import { starterChoices } from './ui/starters';
 import { canPause, pauseRun, resumeRun } from './world/pause';
 import { stepWorld } from './world/step';
 import { World } from './world/world';
+import { isAlive, nextLiving, viewedBy } from './world/party';
 import type { Player } from './world/types';
 
 async function main(): Promise<void> {
@@ -240,12 +241,18 @@ async function main(): Promise<void> {
       // Read before the intent, so a click and a key pressed in the same tick
       // resolve the way they should: the key wins and the order is dropped
       // inside `steeringSystem` rather than half-obeyed here.
-      const order = clicks.consume();
-      if (order !== null) me().moveTarget = renderer.screenToWorld(order.x, order.y);
+      // A downed player steers nothing and orders nothing. What their mouse
+      // does instead is move the camera along the team — see `watching`.
+      if (isAlive(me())) {
+        const order = clicks.consume();
+        if (order !== null) me().moveTarget = renderer.screenToWorld(order.x, order.y);
 
-      const intent = combinedIntent();
-      me().intentX = intent.x;
-      me().intentY = intent.y;
+        const intent = combinedIntent();
+        me().intentX = intent.x;
+        me().intentY = intent.y;
+      } else if (clicks.consumePrimary()) {
+        me().watching = nextLiving(world, me().watching);
+      }
       stepWorld(world, dt);
       syncOverlays();
       return;
@@ -360,8 +367,13 @@ async function main(): Promise<void> {
   }
 
   function draw(alpha: number): void {
-    renderer.draw(world, me(), alpha);
-    hud.update(world, me());
+    // Whose eyes: their own while they are standing, and a teammate's while
+    // they are not. One answer for the camera and the bars alike, so a
+    // spectator's screen is a coherent view of somebody else rather than a
+    // camera over there and a health bar over here.
+    const eyes = viewedBy(world, me());
+    renderer.draw(world, eyes, alpha);
+    hud.update(world, eyes, me());
     stick.update(touch);
   }
 

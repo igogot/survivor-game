@@ -183,6 +183,8 @@ function createPlayer(starterId: string): Player {
     py: 0,
     hp: CONFIG.player.maxHp,
     invuln: 0,
+    respawnAt: 0,
+    watching: 0,
     stats: {
       maxHp: CONFIG.player.maxHp,
       moveSpeed: CONFIG.player.moveSpeed,

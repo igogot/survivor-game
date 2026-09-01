@@ -16,6 +16,9 @@
  */
 export const EN = {
   // The HUD, which is read at a glance and never in a sentence.
+  'hud.player': 'Player {n}',
+  'hud.down': '{who} is down — back in {clock}',
+  'hud.watching': 'watching {who} · left click to switch',
   'hud.level': 'LV',
   'hud.kills': 'kills',
   'hud.bosses': 'bosses',

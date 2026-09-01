@@ -3,6 +3,9 @@ import type { Vector } from './touch';
 /** `PointerEvent.button` for the right mouse button. */
 const SECONDARY_BUTTON = 2;
 
+/** And for the left one, which only a spectator uses. */
+const PRIMARY_BUTTON = 0;
+
 /**
  * Right-click move orders, sampled once per tick like the keyboard.
  *
@@ -23,6 +26,15 @@ export class ClickInput {
   private heldPointer: number | null = null;
   private cursorX = 0;
   private cursorY = 0;
+
+  /**
+   * Left clicks waiting to be read, counted rather than flagged.
+   *
+   * Somebody cycling through their team's cameras clicks faster than the tick
+   * rate, and a boolean would eat every click but the last one — the camera
+   * would lag behind the hand. Counting means four clicks move four seats.
+   */
+  private primaryClicks = 0;
 
   attach(surface: EventTarget): void {
     this.detach();
@@ -88,10 +100,28 @@ export class ClickInput {
   reset(): void {
     this.clearPending();
     this.heldPointer = null;
+    this.primaryClicks = 0;
+  }
+
+  /**
+   * One unread left click, or none.
+   *
+   * Separate from the move order because it means something else entirely: the
+   * right button says where to walk, and the left one is only read while the
+   * player who pressed it is dead and looking through somebody else's eyes.
+   */
+  consumePrimary(): boolean {
+    if (this.primaryClicks === 0) return false;
+    this.primaryClicks--;
+    return true;
   }
 
   private onPointerDown = (event: Event): void => {
     const pointer = event as PointerEvent;
+    if (pointer.button === PRIMARY_BUTTON) {
+      this.primaryClicks++;
+      return;
+    }
     if (pointer.button !== SECONDARY_BUTTON) return;
 
     this.heldPointer = pointer.pointerId;

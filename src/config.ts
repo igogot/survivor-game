@@ -48,6 +48,19 @@ export const CONFIG = {
     moveSpeed: 175,
     /** Invulnerability window after taking a hit. */
     invulnTime: 0.5,
+    /**
+     * Seconds a downed player waits per teammate, so a pair wait a minute, a
+     * three two and a four three. See `respawnDelay`.
+     */
+    respawnPerTeammate: 60,
+    /**
+     * Grace on coming back, which is longer than a hit's.
+     *
+     * A player returns beside the one they were watching, and that player is
+     * being watched because they are alive in the middle of something. Half a
+     * second would be a respawn spent on the tick it happened.
+     */
+    respawnGrace: 2,
     /** Gems inside this radius fly toward the player. */
     pickupRadius: 75,
     /** Gems inside this radius are collected. */
