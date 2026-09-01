@@ -1,0 +1,31 @@
+# Apache config for shared hosting (reg.ru Host-A and friends).
+#
+# Vite copies everything in public/ to the root of dist/, so this ships with
+# every build and only has to be uploaded once. GitHub Pages ignores it.
+
+# Compression. Shared Apache serves JavaScript uncompressed by default, which
+# turns a 600 KB build into a 600 KB download instead of ~150 KB.
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain
+  AddOutputFilterByType DEFLATE application/javascript application/json
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# Caching. Vite fingerprints every file under assets/ with a content hash, so
+# those URLs can never go stale and are safe to cache forever. index.html is
+# the opposite: cache it and players stay pinned to an old build after a
+# deploy, loading asset URLs that no longer exist.
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# Some shared hosts still guess text/plain for .js, which browsers refuse to
+# run as an ES module. index.html loads main.js with type="module", so an
+# unrecognised type is a blank canvas, not a slow load.
+<IfModule mod_mime.c>
+  AddType application/javascript .js
+</IfModule>
