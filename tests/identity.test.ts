@@ -158,3 +158,68 @@ describe('when a password may leave the page', () => {
     expect(connectionCanCarryAPassword(at('http:', '127.0.0.1'))).toBe(true);
   });
 });
+
+describe('telling the screen the name changed', () => {
+  /**
+   * The HUD shows the name a run will be submitted under, and it has to be
+   * right the moment somebody signs in rather than after a reload. Reading
+   * storage in the draw loop would ask the same question sixty times a second,
+   * so the two functions that can change the answer say so instead.
+   */
+  it('announces a sign-in', async () => {
+    const { saveIdentity, onIdentityChange } = await identity();
+    const seen: string[] = [];
+    onIdentityChange((held) => seen.push(held.name));
+
+    saveIdentity('Kira', 'a'.repeat(64), true);
+    expect(seen).toEqual(['Kira']);
+  });
+
+  it('announces a sign-out, with the name gone from the answer', async () => {
+    const { saveIdentity, forgetToken, onIdentityChange } = await identity();
+    saveIdentity('Kira', 'b'.repeat(64), true);
+
+    const seen: { name: string; token: string }[] = [];
+    onIdentityChange((held) => seen.push({ name: held.name, token: held.token }));
+    forgetToken();
+
+    expect(seen).toHaveLength(1);
+    // The name stays in the box for typing; the token is what went.
+    expect(seen[0]).toEqual({ name: 'Kira', token: '' });
+  });
+
+  it('stops telling a listener that unsubscribed', async () => {
+    const { saveIdentity, onIdentityChange } = await identity();
+    const seen: string[] = [];
+    const stop = onIdentityChange((held) => seen.push(held.name));
+
+    saveIdentity('Kira', 'c'.repeat(64));
+    stop();
+    saveIdentity('Volk', 'd'.repeat(64));
+
+    expect(seen).toEqual(['Kira']);
+  });
+
+  it('tells every listener', async () => {
+    const { saveIdentity, onIdentityChange } = await identity();
+    const first: string[] = [];
+    const second: string[] = [];
+    onIdentityChange((held) => first.push(held.name));
+    onIdentityChange((held) => second.push(held.name));
+
+    saveIdentity('Kira', 'e'.repeat(64));
+    expect(first).toEqual(['Kira']);
+    expect(second).toEqual(['Kira']);
+  });
+
+  /** Storage that throws must not take the screen down with it. */
+  it('still announces when nothing could be stored', async () => {
+    const { saveIdentity, onIdentityChange } = await identity();
+    const seen: string[] = [];
+    onIdentityChange((held) => seen.push(held.name));
+    storage.hostile = true;
+
+    expect(() => saveIdentity('Kira', 'f'.repeat(64))).not.toThrow();
+    expect(seen).toEqual(['']);
+  });
+});
