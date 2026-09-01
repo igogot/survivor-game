@@ -492,6 +492,140 @@
         background: rgba(255, 209, 102, 0.12);
       }
 
+      /* One step of the opening screen. They are swapped by `hidden`, so the
+         panel's own padding and the language switch are written once. */
+      .step {
+        display: contents;
+      }
+
+      .choices {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-bottom: 16px;
+      }
+
+      /* Deliberately the weapon card's shape: choosing a mode and choosing a
+         weapon are the same gesture two screens apart, and they should not look
+         like two different games. */
+      .choice {
+        pointer-events: auto;
+        width: 260px;
+        padding: 18px 16px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text);
+        font-family: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 120ms, background 120ms, transform 120ms;
+      }
+
+      .choice:hover,
+      .choice:focus-visible {
+        border-color: var(--accent, #6ee7a0);
+        background: rgba(255, 255, 255, 0.06);
+        transform: translateY(-2px);
+        outline: none;
+      }
+
+      .choice-name {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 15px;
+        color: var(--accent, #6ee7a0);
+      }
+
+      .choice-hint {
+        display: block;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      .code-form {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-bottom: 12px;
+        pointer-events: auto;
+      }
+
+      /* Monospace and widely spaced: this is read off one screen and typed into
+         another, so every character has to stand alone. */
+      .code-input,
+      .code-value {
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 22px;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+      }
+
+      .code-input {
+        width: 220px;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.25);
+        color: var(--text);
+      }
+
+      .code-input:focus-visible {
+        border-color: var(--accent, #6ee7a0);
+        outline: none;
+      }
+
+      .code-show {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        margin-bottom: 8px;
+      }
+
+      .code-value {
+        color: var(--accent, #6ee7a0);
+      }
+
+      .roster {
+        list-style: none;
+        margin: 14px auto;
+        padding: 0;
+        width: 260px;
+        text-align: left;
+      }
+
+      .roster li {
+        display: flex;
+        justify-content: space-between;
+        padding: 7px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+
+      .roster li.roster--empty {
+        color: var(--muted);
+        border-style: dashed;
+      }
+
+      .roster .tag {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .hint--warn {
+        color: #ff9f6b;
+      }
+
+      .action--quiet {
+        background: transparent;
+        color: var(--muted);
+      }
+
       .starters {
         display: flex;
         gap: 14px;
@@ -987,14 +1121,115 @@
           <button class="lang" type="button" data-lang="en">EN</button>
           <button class="lang" type="button" data-lang="ru">RU</button>
         </div>
-        <h2 data-i18n="start.title">Survivor</h2>
-        <p class="sub" data-i18n="start.sub">One life, no finish line. Choose what you open with.</p>
-        <div class="starters" id="start-weapons"></div>
-        <!-- Filled by StartScreen from the weapons themselves. It said "1 2 3"
-             here for two weapons longer than that was true, which is what a
-             hint written twice always comes to. -->
-        <p class="hint keys-only" id="start-keys"></p>
-        <p class="hint touch-only" data-i18n="start.touchHint">tap a weapon to begin</p>
+        <!-- Four steps behind one overlay, shown one at a time by StartScreen.
+             One panel rather than four overlays so the language switch, the
+             frame and the z-order are written once. -->
+        <div class="step" id="step-mode">
+          <h2 data-i18n="mode.title">Survivor</h2>
+          <p class="sub" data-i18n="mode.sub">
+            One life, no finish line. Alone or with company.
+          </p>
+          <div class="choices">
+            <button class="choice" type="button" id="mode-solo">
+              <span class="choice-name" data-i18n="mode.solo">Solo run</span>
+              <span class="choice-hint" data-i18n="mode.soloHint">
+                One player against the horde.
+              </span>
+            </button>
+            <button class="choice" type="button" id="mode-party">
+              <span class="choice-name" data-i18n="mode.party">Multiplayer</span>
+              <span class="choice-hint" data-i18n="mode.partyHint">
+                Up to four in one horde.
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div class="step" id="step-weapons" hidden>
+          <h2 data-i18n="start.title">Survivor</h2>
+          <p class="sub" data-i18n="start.sub">
+            One life, no finish line. Choose what you open with.
+          </p>
+          <div class="starters" id="start-weapons"></div>
+          <!-- Filled by StartScreen from the weapons themselves. It said "1 2 3"
+               here for two weapons longer than that was true, which is what a
+               hint written twice always comes to. -->
+          <p class="hint keys-only" id="start-keys"></p>
+          <p class="hint touch-only" data-i18n="start.touchHint">tap a weapon to begin</p>
+          <button class="action action--quiet" type="button" id="weapons-back" data-i18n="mode.back">
+            Back
+          </button>
+        </div>
+
+        <div class="step" id="step-party" hidden>
+          <h2 data-i18n="party.title">Multiplayer</h2>
+          <p class="sub" data-i18n="party.sub">
+            Somebody makes a team, everybody else joins it.
+          </p>
+          <div class="choices">
+            <button class="choice" type="button" id="party-create">
+              <span class="choice-name" data-i18n="party.create">Create a team</span>
+              <span class="choice-hint" data-i18n="party.createHint">You are given a code.</span>
+            </button>
+            <button class="choice" type="button" id="party-join">
+              <span class="choice-name" data-i18n="party.join">Join by code</span>
+              <span class="choice-hint" data-i18n="party.joinHint">
+                The code comes from somebody already waiting.
+              </span>
+            </button>
+          </div>
+          <p class="hint" data-i18n="room.reach">
+            A code reaches the other windows of this browser.
+          </p>
+          <button class="action action--quiet" type="button" id="party-back" data-i18n="mode.back">
+            Back
+          </button>
+        </div>
+
+        <div class="step" id="step-join" hidden>
+          <h2 data-i18n="join.title">Join a team</h2>
+          <p class="sub" data-i18n="join.sub">
+            Six characters, from somebody already in the room.
+          </p>
+          <form class="code-form" id="join-form">
+            <input
+              class="code-input"
+              id="join-code"
+              type="text"
+              inputmode="latin"
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="9"
+            />
+            <button class="action" type="submit" id="join-confirm" data-i18n="join.confirm">
+              Join
+            </button>
+          </form>
+          <p class="hint hint--warn" id="join-error" hidden></p>
+          <button class="action action--quiet" type="button" id="join-back" data-i18n="mode.back">
+            Back
+          </button>
+        </div>
+
+        <div class="step" id="step-room" hidden>
+          <h2 data-i18n="room.title">Waiting room</h2>
+          <p class="sub" data-i18n="room.codeLabel">Team code</p>
+          <div class="code-show">
+            <span class="code-value" id="room-code"></span>
+            <button class="action action--quiet" type="button" id="room-copy" data-i18n="room.copy">
+              Copy
+            </button>
+          </div>
+          <p class="hint" data-i18n="room.codeHint">
+            Everyone in the room can see it. Nobody outside can guess it.
+          </p>
+          <ol class="roster" id="room-roster"></ol>
+          <p class="hint" data-i18n="room.notYet">The team gathers, but the run is not networked yet.</p>
+          <button class="action action--quiet" type="button" id="room-leave" data-i18n="room.leave">
+            Leave the team
+          </button>
+        </div>
+
         <div class="help" id="help-start"></div>
       </div>
     </div>

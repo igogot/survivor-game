@@ -1,6 +1,7 @@
 import { formatTime, requireElement } from './hud';
 import { describeOffer, describeSpoil } from './offers';
 import { renderHelp } from './help';
+import { LobbyView } from './lobby';
 import {
   plural,
   spoilDescription,
@@ -39,6 +40,9 @@ export class StartScreen {
   private readonly root = requireElement('start');
   private readonly cards = requireElement('start-weapons');
   private readonly keys = requireElement('start-keys');
+  private readonly modePanel = requireElement('step-mode');
+  private readonly weaponsPanel = requireElement('step-weapons');
+  private readonly lobby: LobbyView;
 
   /**
    * Built once, not on every show.
@@ -52,6 +56,30 @@ export class StartScreen {
     private readonly paint: SpritePainter,
   ) {
     this.build();
+    this.lobby = new LobbyView(() => this.step('mode'));
+
+    requireElement('mode-solo').addEventListener('click', () => this.step('weapons'));
+    requireElement('mode-party').addEventListener('click', () => this.step('party'));
+    requireElement('weapons-back').addEventListener('click', () => this.step('mode'));
+  }
+
+  /**
+   * Which panel of the opening screen is up.
+   *
+   * The screen is a small flow now rather than one page: pick a mode, then
+   * either a weapon or a team. It is written as one overlay with panels rather
+   * than several overlays because everything around the panels — the frame, the
+   * language switch, the rules — belongs to all of them.
+   */
+  private step(step: 'mode' | 'weapons' | 'party'): void {
+    this.modePanel.hidden = step !== 'mode';
+    this.weaponsPanel.hidden = step !== 'weapons';
+
+    if (step === 'party') {
+      this.lobby.open();
+    } else {
+      this.lobby.hide();
+    }
   }
 
   /**
@@ -64,6 +92,7 @@ export class StartScreen {
   relabel(): void {
     this.cards.replaceChildren();
     this.build();
+    this.lobby.relabel();
   }
 
   private build(): void {
@@ -76,7 +105,9 @@ export class StartScreen {
     this.keys.replaceChildren(...keyHint(choices));
   }
 
+  /** Always opens on the mode choice: a restart is a chance to play differently. */
   show(): void {
+    this.step('mode');
     this.root.hidden = false;
   }
 
