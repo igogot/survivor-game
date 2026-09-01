@@ -44,6 +44,14 @@ export function applyDamage(world: World, enemy: Enemy, amount: number): void {
  *
  * Returns what should come off the boss, and may cost the player on the way.
  */
+/**
+ * The most one reflection may take, as a share of the player's own maximum.
+ *
+ * With the invulnerability window at half a second this bounds thorns at twice
+ * this much per second, whatever the player is hitting for.
+ */
+const THORNS_CAP = 0.08;
+
 function bossToll(world: World, enemy: Enemy, amount: number): number {
   const ability = bossAbilityById(enemy.ability);
   if (ability === undefined) return amount;
@@ -56,10 +64,18 @@ function bossToll(world: World, enemy: Enemy, amount: number): number {
 
   if (ability.id === 'thorns') {
     const player = nearestPlayer(world, enemy.x, enemy.y);
-    // Through `damagePlayer`, so a reflection obeys the same invulnerability
-    // window as a body does — otherwise a fast weapon would return the whole
-    // volley at once and kill through it.
-    if (player !== null) damagePlayer(world, player, amount * ability.power);
+    if (player !== null) {
+      // Capped against the player's own health rather than left as a share of
+      // the hit. The hit grows all run — a harpoon at minute ninety lands for
+      // thousands — and an uncapped share of it would stop being a threat and
+      // become an execution. The cap keeps it a cost of fighting rather than a
+      // verdict on it.
+      const reflected = Math.min(amount * ability.power, player.stats.maxHp * THORNS_CAP);
+      // Through `damagePlayer`, so a reflection obeys the same invulnerability
+      // window as a body does — otherwise a fast weapon would return the whole
+      // volley at once and kill through it.
+      damagePlayer(world, player, reflected);
+    }
   }
 
   return amount;

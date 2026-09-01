@@ -100,11 +100,17 @@ export const BOSS_ABILITIES: readonly BossAbilityDef[] = [
   {
     // The floor, not the air: everything within reach is hit at once. This is
     // the one that punishes fighting a boss from arm's length.
+    //
+    // `power` is damage, and it is worth saying so out loud: it was 190 for a
+    // while, which is the *radius* — against a hundred points of health that
+    // was not a hard ability, it was an instant loss every six seconds. A
+    // little more than a body's touch, because unlike a body it can be walked
+    // away from.
     id: 'quake',
     kind: 'active',
     cooldown: 6.5,
     duration: 0,
-    power: 190,
+    power: 34,
   },
   {
     // Faster the closer it is to dying, so the last tenth of the fight is the
@@ -147,6 +153,11 @@ export const BOSS_ABILITIES: readonly BossAbilityDef[] = [
     // Sends a share of every hit back at whoever is nearest. The only ability
     // that scales with the player's own damage, which is why it comes tenth —
     // by then there is enough of it for this to mean something.
+    //
+    // Capped in `bossToll`, and the cap is the whole reason it is shippable: a
+    // share of a hit is a share of a number that grows all run, so by the
+    // hundredth minute an uncapped reflection would kill a full-health player
+    // in about two seconds no matter what they did.
     id: 'thorns',
     kind: 'passive',
     cooldown: 0,

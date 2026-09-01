@@ -228,12 +228,54 @@ describe('what each boss does', () => {
     const player = world.players[0];
     const hp = player.hp;
 
-    applyDamage(world, boss, 200);
+    // Small enough that the share is under the cap and the share is what lands.
+    applyDamage(world, boss, 50);
 
-    expect(player.hp).toBeCloseTo(hp - 200 * ability.power, 5);
+    expect(player.hp).toBeCloseTo(hp - 50 * ability.power, 5);
     // Reflected through the same window a body's hit uses, so a fast weapon
     // cannot return a whole volley at once.
     expect(player.invuln).toBeGreaterThan(0);
+  });
+
+  /**
+   * The reflection is a share of a number that grows all run — a harpoon at
+   * minute ninety lands for thousands. Uncapped, the tenth boss would not be a
+   * hard fight but an execution, and the cap is what makes the ability
+   * shippable rather than a joke about big numbers.
+   */
+  it('caps what a reflection can take, however hard the player hits', () => {
+    const world = new World(5);
+    const boss = placeBoss(world, indexOf('thorns'), 300, 0);
+    const player = world.players[0];
+    const hp = player.hp;
+
+    applyDamage(world, boss, 100000);
+
+    const taken = hp - player.hp;
+    expect(taken).toBeGreaterThan(0);
+    expect(taken, 'an uncapped reflection').toBeLessThan(player.stats.maxHp * 0.2);
+  });
+
+  /**
+   * The blunder this exists to make impossible: `power` for the quake is
+   * damage, and it sat at 190 for a while — which is the radius, and which
+   * against a hundred points of health was not an ability but an instant loss
+   * every six seconds.
+   */
+  it('never kills a player at full health with one use', () => {
+    for (const ability of BOSS_ABILITIES) {
+      const world = new World(5);
+      // Right on top of the player, which is the worst case for every one of
+      // them, and long enough for several uses.
+      const boss = placeBoss(world, indexOf(ability.id), 20, 0);
+      const player = world.players[0];
+      player.hp = player.stats.maxHp;
+
+      tick(world, ability.cooldown);
+
+      expect(player.hp, `${ability.id} emptied a full bar in one use`).toBeGreaterThan(0);
+      expect(boss.hp).toBeGreaterThan(0);
+    }
   });
 
   /**
