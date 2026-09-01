@@ -1,6 +1,6 @@
 import { CONFIG } from '../config';
 import { dist2 } from '../core/math';
-import { nearestPlayer } from '../world/party';
+import { nearestPlayer, partySize } from '../world/party';
 import type { World } from '../world/world';
 
 /**
@@ -19,6 +19,21 @@ import type { World } from '../world/world';
  * decides who does the fetching, not who profits: levels arrive for everybody
  * at once, so nobody is punished for guarding a flank while somebody else walks
  * the field. See `World.level`.
+ *
+ * What it pays is multiplied by the size of the party, because so is the health
+ * of the thing that dropped it. An enemy with four times the health takes four
+ * times the shooting and is worth four times the experience; without that half
+ * of the pair of party multipliers charges and the other half does not pay, and
+ * a party ends up levelling at half a solo player's pace. The stand measured
+ * exactly that: a duo felled no boss in eight seeds where a solo player felled
+ * six.
+ *
+ * Multiplied here at the pickup rather than stored into `Gem.value`, for two
+ * reasons. A gem worth more than one is drawn with a different frame, so baking
+ * the party's multiplier in would make every grunt drop a rich-looking gem and
+ * erase a distinction the player reads at a glance. And applied here it cancels
+ * against `xpForNextLevel` at every instant, including the one where somebody
+ * dies mid-bar and both sides of the ratio change together.
  *
  * A harvest widens one player's radius enormously for a few seconds. Nothing
  * else about the pass changes: the gems still fly in and are still collected on
@@ -62,7 +77,7 @@ export function pickupSystem(world: World, dt: number): void {
     }
 
     if (distanceSq <= collectRadiusSq) {
-      world.xp += gem.value;
+      world.xp += gem.value * partySize(world);
       gems[i] = gems[gems.length - 1];
       gems.pop();
       world.gemPool.release(gem);

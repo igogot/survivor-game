@@ -250,7 +250,9 @@ describe('who takes the hit and who takes the gem', () => {
 
     pickupSystem(world, DT);
 
-    expect(world.xp).toBe(3);
+    // Two players, so the body it came off had twice the health and is worth
+    // twice the experience — see `pickupSystem`.
+    expect(world.xp).toBe(6);
     expect(world.gems).toHaveLength(0);
   });
 });
@@ -313,6 +315,25 @@ describe('the shared experience bar', () => {
     expect(world.level).toBe(2);
     expect(fallen.pendingLevels).toBe(0);
     expect(world.players[1].pendingLevels).toBe(1);
+  });
+
+  /**
+   * The pair of party multipliers has to cancel, or the game charges a party
+   * for its size on one side of the ledger and refuses to pay it on the other.
+   * Measured as a ratio rather than as two numbers: what matters is how many
+   * bodies a level costs, and that has to be the same for one player as for
+   * four.
+   */
+  it('costs the same number of bodies per level whatever the party size', () => {
+    const bodiesPerLevel = (size: number): number => {
+      const world = party(35, size);
+      // What one grunt's gem pays into the bar right now.
+      const perBody = 1 * size;
+      return xpForNextLevel(world) / perBody;
+    };
+
+    expect(bodiesPerLevel(2)).toBe(bodiesPerLevel(1));
+    expect(bodiesPerLevel(4)).toBe(bodiesPerLevel(1));
   });
 
   /** The levels are shared; what they buy is not. */
