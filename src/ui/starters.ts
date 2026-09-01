@@ -1,5 +1,5 @@
 import { WEAPONS } from '../data/weapons';
-import { weaponRole } from './help';
+import { weaponName, weaponRole } from '../i18n';
 import type { SpriteName } from '../data/sprites';
 
 /**
@@ -37,7 +37,7 @@ export interface StarterChoice {
 export function starterChoices(): readonly StarterChoice[] {
   return WEAPONS.map((def, index) => ({
     id: def.id,
-    name: def.name,
+    name: weaponName(def),
     sprite: def.playerSprite,
     detail: weaponRole(def.id),
     color: def.color,

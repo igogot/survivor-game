@@ -1,4 +1,5 @@
 import { weaponById } from '../data/weapons';
+import { t, weaponName } from '../i18n';
 import type { SpoilCategory, SpoilDef } from '../data/spoils';
 import type { UpgradeDef } from '../data/upgrades';
 
@@ -35,7 +36,7 @@ export interface OfferLabel {
 export function describeOffer(offer: UpgradeDef, taken: number): OfferLabel {
   const isNew = taken === 0;
   const isMax = taken + 1 >= offer.maxStacks;
-  const progress = isNew ? 'NEW' : `Lv ${taken} → ${taken + 1}`;
+  const progress = isNew ? t('offer.new') : `${t('offer.level')} ${taken} → ${taken + 1}`;
   const scopedToWeapon = offer.kind === 'weapon' || offer.kind === 'weaponMod';
 
   return {
@@ -45,7 +46,7 @@ export function describeOffer(offer: UpgradeDef, taken: number): OfferLabel {
     badge: badgeFor(offer),
     isNew,
     isMax,
-    progress: isMax ? `${progress} · MAX` : progress,
+    progress: isMax ? `${progress} · ${t('offer.max')}` : progress,
   };
 }
 
@@ -58,13 +59,15 @@ export function describeOffer(offer: UpgradeDef, taken: number): OfferLabel {
 function badgeFor(offer: UpgradeDef): string {
   switch (offer.kind) {
     case 'weapon':
-      return 'WEAPON';
-    case 'weaponMod':
+      return t('badge.weapon');
+    case 'weaponMod': {
       // An id with no weapon behind it can only mean the pool and the weapon
       // list drifted apart; the old word still describes the card correctly.
-      return weaponById(offer.weaponId)?.name.toUpperCase() ?? 'MOD';
+      const weapon = weaponById(offer.weaponId);
+      return weapon === undefined ? t('badge.mod') : weaponName(weapon).toUpperCase();
+    }
     case 'stat':
-      return 'UPGRADE';
+      return t('badge.upgrade');
     default: {
       const unhandled: never = offer;
       throw new Error(`Unhandled upgrade kind: ${String(unhandled)}`);
@@ -87,17 +90,17 @@ export interface SpoilLabel {
   readonly note: string;
 }
 
-const CATEGORY_BADGES: Readonly<Record<SpoilCategory, string>> = {
-  survive: 'SURVIVE',
-  clear: 'CLEAR',
-  gather: 'GATHER',
-};
+const CATEGORY_BADGES = {
+  survive: 'badge.survive',
+  clear: 'badge.clear',
+  gather: 'badge.gather',
+} as const satisfies Record<SpoilCategory, string>;
 
 export function describeSpoil(spoil: SpoilDef): SpoilLabel {
   return {
-    badge: CATEGORY_BADGES[spoil.category],
+    badge: t(CATEGORY_BADGES[spoil.category]),
     // The one line every spoil shares, which is what makes it the family
     // trait rather than a property of any single card.
-    note: 'ONE USE',
+    note: t('spoil.oneUse'),
   };
 }

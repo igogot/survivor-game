@@ -6,8 +6,11 @@ import { Input } from './core/input';
 import { TouchInput } from './core/touch-input';
 import { GameRenderer } from './render/renderer';
 import { STARTER_WEAPON_ID } from './data/weapons';
-import { applyUpgrade } from './systems/progression';
+import { applyStaticText } from './i18n';
+import { getLang, initLang } from './i18n/lang';
+import { OFFERS_PER_LEVEL, applyUpgrade } from './systems/progression';
 import { takeSpoil } from './systems/chests';
+import { mountLanguageSwitch } from './ui/language';
 import { Hud } from './ui/hud';
 import {
   ChestMenu,
@@ -16,6 +19,7 @@ import {
   StartScreen,
   UpgradeMenu,
   mountHelp,
+  renderKeyLines,
 } from './ui/menus';
 import { StickView } from './ui/stick';
 import { starterChoices } from './ui/starters';
@@ -27,6 +31,11 @@ import type { Player } from './world/types';
 async function main(): Promise<void> {
   const host = document.getElementById('app');
   if (host === null) throw new Error('Missing #app in index.html');
+
+  // Before anything reads a string. Every screen below is built out of text,
+  // and text is read from whichever table this call selects — so a language
+  // decided after the first panel exists is a panel in the wrong language.
+  initLang(window.location.search);
 
   const renderer = new GameRenderer();
   await renderer.init(host);
@@ -57,9 +66,8 @@ async function main(): Promise<void> {
   const starters = starterChoices();
 
   // One source of rules, printed into the briefing, the pause screen and the
-  // result screen. Rendered once at boot: the text never changes within a
-  // session, and rebuilding it on every pause would be work for nothing.
-  mountHelp(['help-start', 'help-pause', 'help-result']);
+  // result screen. Put on the page by `relabel` below, once there is a world
+  // for it to sync the overlays against.
 
   const pauseButton = document.getElementById('pause-button');
   pauseButton?.addEventListener('click', togglePause);
@@ -107,7 +115,12 @@ async function main(): Promise<void> {
    */
   let picking = !unattended;
   if (picking) pauseRun(world);
-  syncOverlays();
+
+  // Text first, then the screens built out of it. `relabel` ends by syncing the
+  // overlays, so this is also the first sync — and it has to happen here rather
+  // than beside the other setup above, because syncing reads `world`.
+  relabel();
+  mountLanguageSwitch(relabel);
 
   const loop = new GameLoop(CONFIG.tickRate, CONFIG.maxFrameTime, tick, draw);
   loop.start();
@@ -142,6 +155,32 @@ async function main(): Promise<void> {
         draw(0);
       },
     };
+  }
+
+  /**
+   * Puts every piece of text on the page into the current language.
+   *
+   * Three kinds of text need three different things done to them. Static lines
+   * are stamped from the markup's own ids; the lines with keycaps in them are
+   * rebuilt, because the caps sit in a different place in each language; and
+   * everything built from game data — the rules, the opening cards, whichever
+   * overlay is up — is re-rendered from its source.
+   *
+   * The HUD is absent on purpose: it is rewritten on every frame anyway, so it
+   * is already in the new language by the time the click that changed it has
+   * finished.
+   */
+  function relabel(): void {
+    document.documentElement.lang = getLang();
+    applyStaticText();
+    renderKeyLines(OFFERS_PER_LEVEL);
+    mountHelp(['help-start', 'help-pause', 'help-result']);
+    startScreen.relabel();
+    // The armed restart button says something the markup does not, so a
+    // re-stamp would quietly put the calm label back under a player who had
+    // already pressed once.
+    pauseScreen.disarm();
+    syncOverlays();
   }
 
   function tick(dt: number): void {

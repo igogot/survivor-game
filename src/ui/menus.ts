@@ -1,6 +1,15 @@
 import { formatTime, requireElement } from './hud';
 import { describeOffer, describeSpoil } from './offers';
 import { renderHelp } from './help';
+import {
+  plural,
+  spoilDescription,
+  spoilName,
+  t,
+  textNodes,
+  upgradeDescription,
+  upgradeName,
+} from '../i18n';
 import { cssColor, starterChoices } from './starters';
 import type { SpritePainter, StarterChoice } from './starters';
 import type { SpoilDef } from '../data/spoils';
@@ -38,11 +47,30 @@ export class StartScreen {
    * away the canvases their figures were painted into — which is real work,
    * since each one may have come out of the artwork sheet.
    */
-  constructor(onStart: (weaponId: string) => void, paint: SpritePainter) {
+  constructor(
+    private readonly onStart: (weaponId: string) => void,
+    private readonly paint: SpritePainter,
+  ) {
+    this.build();
+  }
+
+  /**
+   * Rebuilds the cards in the current language.
+   *
+   * The figures are repainted with them, which is the work the constructor's
+   * note was avoiding — but a language change happens once in a session at
+   * most, and the alternative is holding on to canvases to relabel around.
+   */
+  relabel(): void {
+    this.cards.replaceChildren();
+    this.build();
+  }
+
+  private build(): void {
     const choices = starterChoices();
 
     for (const choice of choices) {
-      this.cards.append(starterCard(choice, onStart, paint));
+      this.cards.append(starterCard(choice, this.onStart, this.paint));
     }
 
     this.keys.replaceChildren(...keyHint(choices));
@@ -115,15 +143,51 @@ function starterCard(
  * weapons on the screen.
  */
 function keyHint(choices: readonly StarterChoice[]): readonly Node[] {
-  const nodes: Node[] = [document.createTextNode('press ')];
+  const nodes: Node[] = [document.createTextNode(`${t('start.press')} `)];
 
   for (const choice of choices) {
     nodes.push(keycap(choice.key), document.createTextNode(' '));
   }
 
   nodes.push(document.createTextNode('· '), keycap('Space'));
-  nodes.push(document.createTextNode(' takes the first'));
+  nodes.push(document.createTextNode(` ${t('start.spaceTakes')}`));
   return nodes;
+}
+
+/**
+ * The three lines that mix a sentence with keycaps.
+ *
+ * They cannot be plain `data-i18n` text, because the caps sit inside the
+ * sentence and land in a different place in each language. `textNodes` splits
+ * the translated line on its own holes and drops the caps in where that
+ * language put them.
+ */
+export function renderKeyLines(offers: number): void {
+  const digits = Array.from({ length: offers }, (_, index) => keycap(String(index + 1)));
+
+  fillLine('levelup-sub', 'levelup.sub', { keys: spaced(digits) });
+  fillLine('pause-sub', 'pause.sub', {
+    esc: [keycap('Esc')],
+    p: [keycap('P')],
+    r: [keycap('R')],
+  });
+  fillLine('result-hint', 'result.hint', { r: [keycap('R')] });
+}
+
+function fillLine(
+  id: string,
+  line: Parameters<typeof textNodes>[0],
+  slots: Readonly<Record<string, readonly Node[]>>,
+): void {
+  const host = document.getElementById(id);
+  if (host !== null) host.replaceChildren(...textNodes(line, slots));
+}
+
+/** Keycaps with a space between them, so a run of digits does not run together. */
+function spaced(caps: readonly Node[]): Node[] {
+  return caps.flatMap((cap, index) =>
+    index === 0 ? [cap] : [document.createTextNode(' '), cap],
+  );
 }
 
 function keycap(label: string): HTMLElement {
@@ -180,11 +244,11 @@ export class UpgradeMenu {
 
       const name = document.createElement('div');
       name.className = 'name';
-      name.textContent = offer.name;
+      name.textContent = upgradeName(offer);
 
       const description = document.createElement('div');
       description.className = 'desc';
-      description.textContent = offer.description;
+      description.textContent = upgradeDescription(offer);
 
       const stackLine = document.createElement('div');
       stackLine.className = label.isNew ? 'stacks stacks--new' : 'stacks';
@@ -246,11 +310,11 @@ export class ChestMenu {
 
       const name = document.createElement('div');
       name.className = 'name';
-      name.textContent = spoil.name;
+      name.textContent = spoilName(spoil);
 
       const description = document.createElement('div');
       description.className = 'desc';
-      description.textContent = spoil.description;
+      description.textContent = spoilDescription(spoil);
 
       const note = document.createElement('div');
       note.className = 'stacks';
@@ -305,7 +369,7 @@ export class PauseScreen {
   requestRestart(): void {
     if (!this.armed) {
       this.armed = true;
-      this.restartButton.textContent = 'Sure? The run is lost';
+      this.restartButton.textContent = t('pause.restartArmed');
       this.restartButton.classList.add('action--armed');
       return;
     }
@@ -326,9 +390,16 @@ export class PauseScreen {
     this.root.hidden = true;
   }
 
-  private disarm(): void {
+  /**
+   * Public because a language change has to reach it.
+   *
+   * The armed button is the one piece of text on the page that is not a
+   * translation of what the markup says — re-stamping the panel would put the
+   * calm label back under a player who had already asked twice.
+   */
+  disarm(): void {
     this.armed = false;
-    this.restartButton.textContent = 'Restart run';
+    this.restartButton.textContent = t('pause.restart');
     this.restartButton.classList.remove('action--armed');
   }
 }
@@ -355,7 +426,7 @@ export class ResultScreen {
   }
 
   show(world: World): void {
-    this.title.textContent = 'You Died';
+    this.title.textContent = t('result.died');
     this.subtitle.textContent = resultSubtitle(world.bossesKilled);
 
     this.time.textContent = formatTime(world.time);
@@ -378,7 +449,17 @@ export class ResultScreen {
  * same split `describeOffer` uses.
  */
 export function resultSubtitle(bossesKilled: number): string {
-  if (bossesKilled === 0) return 'The horde does not stop. Try standing somewhere else.';
-  if (bossesKilled === 1) return 'One boss down. The horde kept coming anyway.';
-  return `${bossesKilled} bosses down. The horde kept coming anyway.`;
+  if (bossesKilled === 0) return t('result.sub.none');
+  if (bossesKilled === 1) return t('result.sub.one');
+
+  return t('result.sub.many', {
+    count: bossesKilled,
+    // Unused in English, where the plural is already in the sentence. Russian
+    // needs the noun itself, because five bosses take a different word to two.
+    bosses: plural(bossesKilled, {
+      one: 'plural.boss.one',
+      few: 'plural.boss.few',
+      many: 'plural.boss.many',
+    }),
+  });
 }

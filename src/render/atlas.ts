@@ -60,7 +60,67 @@ type Draw = (ctx: CanvasRenderingContext2D, width: number, height: number) => vo
 
 const WHITE = '#ffffff';
 
-/** Regular polygon, first vertex pointing up. */
+/**
+ * Where the ember's edge sits at one angle, as a fraction of its radius.
+ *
+ * Pulled out of the drawer so the rule can be tested without a canvas: the
+ * result is never above 1, which is what "the fire never reaches past what it
+ * burns" means in code.
+ *
+ * Three waves whose frequencies share no common factor, so the tongues never
+ * line up into a pattern the eye can finish. The amplitudes add to `EMBER_REACH`
+ * and `EMBER_FLOOR` is what is left of the radius underneath them; together
+ * they come to exactly 1.
+ */
+const EMBER_WAVES: readonly (readonly [number, number, number])[] = [
+  [0.18, 5, 0],
+  [0.1, 8, 2.1],
+  [0.06, 13, 0.7],
+];
+const EMBER_REACH = 0.34;
+const EMBER_FLOOR = 0.66;
+
+/**
+ * The largest value the waves actually reach together.
+ *
+ * Not the sum of the amplitudes: three cosines at different phases never crest
+ * at the same angle, so the sum overstates the real peak by about a fourteenth
+ * — and that fourteenth is the difference between fire that touches the ground
+ * it burns and fire that stops short of it everywhere. Measured here rather
+ * than written down, because a written-down number is exactly what goes stale
+ * when somebody retunes the waves above.
+ */
+const EMBER_PEAK = ((): number => {
+  const steps = 2048;
+  let peak = 0;
+  for (let i = 0; i < steps; i++) {
+    const angle = (i * TAU) / steps;
+    let wave = 0;
+    for (const [amplitude, frequency, phase] of EMBER_WAVES) {
+      wave += amplitude * Math.cos(frequency * angle + phase);
+    }
+    peak = Math.max(peak, wave);
+  }
+  return peak;
+})();
+
+export function emberRadius(angle: number): number {
+  let wave = 0;
+  for (const [amplitude, frequency, phase] of EMBER_WAVES) {
+    wave += amplitude * Math.cos(frequency * angle + phase);
+  }
+
+  // Crests pulled to points, troughs left round and shallow. Fire licks outward
+  // and pools at the base; a curve symmetric about its own mean does neither,
+  // which is the whole difference from the seven-lobed wobble this replaced.
+  const unit = wave / EMBER_PEAK;
+  const shaped = unit >= 0 ? Math.pow(unit, 2.2) * EMBER_REACH : wave * 0.4;
+  return EMBER_FLOOR + shaped;
+}
+
+/**
+ * Regular polygon, first vertex pointing up.
+ */
 function polygon(ctx: CanvasRenderingContext2D, size: number, sides: number, inset: number): void {
   const radius = size / 2 - inset;
   ctx.beginPath();
@@ -437,31 +497,40 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
   },
 
   /**
-   * One patch of burning ground.
+   * One patch of burning ground: tongues licking outward from a hot middle.
    *
-   * A disc with a wobbling edge rather than a clean circle: a trail is a few
-   * dozen of these laid along the player's path, and identical circles read as
-   * a row of dots instead of as fire. The renderer turns each patch by its own
-   * position so the wobble never lines up between neighbours.
+   * A trail is a few dozen of these laid along the player's path and stacked at
+   * four tenths alpha, so what has to read as fire is the ribbon, not the
+   * patch. This used to be a disc with a gentle seven-lobed wobble, and a
+   * gentle wobble is exactly what a stain looks like — smooth, closed, the same
+   * width all the way round. Tongues of uneven length and spacing are what say
+   * burning instead of spilt.
+   *
+   * The renderer turns each patch by its own position, so the shape has to hold
+   * up at every angle. That rules out a flame with a tip, which would point a
+   * different way in each patch and none of them upward. A rosette has no tip
+   * to point wrongly.
    *
    * What the patch damages is its full radius, and this project's rule is that
-   * a weapon hits where it is drawn — so the wobble only ever goes inward. In
-   * the valleys the fire is drawn a fifth short of what it burns, and never a
-   * pixel long. On a ribbon that is covered by the neighbouring patches, which
-   * sit three quarters of a radius away; the only exposed rim in the game is
-   * the newest patch, the one under the player's own feet.
+   * a weapon hits where it is drawn — so the outline only ever goes inward. The
+   * crests land exactly on the radius and never a pixel past it; the deepest
+   * notches sit at a little over half of it. `tests/atlas.test.ts` holds both
+   * ends, because a frame is pixels and pixels have no test of their own. On a ribbon those troughs are covered by
+   * the neighbouring patches, which sit three quarters of a radius away; the
+   * only exposed rim in the game is the newest patch, under the player's feet.
    */
   ember: (ctx, size) => {
     const centre = size / 2;
     const outer = size / 2 - 1;
-    const lobes = 7;
-    const steps = 96;
+    // Enough segments that a tongue's point is a point rather than a facet at
+    // the size a patch is actually drawn.
+    const steps = 288;
 
     ctx.fillStyle = WHITE;
     ctx.beginPath();
     for (let i = 0; i < steps; i++) {
       const angle = (i * TAU) / steps;
-      const radius = outer * (0.9 + 0.1 * Math.cos(lobes * angle));
+      const radius = outer * emberRadius(angle);
       const x = centre + Math.cos(angle) * radius;
       const y = centre + Math.sin(angle) * radius;
       if (i === 0) ctx.moveTo(x, y);
