@@ -76,11 +76,90 @@ describe('the stylesheet', () => {
   });
 
   /**
-   * Every overlay depends on this one rule to stay out of the way. Without it
-   * they all render at once, stacked down the page — which is exactly what the
-   * broken stylesheet looked like.
+   * Every panel on this page depends on one rule to stay out of the way.
+   *
+   * `hidden` carries no weight of its own. Its whole effect is the browser's
+   * `[hidden] { display: none }`, and a stylesheet outranks a browser whatever
+   * the specificity — so one author rule setting `display` on a hidden element
+   * switches the attribute off for it, silently, with nothing to see but a
+   * panel that will not go away.
+   *
+   * That is not a hypothetical. `.step { display: contents }` did it to the
+   * whole opening screen: five panels meant to be shown one at a time were all
+   * on the page together, and the code that swapped between them had never once
+   * been visible. It was worked around eight separate times in this file before
+   * anybody traced it, each time by writing `#that-one[hidden] { display: none }`
+   * for one more element.
+   *
+   * So the rule is global and `!important`, and this is the test that says so.
    */
-  it('keeps the rule that hides an overlay', () => {
-    expect(stylesheet()).toMatch(/\.overlay\[hidden\]\s*\{[^}]*display:\s*none/);
+  it('keeps the rule that makes hidden mean hidden', () => {
+    expect(stylesheet()).toMatch(/\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+  });
+
+  /**
+   * And nothing outranks it.
+   *
+   * The rule above can only be beaten by another `!important`, so that is the
+   * one thing to watch for. Anything else setting `display` is now harmless,
+   * which is the entire point of writing it this way.
+   */
+  it('lets nothing outrank that rule', () => {
+    const shouting = [...stylesheet().matchAll(/([^{}]+)\{[^}]*display:[^;}]*!important/g)]
+      .map((match) => match[1].trim())
+      .filter((selector) => !selector.includes('[hidden]'));
+
+    expect(shouting, `${shouting.join(', ')} can override [hidden]`).toEqual([]);
+  });
+
+  /**
+   * The opening screen is a flow, and the markup has to agree.
+   *
+   * Every step but the first carries `hidden` in the source, so the page is
+   * already showing one panel before a line of script runs. Getting this wrong
+   * is not a wrong pixel: it is every panel of the flow at once for as long as
+   * it takes the bundle to load.
+   */
+  it('opens the start screen on one step', () => {
+    const steps = [...html.matchAll(/<div class="step" id="(step-[a-z]+)"([^>]*)>/g)];
+
+    expect(steps.map((step) => step[1])).toEqual([
+      'step-mode',
+      'step-weapons',
+      'step-party',
+      'step-join',
+      'step-room',
+    ]);
+
+    for (const [, id, attributes] of steps) {
+      const shown = id === 'step-mode';
+      expect(attributes.includes('hidden'), `${id} should start ${shown ? 'shown' : 'hidden'}`).toBe(
+        !shown,
+      );
+    }
+  });
+
+  /**
+   * And the first step is only the question.
+   *
+   * The board, the account and the briefing hang below the steps rather than
+   * inside one, which is what lets `StartScreen` show them the moment a mode is
+   * chosen. Inside `step-mode` they would be part of the question; inside
+   * `step-weapons` they would be unreachable from the multiplayer half of the
+   * screen.
+   */
+  it('keeps the board, the account and the briefing out of the mode choice', () => {
+    const mode = /<div class="step" id="step-mode">([\s\S]*?)<div class="step" id="step-weapons"/.exec(
+      html,
+    );
+    if (mode === null) throw new Error('index.html has no step-mode');
+
+    for (const id of ['start-records', 'start-account', 'help-start']) {
+      expect(mode[1], `${id} is inside the mode choice`).not.toContain(id);
+    }
+
+    // Below the steps, and shut until one is chosen.
+    expect(html).toMatch(/<div class="actions" id="start-actions" hidden>/);
+    expect(html).toMatch(/<div class="help" id="help-start" hidden><\/div>/);
   });
 });

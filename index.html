@@ -28,6 +28,31 @@
         box-sizing: border-box;
       }
 
+      /* `hidden` means hidden, whatever else claims otherwise.
+
+         The attribute's only weight is the browser's own `[hidden] { display:
+         none }`, which every author rule in this file outranks — a stylesheet
+         beats a user agent regardless of specificity. So any rule that sets
+         `display` on an element also toggled by `hidden` silently switches the
+         attribute off, and the panel it was hiding renders anyway.
+
+         The opening screen was doing exactly that. Its five steps are swapped
+         by `hidden`, and `.step { display: contents }` overrode every one of
+         them: the mode choice, the weapon cards, the create-or-join panel, the
+         code form and the waiting room were all on the page at once, stacked
+         down one column. The flow in `StartScreen` was right the whole time and
+         had never once been visible.
+
+         It had been found before and never named. Eight rules in this file were
+         `#something[hidden] { display: none }` — the same patch written eight
+         times for a cause nobody had traced. They are gone; this replaces them.
+
+         `!important` is the point rather than a shortcut. It is what makes the
+         next `display` rule harmless instead of the next silent bug. */
+      [hidden] {
+        display: none !important;
+      }
+
       html,
       body {
         margin: 0;
@@ -98,10 +123,6 @@
         max-width: 12ch;
         overflow: hidden;
         text-overflow: ellipsis;
-      }
-
-      #player-name[hidden] {
-        display: none;
       }
 
       #hp-wrap {
@@ -254,10 +275,6 @@
         text-align: center;
       }
 
-      #boss[hidden] {
-        display: none;
-      }
-
       #boss-name {
         font-size: 12px;
         letter-spacing: 0.22em;
@@ -283,10 +300,6 @@
         animation: warning-pulse 900ms ease-in-out infinite;
       }
 
-      #warning[hidden] {
-        display: none;
-      }
-
       /* The chest pointer. Fixed rather than inside #hud, which has safe-area
          padding: the marker is measured from the middle of the glass, and a
          notch on one side would otherwise shift the centre it is measured
@@ -305,10 +318,6 @@
         background: rgba(14, 17, 26, 0.85);
         box-shadow: 0 0 14px rgba(255, 209, 102, 0.25);
         animation: chest-pulse 1800ms ease-in-out infinite;
-      }
-
-      #chest-marker[hidden] {
-        display: none;
       }
 
       #chest-icon {
@@ -365,10 +374,6 @@
         background: rgba(6, 8, 13, 0.78);
         backdrop-filter: blur(3px);
         z-index: 10;
-      }
-
-      .overlay[hidden] {
-        display: none;
       }
 
       /* The board is the one overlay opened from on top of another one — from
@@ -545,7 +550,11 @@
       }
 
       /* One step of the opening screen. They are swapped by `hidden`, so the
-         panel's own padding and the language switch are written once. */
+         panel's own padding and the language switch are written once.
+
+         `display: contents` is why the rule at the top of this file has to
+         exist: it is a `display` rule on the very elements `hidden` is meant to
+         control, and for a long time it won. */
       .step {
         display: contents;
       }
@@ -798,10 +807,6 @@
         margin: 14px 0 4px;
       }
 
-      #submit-strip[hidden] {
-        display: none;
-      }
-
       #submit-message {
         margin: 0 0 10px;
         font-size: 12px;
@@ -813,10 +818,6 @@
         gap: 8px;
         justify-content: center;
         flex-wrap: wrap;
-      }
-
-      #submit-form[hidden] {
-        display: none;
       }
 
       .account-form {
@@ -974,6 +975,17 @@
         gap: 12px;
         justify-content: center;
         margin-top: 22px;
+      }
+
+      /* The opening screen's footer: the board, the account, and nothing that
+         belongs to the step above it. Ruled off for that reason — without the
+         line it reads as two more buttons of whichever panel is up, and on the
+         weapon step that puts "Records" next to "Back" as though they were the
+         same kind of thing. */
+      #start-actions {
+        margin-top: 18px;
+        border-top: 1px solid var(--border);
+        padding-top: 18px;
       }
 
       /* On the briefing the button comes before the rules rather than after
@@ -1155,10 +1167,6 @@
         border-radius: 50%;
         background: rgba(230, 233, 240, 0.05);
         pointer-events: none;
-      }
-
-      #stick[hidden] {
-        display: none;
       }
 
       #stick-knob {
@@ -1486,14 +1494,6 @@
               </span>
             </button>
           </div>
-        <div class="actions">
-          <button class="action" id="start-records" type="button" data-i18n="board.open">
-            Records
-          </button>
-          <button class="action" id="start-account" type="button" data-i18n="account.open">
-            Account
-          </button>
-        </div>
         </div>
 
         <div class="step" id="step-weapons" hidden>
@@ -1530,7 +1530,7 @@
             </button>
           </div>
           <p class="hint" data-i18n="room.reach">
-            A code reaches the other windows of this browser.
+            A code reaches anybody, on any machine.
           </p>
           <button class="action action--quiet" type="button" id="party-back" data-i18n="mode.back">
             Back
@@ -1600,7 +1600,23 @@
           </button>
         </div>
 
-        <div class="help" id="help-start"></div>
+        <!-- Everything that is not the question the panel is asking.
+
+             It hangs below the steps rather than inside one because it belongs
+             to all of them but the first: the opening screen asks solo or
+             company, and a screen with one question on it should have one
+             question on it. Both are shown by `StartScreen.step` the moment
+             that question is answered. -->
+        <div class="actions" id="start-actions" hidden>
+          <button class="action" id="start-records" type="button" data-i18n="board.open">
+            Records
+          </button>
+          <button class="action" id="start-account" type="button" data-i18n="account.open">
+            Account
+          </button>
+        </div>
+
+        <div class="help" id="help-start" hidden></div>
       </div>
     </div>
 
