@@ -74,13 +74,36 @@ is('caps to the limit', mb_strlen((string) cleanName(str_repeat('x', 200), 18), 
 is('refuses nothing at all', cleanName('', 18), null);
 is('refuses only spaces', cleanName('   ', 18), null);
 is('keeps Cyrillic', cleanName('Игрок', 18), 'Игрок');
-is('keeps an emoji', cleanName('ka-50 🐙', 18), 'ka-50 🐙');
+is('keeps an emoji', cleanName('ka-50🐙', 18), 'ka-50🐙');
 is('strips a control character', cleanName("a\x07bc", 18), 'abc');
 is('strips a zero-width space', cleanName("we\u{200b}ird", 18), 'weird');
-is('strips a newline', cleanName("two\nlines", 18), 'twolines');
+// A newline separates words, so this is two of them and refused rather than
+// joined into a name nobody chose.
+is('refuses a newline between words', cleanName("two\nlines", 18), null);
 is('strips a bidi override', cleanName("right\u{202e}left", 18), 'rightleft');
 is('strips a bidi isolate', cleanName("a\u{2066}b", 18), 'ab');
 is('is idempotent', cleanName((string) cleanName('  bob ', 18), 18), 'bob');
+
+is('refuses two words', cleanName('two words', 18), null);
+is('refuses a tab between words', cleanName("ka	50", 18), null);
+is('refuses a non-breaking space', cleanName("a" . mb_chr(0x00a0, 'UTF-8') . "b", 18), null);
+is('refuses an ideographic space', cleanName("a" . mb_chr(0x3000, 'UTF-8') . "b", 18), null);
+is('still trims the ends', cleanName('  solo  ', 18), 'solo');
+is('one word with punctuation is fine', cleanName('ka-50', 18), 'ka-50');
+
+echo "names that look the same
+";
+/*
+ * Both sides have to fold identically, or the game offers a name the board
+ * then refuses. These are the same pairs tests/scores.test.ts asserts on.
+ */
+check('a Cyrillic lookalike folds onto its Latin twin', nameKey('Kira') === nameKey('Кira'));
+check('a whole word of them folds', nameKey('POCTOB') === nameKey('РОСТОВ'));
+check('Greek folds too', nameKey('okto') === nameKey('οκτο'));
+check('case is ignored', nameKey('Kira') === nameKey('kIRA'));
+check('different names stay different', nameKey('Kira') !== nameKey('Volk'));
+check('different Russian names stay different', nameKey('Игрок') !== nameKey('Волк'));
+is('the fold is stable', nameKey(nameKey('Кira')), nameKey('Kira'));
 
 echo "the sampled curves\n";
 check('a value below the first sample takes it', ceilingFrom([[10, 100], [20, 200]], 5.0) === 100.0);

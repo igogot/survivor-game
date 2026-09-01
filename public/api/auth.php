@@ -55,11 +55,17 @@ function hashToken(string $token): string
     return hash('sha256', $token);
 }
 
-/** Whether this name has been claimed at all. */
+/**
+ * Whether this name — or anything that looks exactly like it — has been claimed.
+ *
+ * Looked up by the folded key rather than by the name, so `Kira` finds a row
+ * claimed as `Кira` with a Cyrillic К. Matching on the name itself would let
+ * the two coexist, which is the impersonation owning a name is meant to stop.
+ */
 function ownerOf(PDO $pdo, string $name): ?array
 {
-    $statement = $pdo->prepare('SELECT name, password_hash FROM owners WHERE name = ?');
-    $statement->execute([$name]);
+    $statement = $pdo->prepare('SELECT name, password_hash FROM owners WHERE name_key = ?');
+    $statement->execute([nameKey($name)]);
     $row = $statement->fetch();
 
     return $row === false ? null : $row;
@@ -78,8 +84,16 @@ function tokenHoldsName(PDO $pdo, string $name, string $token): bool
         return false;
     }
 
+    // The owner row is the one that decides what the name is. Comparing the
+    // token against the name as typed would refuse somebody whose own name
+    // reaches them in a different case than they claimed it in.
+    $owner = ownerOf($pdo, $name);
+    if ($owner === null) {
+        return false;
+    }
+
     $statement = $pdo->prepare('SELECT 1 FROM tokens WHERE name = ? AND token_hash = ?');
-    $statement->execute([$name, hashToken($token)]);
+    $statement->execute([$owner['name'], hashToken($token)]);
 
     return $statement->fetchColumn() !== false;
 }
@@ -106,8 +120,10 @@ function grantToken(PDO $pdo, string $name): string
 function claimName(PDO $pdo, string $name): ?string
 {
     try {
-        $pdo->prepare('INSERT INTO owners (name, password_hash, created_at) VALUES (?, NULL, NOW())')
-            ->execute([$name]);
+        $pdo->prepare(
+            'INSERT INTO owners (name, name_key, password_hash, created_at)
+                  VALUES (?, ?, NULL, NOW())'
+        )->execute([$name, nameKey($name)]);
     } catch (PDOException $e) {
         // Somebody won the race. Not an error worth logging — it is the unique
         // key doing exactly its job.

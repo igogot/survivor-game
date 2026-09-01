@@ -71,12 +71,13 @@ export const RU: Record<StringId, string> = {
   'board.qualifies': 'Это {place} место. Впиши имя.',
   'board.missed': 'Этот забег в таблицу не попадает.',
   'board.missedBy': 'Не в топ-{size} — последнее место в нём продержалось {time}.',
-  'board.needName': 'Имя, хоть какое-нибудь.',
+  'board.needName': 'Одно слово, без пробелов, и не пустое.',
   'board.failOffline': 'Таблица не ответила. Забег всё равно был.',
   'board.failRefused': 'Таблица не поверила в этот забег.',
   'board.failTooMany': 'Слишком много отправок отсюда. Подожди несколько минут.',
   'board.failInvalid': 'Этот забег не сходится, поэтому не отправлен.',
   'board.failNameTaken': 'Это имя занято. Войди под ним или возьми другое.',
+  'board.nameRule': 'Одно слово. Имена, которые выглядят одинаково, считаются одним именем.',
 
   // Аккаунты — дело добровольное.
   'account.title': 'Твоё имя',
@@ -102,7 +103,7 @@ export const RU: Record<StringId, string> = {
   'account.failAlreadyProtected': 'У этого имени уже есть пароль.',
   'account.failPasswordShort': 'Минимум {min} символов.',
   'account.failTooMany': 'Слишком много попыток отсюда. Подожди несколько минут.',
-  'account.failName': 'Такое имя не подойдёт.',
+  'account.failName': 'Одно слово, без пробелов, и не пустое.',
   'plural.boss.one': 'босс',
   'plural.boss.few': 'босса',
   'plural.boss.many': 'боссов',

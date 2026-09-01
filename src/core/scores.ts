@@ -77,7 +77,7 @@ export function rankScores(scores: readonly Score[], limit = BOARD_SIZE): Score[
   const best = new Map<string, Score>();
 
   for (const score of scores) {
-    const key = score.name.toLocaleLowerCase();
+    const key = nameKey(score.name);
     const held = best.get(key);
     if (held === undefined || compareScores(score, held) < 0) best.set(key, score);
   }
@@ -93,7 +93,7 @@ export function rankScores(scores: readonly Score[], limit = BOARD_SIZE): Score[
  */
 export function rankOf(score: Score, board: readonly Score[], limit = BOARD_SIZE): number {
   const placed = rankScores([...board, score], limit).findIndex(
-    (entry) => entry.name.toLocaleLowerCase() === score.name.toLocaleLowerCase(),
+    (entry) => nameKey(entry.name) === nameKey(score.name),
   );
   return placed;
 }
@@ -106,15 +106,78 @@ export function rankOf(score: Score, board: readonly Score[], limit = BOARD_SIZE
  * refused for an invisible reason reads as the board being broken.
  */
 export function cleanName(raw: string): string | null {
+  /*
+   * The one-word rule is checked first, on what was actually typed.
+   *
+   * Order matters here and the reverse of it is a bug: a tab is a control
+   * character, so stripping first would remove it and leave "ka	50" as the
+   * single word "ka50" — handing somebody a name they did not choose and
+   * letting them discover it from the board. Refusing is the honest answer,
+   * and it can only be given while the separator is still there.
+   */
+  const typed = raw.trim();
+  if (WHITESPACE.test(typed)) return null;
+
   let kept = '';
-  for (const character of raw) {
+  for (const character of typed) {
     if (isNameCharacter(character.codePointAt(0) ?? 0)) kept += character;
   }
 
   const trimmed = kept.trim();
   if (trimmed.length === 0) return null;
+
   return trimmed.slice(0, MAX_NAME_LENGTH);
 }
+
+/** Any space anywhere, including the ones that are not a plain space bar. */
+const WHITESPACE = /\s/u;
+
+/**
+ * The form two names are compared in.
+ *
+ * Uniqueness cannot be a comparison of the strings themselves. `Kira` and
+ * `Кira` with a Cyrillic К are different strings that render identically, so a
+ * board that only refuses exact matches ends up showing the same name twice
+ * with different people behind it — which is the whole thing owning a name was
+ * supposed to prevent.
+ *
+ * So the key folds the letters that are drawn the same into one alphabet and
+ * lowercases the result. It is never displayed: what a player typed is what
+ * the board shows, and this only decides whether that name is already taken.
+ *
+ * The cost is real and worth stating. Russian `Кот` and English `Kot` fold to
+ * the same key and cannot both exist. They also look the same, which is why
+ * this is the right answer rather than an unfortunate one — but it does mean
+ * a legitimate name can be refused because somebody in another alphabet got
+ * there first.
+ */
+export function nameKey(name: string): string {
+  let folded = '';
+  for (const character of name.toLowerCase()) {
+    folded += CONFUSABLE.get(character) ?? character;
+  }
+  return folded;
+}
+
+/**
+ * Letters that are drawn the same in different alphabets.
+ *
+ * Cyrillic and Greek against Latin, lowercase only — `nameKey` lowercases
+ * first. Deliberately not the whole Unicode confusables table, which is
+ * thousands of entries and would need shipping to the browser: this is the set
+ * that matters for the two alphabets this game is actually played in.
+ */
+const CONFUSABLE = new Map<string, string>([
+  // Cyrillic
+  ['а', 'a'], ['в', 'b'], ['е', 'e'], ['ё', 'e'], ['з', '3'], ['и', 'u'],
+  ['к', 'k'], ['м', 'm'], ['н', 'h'], ['о', 'o'], ['р', 'p'], ['с', 'c'],
+  ['т', 't'], ['у', 'y'], ['х', 'x'], ['ѕ', 's'], ['і', 'i'], ['ј', 'j'],
+  ['ԁ', 'd'], ['ԛ', 'q'], ['ѡ', 'w'],
+  // Greek
+  ['α', 'a'], ['β', 'b'], ['ε', 'e'], ['ζ', 'z'], ['η', 'n'], ['ι', 'i'],
+  ['κ', 'k'], ['μ', 'm'], ['ν', 'v'], ['ο', 'o'], ['ρ', 'p'], ['τ', 't'],
+  ['υ', 'y'], ['χ', 'x'], ['ѳ', 'o'],
+]);
 
 /**
  * Whether a code point may appear in a name.

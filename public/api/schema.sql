@@ -72,11 +72,17 @@ CREATE TABLE IF NOT EXISTS submissions (
 -- somebody own `Ann` and still be refused their own row.
 CREATE TABLE IF NOT EXISTS owners (
   name          VARCHAR(18)  NOT NULL,
+  -- What uniqueness is actually decided on. Two names that render identically
+  -- fold to the same key, so `Kira` and `Кira` with a Cyrillic К cannot both
+  -- exist — see nameKey() in validate.php. The application computes it; the
+  -- unique index is what makes it true even when two claims race.
+  name_key      VARCHAR(18)  NOT NULL,
   -- From PHP's password_hash(). Never a plain digest: a leaked table of sha256
   -- passwords is a leaked table of passwords, and people reuse them.
   password_hash VARCHAR(255) NULL,
   created_at    DATETIME     NOT NULL,
-  PRIMARY KEY (name)
+  PRIMARY KEY (name),
+  UNIQUE KEY uniq_name_key (name_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Proof of ownership, one row per device that holds a name.

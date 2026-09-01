@@ -23,11 +23,24 @@ declare(strict_types=1);
  */
 function cleanName(string $raw, int $maxLength): ?string
 {
+    /*
+     * The one-word rule is checked first, on what was actually typed.
+     *
+     * Order matters and the reverse of it is a bug: a tab is a control
+     * character, so stripping first would remove it and leave "ka	50" as the
+     * single word "ka50" — a name nobody chose. Refusing can only be done
+     * while the separator is still there.
+     */
+    $typed = trim($raw);
+    if (preg_match('/\s/u', $typed) === 1) {
+        return null;
+    }
+
     $kept = '';
-    $length = mb_strlen($raw, 'UTF-8');
+    $length = mb_strlen($typed, 'UTF-8');
 
     for ($i = 0; $i < $length; $i++) {
-        $character = mb_substr($raw, $i, 1, 'UTF-8');
+        $character = mb_substr($typed, $i, 1, 'UTF-8');
         $point = mb_ord($character, 'UTF-8');
         if ($point === false || !isNameCharacter($point)) {
             continue;
@@ -41,6 +54,34 @@ function cleanName(string $raw, int $maxLength): ?string
     }
 
     return mb_substr($trimmed, 0, $maxLength, 'UTF-8');
+}
+
+/**
+ * The form two names are compared in.
+ *
+ * Deliberately the same fold as `nameKey` in src/core/scores.ts, and for the
+ * same reason: `Kira` and `Кira` with a Cyrillic К are different strings that
+ * render identically, so a board refusing only exact matches shows one name
+ * twice with two people behind it.
+ *
+ * Never displayed. What a player typed is what the board shows; this only
+ * decides whether the name is already taken.
+ */
+function nameKey(string $name): string
+{
+    static $confusable = [
+        // Cyrillic
+        'а' => 'a', 'в' => 'b', 'е' => 'e', 'ё' => 'e', 'з' => '3', 'и' => 'u',
+        'к' => 'k', 'м' => 'm', 'н' => 'h', 'о' => 'o', 'р' => 'p', 'с' => 'c',
+        'т' => 't', 'у' => 'y', 'х' => 'x', 'ѕ' => 's', 'і' => 'i', 'ј' => 'j',
+        'ԁ' => 'd', 'ԛ' => 'q', 'ѡ' => 'w',
+        // Greek
+        'α' => 'a', 'β' => 'b', 'ε' => 'e', 'ζ' => 'z', 'η' => 'n', 'ι' => 'i',
+        'κ' => 'k', 'μ' => 'm', 'ν' => 'v', 'ο' => 'o', 'ρ' => 'p', 'τ' => 't',
+        'υ' => 'y', 'χ' => 'x', 'ѳ' => 'o',
+    ];
+
+    return strtr(mb_strtolower($name, 'UTF-8'), $confusable);
 }
 
 /** Whether a code point may appear in a name. Mirrors the TypeScript exactly. */

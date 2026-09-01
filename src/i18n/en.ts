@@ -76,12 +76,13 @@ export const EN = {
   'board.qualifies': 'That is {place} place. Put a name to it.',
   'board.missed': 'This run does not make the board.',
   'board.missedBy': 'Not the top {size} — the last place on it survived {time}.',
-  'board.needName': 'A name, however short.',
+  'board.needName': 'One word, no spaces, and not an empty one.',
   'board.failOffline': 'The board did not answer. The run still happened.',
   'board.failRefused': 'The board did not believe that run.',
   'board.failTooMany': 'Too many submissions from here just now. Give it a few minutes.',
   'board.failInvalid': 'That run does not add up, so it was not sent.',
   'board.failNameTaken': 'Somebody else holds that name. Log in to it, or pick another.',
+  'board.nameRule': 'One word. Names that look alike count as the same name.',
 
   // Accounts, which are optional: a name is held by this browser unless a
   // player asks for something sturdier.
@@ -108,7 +109,7 @@ export const EN = {
   'account.failAlreadyProtected': 'That name already has a password.',
   'account.failPasswordShort': 'At least {min} characters.',
   'account.failTooMany': 'Too many attempts from here. Give it a few minutes.',
-  'account.failName': 'That name will not do.',
+  'account.failName': 'One word, no spaces, and not an empty one.',
   // English needs two forms and Russian three, so the noun is a lookup rather
   // than part of the sentence. See `plural()`.
   'plural.boss.one': 'boss',

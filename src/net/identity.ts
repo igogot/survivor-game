@@ -1,4 +1,4 @@
-import { cleanName } from '../core/scores';
+import { cleanName, nameKey } from '../core/scores';
 
 /**
  * Who this browser says it is.
@@ -81,7 +81,7 @@ export function forgetToken(): void {
  */
 export function tokenFor(name: string): string {
   const held = loadIdentity();
-  return held.name.toLocaleLowerCase() === name.toLocaleLowerCase() ? held.token : '';
+  return nameKey(held.name) === nameKey(name) ? held.token : '';
 }
 
 /** Tokens are hex from the server; anything else did not come from there. */

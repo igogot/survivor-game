@@ -150,6 +150,6 @@ respond(200, ['name' => $name, 'token' => grantToken($pdo, $name), 'protected' =
  */
 function setPassword(PDO $pdo, string $name, string $password): void
 {
-    $pdo->prepare('UPDATE owners SET password_hash = ? WHERE name = ?')
-        ->execute([password_hash($password, PASSWORD_DEFAULT), $name]);
+    $pdo->prepare('UPDATE owners SET password_hash = ? WHERE name_key = ?')
+        ->execute([password_hash($password, PASSWORD_DEFAULT), nameKey($name)]);
 }

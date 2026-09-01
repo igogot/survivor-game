@@ -1,5 +1,5 @@
 import { formatTime, requireElement } from './hud';
-import { BOARD_SIZE, MAX_NAME_LENGTH, cleanName, rankOf } from '../core/scores';
+import { BOARD_SIZE, MAX_NAME_LENGTH, cleanName, nameKey, rankOf } from '../core/scores';
 import { weaponById } from '../data/weapons';
 import { loadIdentity } from '../net/identity';
 import { t, weaponName } from '../i18n';
@@ -93,7 +93,7 @@ export class RecordsScreen {
 }
 
 function matches(name: string, highlight?: string): boolean {
-  return highlight !== undefined && name.toLocaleLowerCase() === highlight.toLocaleLowerCase();
+  return highlight !== undefined && nameKey(name) === nameKey(highlight);
 }
 
 function row(entry: Score, index: number, mine: boolean): HTMLElement {

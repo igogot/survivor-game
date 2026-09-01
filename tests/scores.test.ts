@@ -10,6 +10,7 @@ import {
   faultInScore,
   killCeiling,
   levelCeiling,
+  nameKey,
   rankOf,
   rankScores,
 } from '../src/core/scores';
@@ -123,13 +124,81 @@ describe('names', () => {
 
     expect(cleanName(`a${ch(0x07)}bc`)).toBe('abc');
     expect(cleanName(`we${ch(0x200b)}ird`)).toBe('weird');
-    expect(cleanName(`two${ch(0x0a)}lines`)).toBe('twolines');
+    // A newline is a word separator, so this is two words and refused rather
+    // than joined — see the one-word rule below.
+    expect(cleanName(`two${ch(0x0a)}lines`)).toBeNull();
     expect(cleanName(`right${ch(0x202e)}left`)).toBe('rightleft');
   });
 
   it('leaves ordinary writing alone, in any script', () => {
     expect(cleanName('Игрок')).toBe('Игрок');
-    expect(cleanName('ka-50 🐙')).toBe('ka-50 🐙');
+    expect(cleanName('ka-50🐙')).toBe('ka-50🐙');
+  });
+
+  /**
+   * One word. The name shares an eighteen-character row with five other
+   * columns, and a sentence in it crowds out everything the row has to say.
+   */
+  it('refuses a name of two words', () => {
+    expect(cleanName('two words')).toBeNull();
+    expect(cleanName('ka 50')).toBeNull();
+    expect(cleanName('Иван Иванов')).toBeNull();
+  });
+
+  /** Any space, not only the one on the space bar. */
+  it('refuses the spaces that do not look like spaces', () => {
+    for (const point of [0x00a0, 0x2007, 0x202f, 0x3000, 0x09]) {
+      expect(cleanName(`a${String.fromCodePoint(point)}b`)).toBeNull();
+    }
+  });
+
+  /** Trimming the ends is not the same as allowing a gap in the middle. */
+  it('still trims the ends', () => {
+    expect(cleanName('  solo  ')).toBe('solo');
+  });
+});
+
+describe('names that look the same', () => {
+  /**
+   * The hole this closes. `Kira` and `Кira` with a Cyrillic К are different
+   * strings that render identically, so a board refusing only exact matches
+   * would show one name twice with two people behind it — which is the
+   * impersonation that owning a name is supposed to prevent.
+   */
+  it('folds a Cyrillic lookalike onto its Latin twin', () => {
+    expect(nameKey('Kira')).toBe(nameKey('Кira'));
+    expect(nameKey('POCTOB')).toBe(nameKey('РОСТОВ'));
+  });
+
+  it('folds a Greek lookalike too', () => {
+    expect(nameKey('okto')).toBe(nameKey('οκτο'));
+  });
+
+  it('ignores case', () => {
+    expect(nameKey('Kira')).toBe(nameKey('kIRA'));
+  });
+
+  it('keeps genuinely different names apart', () => {
+    expect(nameKey('Kira')).not.toBe(nameKey('Volk'));
+    expect(nameKey('Игрок')).not.toBe(nameKey('Волк'));
+  });
+
+  /** The board holds one row per name, and lookalikes are one name. */
+  it('lets only one lookalike onto the board', () => {
+    const board = rankScores([
+      score({ name: 'Kira', timeMs: 100_000, bosses: 0 }),
+      score({ name: 'Кira', timeMs: 900_000, bosses: 1 }),
+    ]);
+
+    expect(board).toHaveLength(1);
+    expect(board[0].timeMs).toBe(900_000);
+  });
+
+  it('is what rankOf asks about', () => {
+    const board = rankScores([score({ name: 'Kira', timeMs: 900_000, bosses: 1 })]);
+    // The same person under a lookalike spelling is not a second entry.
+    expect(rankOf(score({ name: 'Кira', timeMs: 950_000 }), board)).toBe(0);
+    expect(board).toHaveLength(1);
   });
 
   it('is idempotent, which is what the server checks against', () => {

@@ -145,7 +145,9 @@ recordAttempt($pdo, $fingerprint, 'submit');
  * and submit under your name to take your row.
  */
 $granted = null;
-if (ownerOf($pdo, $name) === null) {
+$owner = ownerOf($pdo, $name);
+
+if ($owner === null) {
     $granted = claimName($pdo, $name);
     if ($granted === null) {
         // Claimed between the read and the insert. Whoever won it holds it now,
@@ -154,6 +156,11 @@ if (ownerOf($pdo, $name) === null) {
     }
 } elseif (!tokenHoldsName($pdo, $name, $token)) {
     fail(403, 'name-taken');
+} else {
+    // The board shows the name as it was claimed, not as it was typed this
+    // time. Otherwise submitting as `KIRA` would rewrite a row claimed as
+    // `Kira`, and the row would change its spelling under the player.
+    $name = (string) $owner['name'];
 }
 
 /*
