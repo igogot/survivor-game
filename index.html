@@ -328,6 +328,11 @@
       }
 
       .panel {
+        /* The containing block for the language switch in its corner. Without
+           it the switch would position against the overlay, which is the whole
+           screen. Every other absolutely placed thing in here sits inside a
+           card, and cards already position themselves. */
+        position: relative;
         background: var(--panel);
         border: 1px solid var(--border);
         border-radius: 14px;
@@ -630,6 +635,44 @@
         background: rgba(255, 59, 59, 0.2);
       }
 
+      /* The language switch. Two small caps in the panel's top corner: it is a
+         setting, not a decision the player came here to make, so it sits out of
+         the way of the one they did. */
+      .langs {
+        position: absolute;
+        top: 14px;
+        right: 16px;
+        display: flex;
+        gap: 4px;
+        pointer-events: auto;
+      }
+
+      .lang {
+        padding: 3px 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        font-family: inherit;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        transition: border-color 120ms, color 120ms;
+      }
+
+      .lang:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+
+      /* The one in use is stated rather than implied: a pair of buttons with
+         neither marked reads as a choice not yet made. */
+      .lang[aria-pressed='true'] {
+        color: var(--bg);
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+
       .hint {
         color: var(--muted);
         font-size: 12px;
@@ -880,7 +923,7 @@
         </div>
         <div id="timer-wrap">
           <span id="timer">00:00</span>
-          <span id="byline">by igogot</span>
+          <span id="byline" data-i18n="hud.byline">by igogot</span>
         </div>
       </div>
       <div class="bar"><i id="xp-fill"></i></div>
@@ -894,12 +937,12 @@
       </div>
 
       <div id="boss" hidden>
-        <div id="boss-name">THE HORDE'S END</div>
+        <div id="boss-name" data-i18n="hud.bossName">THE HORDE'S END</div>
         <div class="bar"><i id="boss-fill"></i></div>
       </div>
     </div>
 
-    <div id="warning" hidden>BOSS INCOMING</div>
+    <div id="warning" hidden data-i18n="hud.bossWarning">BOSS INCOMING</div>
 
     <div id="chest-marker" hidden>
       <canvas id="chest-icon"></canvas>
@@ -908,12 +951,22 @@
 
     <div id="stick" hidden><div id="stick-knob"></div></div>
 
-    <button id="pause-button" class="touch-only" type="button" aria-label="Pause">II</button>
+    <button
+      id="pause-button"
+      class="touch-only"
+      type="button"
+      aria-label="Pause"
+      data-i18n-label="hud.pauseLabel"
+    >
+      II
+    </button>
 
     <div class="overlay" id="levelup" hidden>
       <div class="panel">
-        <h2>Level Up</h2>
-        <p class="sub">Pick one — press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> or click</p>
+        <h2 data-i18n="levelup.title">Level Up</h2>
+        <!-- Filled by renderKeyLines: the keycaps sit inside the sentence, and
+             the sentence is a different shape in each language. -->
+        <p class="sub" id="levelup-sub"></p>
         <div id="upgrade-cards"></div>
       </div>
     </div>
@@ -922,34 +975,42 @@
          player who lands here cannot be killed while reading. -->
     <div class="overlay" id="chest" hidden>
       <div class="panel">
-        <h2>A Chest</h2>
-        <p class="sub">One of the three, used the moment you take it</p>
+        <h2 data-i18n="chest.title">A Chest</h2>
+        <p class="sub" data-i18n="chest.sub">One of the three, used the moment you take it</p>
         <div id="chest-cards"></div>
       </div>
     </div>
 
     <div class="overlay" id="start" hidden>
       <div class="panel panel--help">
-        <h2>Survivor</h2>
-        <p class="sub">One life, no finish line. Choose what you open with.</p>
+        <div class="langs" role="group" aria-label="Language" data-i18n-label="lang.label">
+          <button class="lang" type="button" data-lang="en">EN</button>
+          <button class="lang" type="button" data-lang="ru">RU</button>
+        </div>
+        <h2 data-i18n="start.title">Survivor</h2>
+        <p class="sub" data-i18n="start.sub">One life, no finish line. Choose what you open with.</p>
         <div class="starters" id="start-weapons"></div>
         <!-- Filled by StartScreen from the weapons themselves. It said "1 2 3"
              here for two weapons longer than that was true, which is what a
              hint written twice always comes to. -->
         <p class="hint keys-only" id="start-keys"></p>
-        <p class="hint touch-only">tap a weapon to begin</p>
+        <p class="hint touch-only" data-i18n="start.touchHint">tap a weapon to begin</p>
         <div class="help" id="help-start"></div>
       </div>
     </div>
 
     <div class="overlay" id="pause" hidden>
       <div class="panel panel--help">
-        <h2>Paused</h2>
-        <p class="sub">
-          <kbd>Esc</kbd> or <kbd>P</kbd> to resume &middot; <kbd>R</kbd> to restart
-        </p>
+        <div class="langs" role="group" aria-label="Language" data-i18n-label="lang.label">
+          <button class="lang" type="button" data-lang="en">EN</button>
+          <button class="lang" type="button" data-lang="ru">RU</button>
+        </div>
+        <h2 data-i18n="pause.title">Paused</h2>
+        <p class="sub" id="pause-sub"></p>
         <div class="actions">
-          <button class="action" id="pause-resume" type="button">Resume</button>
+          <button class="action" id="pause-resume" type="button" data-i18n="pause.resume">
+            Resume
+          </button>
           <button class="action" id="pause-restart" type="button">Restart run</button>
         </div>
         <div class="help" id="help-pause"></div>
@@ -958,17 +1019,31 @@
 
     <div class="overlay" id="result" hidden>
       <div class="panel panel--help">
-        <h2 id="result-title">Run Over</h2>
+        <h2 id="result-title" data-i18n="result.title">Run Over</h2>
         <p class="sub" id="result-sub"></p>
         <div id="result-stats">
-          <div><span class="value" id="result-time">00:00</span><span class="label">survived</span></div>
-          <div><span class="value" id="result-kills">0</span><span class="label">kills</span></div>
-          <div><span class="value" id="result-level">1</span><span class="label">level</span></div>
-          <div><span class="value" id="result-bosses">0</span><span class="label">bosses</span></div>
+          <div>
+            <span class="value" id="result-time">00:00</span
+            ><span class="label" data-i18n="result.survived">survived</span>
+          </div>
+          <div>
+            <span class="value" id="result-kills">0</span
+            ><span class="label" data-i18n="result.kills">kills</span>
+          </div>
+          <div>
+            <span class="value" id="result-level">1</span
+            ><span class="label" data-i18n="result.level">level</span>
+          </div>
+          <div>
+            <span class="value" id="result-bosses">0</span
+            ><span class="label" data-i18n="result.bosses">bosses</span>
+          </div>
         </div>
-        <p class="hint">Press <kbd>R</kbd> to run again</p>
+        <p class="hint" id="result-hint"></p>
         <div class="actions">
-          <button class="action" id="result-again" type="button">Run again</button>
+          <button class="action" id="result-again" type="button" data-i18n="result.again">
+            Run again
+          </button>
         </div>
         <div class="help" id="help-result"></div>
       </div>

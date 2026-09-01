@@ -2,6 +2,7 @@ import { CONFIG } from '../config';
 import { BOSS } from '../data/enemies';
 import { WEAPONS } from '../data/weapons';
 import { OFFERS_PER_LEVEL } from '../systems/progression';
+import { t, weaponName, weaponRole } from '../i18n';
 import { formatTime } from './hud';
 
 /**
@@ -12,6 +13,10 @@ import { formatTime } from './hud';
  * surprised by the game. So the numbers in it are read from the constants the
  * simulation uses rather than typed out: a spawn curve or a card count that
  * changes must not leave a confident sentence behind saying otherwise.
+ *
+ * The words come from `src/i18n`, the numbers from `CONFIG`, and the structure
+ * is here. That split is what lets the panel be translated without any sentence
+ * getting the chance to hardcode a number on the way through.
  *
  * The content is data and rendering is a separate pass over it. That is what
  * lets tests/help.test.ts assert what the panel says without a DOM — that every
@@ -55,93 +60,48 @@ export interface HelpSection {
   readonly rows: readonly HelpRow[];
 }
 
-/**
- * One line per weapon, keyed by id.
- *
- * Kept beside the help text rather than on the weapon definition: a definition
- * is numbers the simulation reads, and this is prose only the panel needs.
- * tests/help.test.ts fails if a weapon reaches `WEAPONS` without a line here,
- * which is the part that would otherwise rot in silence.
- */
-const WEAPON_ROLES: Readonly<Record<string, string>> = {
-  bolt: 'Fires at the nearest enemy in range. The only weapon that reaches across the screen, which makes it the forgiving one to open with.',
-  orbit: 'Blades circle you and cut what they touch. They guard the ground you are standing on, not the ground ahead.',
-  nova: 'A burst of damage around you every few seconds. It does not care how many enemies are caught in it.',
-  spear: 'Lunges at the nearest enemy and hits everything standing behind them. The way through a wall rather than around it.',
-  harpoon: 'Spikes the biggest thing in range, not the closest. Slow to reload and wasted on a grunt, which is the point: it is what you bring to a boss.',
-  ember: 'Leaves burning ground wherever you walk, and everything standing in it burns. The only weapon that pays you for running, and the only one that stops while you stand still.',
-};
-
-/**
- * What a weapon is for, in one line.
- *
- * The same sentence the panel prints, read by the weapon picker as well: a
- * choice described one way on the screen where it is made and another way in
- * the rules is how a player learns to distrust both.
- */
-export function weaponRole(id: string): string {
-  return WEAPON_ROLES[id] ?? '';
-}
-
 export function helpSections(): readonly HelpSection[] {
   return [theDeal(), controls(), theLoop(), weaponRows(), dangers()];
 }
 
 function theDeal(): HelpSection {
   return {
-    title: 'The deal',
+    title: t('help.section.deal'),
     rows: [
+      note('help.deal.attack.term', 'help.deal.attack.detail'),
       {
         kind: 'note',
-        term: 'You never attack',
-        detail:
-          'Every weapon fires itself, at whatever is nearest. The only decision your hands make is where to stand.',
+        term: t('help.deal.finish.term'),
+        detail: t('help.deal.finish.detail', { interval: formatTime(CONFIG.boss.interval) }),
       },
-      {
-        kind: 'note',
-        term: 'There is no finish line',
-        detail: `The run has no length. Enemies arrive faster and tougher every minute, a boss lands each time the clock runs another ${formatTime(CONFIG.boss.interval)}, and felling one only buys you until the next. The only ending is yours.`,
-      },
-      {
-        kind: 'note',
-        term: 'One life',
-        detail:
-          'Health does not come back on its own. A chest can hand you half of it, and a Vitality card pays back exactly what it adds — everything else you lose stays lost for the rest of the run.',
-      },
-      {
-        kind: 'note',
-        term: 'The score is how long',
-        detail:
-          'Time survived and bosses felled. Both come from the same thing — staying alive — so there is nothing to trade one for.',
-      },
+      note('help.deal.life.term', 'help.deal.life.detail'),
+      note('help.deal.score.term', 'help.deal.score.detail'),
     ],
   };
 }
 
 function controls(): HelpSection {
   return {
-    title: 'Controls',
+    title: t('help.section.controls'),
     rows: [
       {
         kind: 'keys',
         keys: ['W', 'A', 'S', 'D'],
-        detail: 'Move. Arrow keys do the same thing.',
+        detail: t('help.controls.move.detail'),
         audience: 'keys',
       },
       {
         kind: 'keys',
         keys: [],
-        gesture: 'Right-click',
-        detail:
-          'Walk to that spot and stop there. Hold the button instead and you keep walking toward the cursor for as long as it is down, which is the steadier way to kite. Touching a movement key takes the wheel back at once, so an order can never carry you somewhere you did not want to go.',
+        gesture: t('help.controls.click.gesture'),
+        detail: t('help.controls.click.detail'),
         audience: 'keys',
       },
       {
         kind: 'keys',
         keys: [],
-        gesture: 'Drag anywhere',
-        detail:
-          'A stick appears under your thumb wherever it lands. How far you push it is how fast you go, so a small push is a slow, precise step.',
+        gesture: t('help.controls.drag.gesture'),
+        detail: t('help.controls.drag.detail'),
         audience: 'touch',
       },
       {
@@ -149,125 +109,101 @@ function controls(): HelpSection {
         keys: Array.from({ length: OFFERS_PER_LEVEL }, (_, index) => String(index + 1)),
         // One row for both menus, because it is one gesture: the chest screen
         // is the level-up screen with different cards on it.
-        detail: 'Take that card — an upgrade at a level, a spoil at a chest. Clicking it does the same.',
+        detail: t('help.controls.cards.detail'),
         audience: 'keys',
       },
       {
         kind: 'keys',
         keys: [],
-        gesture: 'Tap a card',
-        detail: 'Take that upgrade, or that spoil.',
+        gesture: t('help.controls.tap.gesture'),
+        detail: t('help.controls.tap.detail'),
         audience: 'touch',
       },
-      { kind: 'keys', keys: ['Esc'], detail: 'Pause. So does P.', audience: 'keys' },
+      {
+        kind: 'keys',
+        keys: ['Esc'],
+        detail: t('help.controls.pause.detail'),
+        audience: 'keys',
+      },
       {
         kind: 'keys',
         keys: [],
-        gesture: 'The pause button',
-        detail: 'Freezes the run. The round button in the bottom corner, always on screen.',
+        gesture: t('help.controls.pauseButton.gesture'),
+        detail: t('help.controls.pauseButton.detail'),
         audience: 'touch',
       },
       {
         kind: 'keys',
         keys: ['R'],
-        detail: 'Start over. On the pause screen it asks twice before throwing the run away.',
+        detail: t('help.controls.restart.detail'),
         audience: 'keys',
       },
-      {
-        kind: 'note',
-        term: 'Leaving the window',
-        detail:
-          'Clicking away pauses the run on its own. Coming back does not resume it — you get to look at the screen first.',
-      },
+      note('help.controls.blur.term', 'help.controls.blur.detail'),
     ],
   };
 }
 
 function theLoop(): HelpSection {
   return {
-    title: 'How you get stronger',
+    title: t('help.section.loop'),
     rows: [
       {
         kind: 'note',
-        term: 'Kills drop gems',
-        detail: `Walk over a gem to take it, or let it come to you — anything within ${CONFIG.player.pickupRadius} pixels flies in on its own.`,
+        term: t('help.loop.gems.term'),
+        detail: t('help.loop.gems.detail', { radius: CONFIG.player.pickupRadius }),
       },
+      note('help.loop.xp.term', 'help.loop.xp.detail'),
+      note('help.loop.chest.term', 'help.loop.chest.detail'),
+      note('help.loop.spoil.term', 'help.loop.spoil.detail'),
+      note('help.loop.starter.term', 'help.loop.starter.detail'),
       {
         kind: 'note',
-        term: 'Gems are the only XP',
-        detail:
-          'An enemy you hurt but did not kill is worth nothing, and one that wanders off the map takes its gem with it.',
+        term: t('help.loop.levels.term'),
+        detail: t('help.loop.levels.detail', { offers: OFFERS_PER_LEVEL }),
       },
-      {
-        kind: 'note',
-        term: 'Chests are somewhere else',
-        detail: `One chest waits on the ground at a time and it is always behind you, on ground you have already crossed. An arrow at the edge of the screen points at it until you take it — it never expires, and the next one is not placed until this one is gone.`,
-      },
-      {
-        kind: 'note',
-        term: 'A chest holds one of three',
-        detail:
-          'Health, the horde killed where it stands, or every gem you walked past coming to you. One of each, always, so there is something in it whatever kind of trouble you are in. It is spent the moment you take it.',
-      },
-      {
-        kind: 'note',
-        term: 'You choose what you open with',
-        detail:
-          'Every run starts with one weapon and you pick which. It decides the first minutes, who you are on screen, and what the level-up cards have to build on — nothing else is decided for you.',
-      },
-      {
-        kind: 'note',
-        term: 'Levels are the only upgrades',
-        detail: `Each level stops the run and offers ${OFFERS_PER_LEVEL} cards. There is no shop and nothing to save for: what you pick is what you get.`,
-      },
-      {
-        kind: 'note',
-        term: 'Cards stack',
-        detail:
-          'A card naming a weapon you do not own grants it; taking it again levels it. Every card says how many times it can still be taken.',
-      },
+      note('help.loop.stack.term', 'help.loop.stack.detail'),
     ],
   };
 }
 
 function weaponRows(): HelpSection {
   return {
-    title: 'The weapons',
+    title: t('help.section.weapons'),
     rows: WEAPONS.map((def) => ({
       kind: 'note' as const,
-      term: def.name,
-      detail: WEAPON_ROLES[def.id] ?? '',
+      term: weaponName(def),
+      detail: weaponRole(def.id),
     })),
   };
 }
 
 function dangers(): HelpSection {
   return {
-    title: 'What kills you',
+    title: t('help.section.dangers'),
     rows: [
       {
         kind: 'note',
-        term: 'Touching anything hurts',
-        detail: `Contact costs health and buys ${CONFIG.player.invulnTime} seconds of grace. Standing inside a crowd spends that grace the moment it runs out, over and over.`,
+        term: t('help.danger.touch.term'),
+        detail: t('help.danger.touch.detail', { grace: CONFIG.player.invulnTime }),
       },
+      note('help.danger.aim.term', 'help.danger.aim.detail'),
       {
         kind: 'note',
-        term: 'They aim where you are going',
-        detail:
-          'Most spawns are placed in your path rather than behind you, so running in a straight line runs you into the next wave.',
+        term: t('help.danger.boss.term'),
+        detail: t('help.danger.boss.detail', {
+          hp: BOSS.hp,
+          damage: BOSS.damage,
+          duel: CONFIG.boss.duelGrace,
+        }),
       },
-      {
-        kind: 'note',
-        term: 'The boss',
-        detail: `The first arrives with ${BOSS.hp} health and hits for ${BOSS.damage}, and every one after it is tougher than the last. The horde stops for the duel — but only for ${CONFIG.boss.duelGrace} seconds, so a boss you cannot finish is one you fight in traffic.`,
-      },
-      {
-        kind: 'note',
-        term: 'If you remember one thing',
-        detail: 'Keep moving, and never let a crowd close around you. Standing still is what ends runs.',
-      },
+      note('help.danger.remember.term', 'help.danger.remember.detail'),
     ],
   };
+}
+
+/** The common shape: a term and a detail, both straight out of the tables. */
+function note(term: Parameters<typeof t>[0], detail: Parameters<typeof t>[0]): HelpNoteRow {
+  return { kind: 'note', term: t(term), detail: t(detail) };
 }
 
 /**

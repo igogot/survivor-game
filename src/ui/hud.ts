@@ -1,5 +1,6 @@
 import { CONFIG } from '../config';
 import { weaponById } from '../data/weapons';
+import { t } from '../i18n';
 import { edgeMark } from './offscreen';
 import type { SpritePainter } from './starters';
 import type { Enemy, Player } from '../world/types';
@@ -92,7 +93,7 @@ export class Hud {
 
     const player = world.player;
 
-    this.level.textContent = `LV ${player.level}`;
+    this.level.textContent = `${t('hud.level')} ${player.level}`;
     // Clamped: a tab returning from the background must not teleport the drain.
     this.updateHealth(player, Math.min(elapsed, 0.1));
     this.xpFill.style.width = `${percent(player.xp, player.xpToNext)}%`;
@@ -100,17 +101,17 @@ export class Hud {
     // Unclamped: the run has no end for it to stop at.
     this.timer.textContent = formatTime(world.time);
     this.weapons.textContent = describeWeapons(world);
-    this.kills.textContent = `kills ${world.kills}`;
+    this.kills.textContent = `${t('hud.kills')} ${world.kills}`;
 
     // Hidden until there is one, otherwise it is a zero the player carries for
     // the first ten minutes of every run.
-    this.bosses.textContent = `bosses ${world.bossesKilled}`;
+    this.bosses.textContent = `${t('hud.bosses')} ${world.bossesKilled}`;
     this.bosses.hidden = world.bossesKilled === 0;
-    this.entities.textContent = `enemies ${world.enemies.length}`;
+    this.entities.textContent = `${t('hud.enemies')} ${world.enemies.length}`;
 
     // Surfaced deliberately: `allocated` should plateau while the game keeps
     // spawning. If it climbs all run, the pool is leaking.
-    this.pool.textContent = `pool ${world.enemyPool.allocated}`;
+    this.pool.textContent = `${t('hud.pool')} ${world.enemyPool.allocated}`;
     this.fps.textContent = `${Math.round(this.smoothedFps)} fps`;
 
     this.updateBoss(world);
