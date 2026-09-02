@@ -3,9 +3,13 @@ import type { SpritesheetData, SpritesheetFrameData } from 'pixi.js';
 import { SPRITE_DRAWERS, SPRITE_SPECS, packFrames } from './atlas';
 import {
   FLOOR_TILES,
+  PAVING_TILES,
+  PILLAR_CAPITAL,
+  PILLAR_SHAFT,
+  PROP_TILES,
   RUBBLE_TILES,
-  RUIN_TILES,
   SPRITE_TILES,
+  WALL_TILES,
   TILE_SIZE,
   loadSpriteSheet,
   stripTileBacking,
@@ -21,53 +25,79 @@ const GRID_TEXTURE_SIZE = 64;
  * Side of one flagstone on screen, in pixels.
  *
  * Twice the 16px source tile, and the camera is at 1:1, so a stone is 32 world
- * units across — a little wider than the player and wider than everything in
- * the horde but the boss. Big enough to read as masonry rather than as noise,
- * small enough that the ground still streams past at speed.
- *
- * A whole multiple of the source on purpose: the pixels double instead of
- * being interpolated, which is what keeps the floor as sharp as what stands
- * on it.
+ * units across — a little wider than the player. A whole multiple of the source
+ * on purpose: the pixels double instead of being interpolated, which is what
+ * keeps the ground as sharp as what stands on it.
  */
 const FLOOR_TILE_SIZE = 32;
 
 /**
- * Flagstones along one side of the repeating patch.
+ * Cells along one side of the repeating patch.
  *
- * The patch is what a TilingSprite repeats, so this is the distance before the
- * floor says the same thing twice: twelve stones is 384px, wider than a third
- * of most screens. Smaller and the scattered rubble turns into wallpaper; the
- * cost of larger is one canvas built once at startup, so the number is chosen
- * by eye rather than by budget.
+ * Thirty-two stones is 1024px, and the patch is what a TilingSprite repeats,
+ * so that is the distance before the ground says the same thing twice. The
+ * first attempt used twelve, which was defensible when the floor was gravel
+ * and indefensible the moment it held buildings: a wall you recognise, seen
+ * three times across one screen, is worse than no wall at all.
  */
-const FLOOR_PATCH_TILES = 12;
+const FLOOR_PATCH_TILES = 32;
 
 /**
- * How the floor is dimmed once it is laid.
+ * How the ground is dimmed once it is laid.
  *
- * The sheet's sand is bright — it was drawn to be looked at, in a room lit for
- * the purpose. Everything this game puts on top of it is small, saturated and
- * has to be found in a crowd, so the ground is taken down to roughly a quarter
- * of its own brightness and pulled towards the cold of the old empty
- * background. What survives is the texture, which is all the floor was for.
+ * Down to about half. The sheet's sand was drawn for a lit room and everything
+ * this game puts on top of it has to be found in a crowd, so the floor has to
+ * give way — but the first attempt took three quarters of the light out, and
+ * what came back was mud with the texture gone. Half is where the stone still
+ * has colour and the horde still wins the contrast.
  */
-const FLOOR_SHADE = 'rgba(10, 12, 20, 0.74)';
+const FLOOR_SHADE = 'rgba(10, 12, 20, 0.48)';
 
 /**
  * Painted under the tiles, in case one lets the canvas through.
  *
  * Keying the backing colour out is a comparison against one exact colour, and
- * nothing guarantees a stray pixel of floor art is not that colour. A dark
- * ground underneath means such a pixel reads as a gap between stones instead
- * of as a hole into nothing.
+ * nothing guarantees a stray pixel of floor art is not that colour. Dark earth
+ * underneath means such a pixel reads as a gap between stones rather than as a
+ * hole into nothing.
  */
-const FLOOR_BASE = '#2a2018';
+const FLOOR_BASE = '#3a2c20';
 
-/** One rubble tile per this many flagstones, on average. */
-const RUBBLE_RARITY = 11;
+/** Buildings whose remains are laid into one patch. */
+const RUIN_COUNT = 7;
 
-/** One block of fallen masonry per this many flagstones, on average. */
-const RUIN_RARITY = 17;
+/** Shortest and longest side of one of them, in cells. */
+const RUIN_MIN_SIDE = 4;
+const RUIN_MAX_SIDE = 9;
+
+/**
+ * One cell of every this many along a wall is missing.
+ *
+ * The number that decides whether this is a ruin or a floor plan. Too high and
+ * the walls are intact, which reads as a building nobody has finished; too low
+ * and they are dashes. The gap is left paved rather than bare, so what is left
+ * behind reads as a doorway or a collapse rather than as a hole in the world.
+ */
+const WALL_GAP = 6;
+
+/** Chances of loose stone: at the foot of a wall, and out in the open. */
+const RUBBLE_AT_WALL = 3;
+const RUBBLE_IN_OPEN = 23;
+
+/** One crate or barrel per this many cells that have a wall to stand against. */
+const PROP_RARITY = 9;
+
+/** One standing column per this many paved cells. */
+const PILLAR_RARITY = 31;
+
+/**
+ * What one cell of the plan holds.
+ *
+ * Open ground has no name here on purpose: it is zero, which is what an
+ * untouched cell of the plan already is, so nothing has to write it.
+ */
+const WALL = 1;
+const PAVED = 2;
 
 export interface TextureSet {
   /**
@@ -147,71 +177,166 @@ export async function createTextures(): Promise<TextureSet> {
 }
 
 /**
- * Lays one patch of ruined floor for the background to repeat.
+ * Lays one patch of ruined ground for the background to repeat.
  *
- * Built once at startup and then handed to a single TilingSprite, so the whole
+ * Built once at startup and handed to a single TilingSprite, so the whole
  * ground under the run stays one draw call however far the player walks.
  *
- * Every cell is decided by hashing its own coordinates rather than by drawing
- * from anything: the run's PRNG is the balance table's, and reaching into it
- * from the renderer would move every seed the stand has ever measured. A hash
- * also means the patch is the same floor on every machine and in every run,
- * which is one less thing a screenshot can disagree about.
+ * The first version of this scattered single tiles at random, and the verdict
+ * on it was that it did not look like ruins — correctly, because ruins are not
+ * a density of debris. They are walls that run in straight lines, meet at
+ * corners, enclose a floor somebody laid, and have fallen down in places. So
+ * the patch is planned before it is painted: rooms first, then their walls
+ * with gaps knocked in them, then what leans against those walls.
  *
- * Decoration is laid as whole tiles and never crosses a cell edge, which is
- * what lets the patch tile seamlessly against itself: the sheet's tiles were
- * cut to sit side by side, and nothing here does anything they were not
- * already drawn to do.
+ * Every decision is hashed from the cell's own coordinates rather than drawn.
+ * The run's PRNG is the balance table's, and one extra draw from the renderer
+ * would move every seed the stand has measured; a hash also means the ground
+ * is the same on every machine and in every run.
+ *
+ * Everything wraps by the patch width, so a wall running off one edge carries
+ * on at the other and the patch tiles against itself.
  */
 function drawFloor(artwork: CanvasImageSource): HTMLCanvasElement {
   const side = FLOOR_TILE_SIZE * FLOOR_PATCH_TILES;
+  const plan = planRuins();
 
   return drawToCanvas(side, side, (ctx) => {
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = FLOOR_BASE;
     ctx.fillRect(0, 0, side, side);
 
-    for (let row = 0; row < FLOOR_PATCH_TILES; row++) {
-      for (let col = 0; col < FLOOR_PATCH_TILES; col++) {
-        const x = col * FLOOR_TILE_SIZE;
-        const y = row * FLOOR_TILE_SIZE;
+    // Ground first, all of it, before anything stands on it. Two passes rather
+    // than one because a column is two cells tall: painting it in the same
+    // sweep would put the next cell's floor over its capital.
+    forEachCell((col, row, at) => {
+      const ground = plan[at] === PAVED ? PAVING_TILES : FLOOR_TILES;
+      blitFloorTile(ctx, artwork, pick(ground, mix(col, row)), col, row);
+    });
 
-        blitFloorTile(ctx, artwork, pick(FLOOR_TILES, mix(col, row)), x, y);
-
-        // A second, unrelated hash of the same cell. One key for both would
-        // tie what lies on a stone to which stone it is, and the floor would
-        // show five combinations instead of five times six.
-        const litter = mix(col + 101, row + 57);
-        if (litter % RUIN_RARITY === 0) {
-          blitFloorTile(ctx, artwork, pick(RUIN_TILES, litter), x, y);
-        } else if (litter % RUBBLE_RARITY === 0) {
-          blitFloorTile(ctx, artwork, pick(RUBBLE_TILES, litter), x, y);
-        }
+    forEachCell((col, row, at) => {
+      if (plan[at] === WALL) {
+        blitFloorTile(ctx, artwork, pick(WALL_TILES, mix(col + 7, row + 11)), col, row);
+        return;
       }
-    }
+
+      // A second, unrelated hash of the same cell. One key for both would tie
+      // what lies on a stone to which stone it is.
+      const litter = mix(col + 101, row + 57);
+      const sheltered = touchesWall(plan, col, row);
+
+      if (sheltered && litter % PROP_RARITY === 0) {
+        blitFloorTile(ctx, artwork, pick(PROP_TILES, litter), col, row);
+        return;
+      }
+
+      // Rubble gathers where something fell, which is against the walls. Out
+      // in the open it is rare enough to read as one stone rather than as a
+      // scattering, which is the thing that made the field look like gravel.
+      const rarity = sheltered ? RUBBLE_AT_WALL : RUBBLE_IN_OPEN;
+      if (litter % rarity === 0) {
+        blitFloorTile(ctx, artwork, pick(RUBBLE_TILES, litter), col, row);
+        return;
+      }
+
+      if (plan[at] === PAVED && litter % PILLAR_RARITY === 0) {
+        blitFloorTile(ctx, artwork, PILLAR_SHAFT, col, row);
+        blitFloorTile(ctx, artwork, PILLAR_CAPITAL, col, row - 1);
+      }
+    });
 
     ctx.fillStyle = FLOOR_SHADE;
     ctx.fillRect(0, 0, side, side);
   });
 }
 
-/** Doubles one source tile onto the patch. */
+/**
+ * Decides what every cell of the patch is before a pixel is drawn.
+ *
+ * Rooms are laid whole and allowed to overlap: two of them sharing ground is
+ * one building put up inside the remains of another, which is what an old site
+ * actually looks like and costs nothing to allow.
+ */
+function planRuins(): Uint8Array {
+  const size = FLOOR_PATCH_TILES;
+  const plan = new Uint8Array(size * size);
+
+  for (let k = 0; k < RUIN_COUNT; k++) {
+    const seed = mix(k * 977 + 13, k * 31 + 7);
+    const left = seed % size;
+    const top = (seed >>> 5) % size;
+    const span = RUIN_MAX_SIDE - RUIN_MIN_SIDE + 1;
+    const width = RUIN_MIN_SIDE + ((seed >>> 11) % span);
+    const height = RUIN_MIN_SIDE + ((seed >>> 17) % span);
+
+    for (let dy = 0; dy < height; dy++) {
+      for (let dx = 0; dx < width; dx++) {
+        const col = (left + dx) % size;
+        const row = (top + dy) % size;
+        const at = row * size + col;
+        const edge = dx === 0 || dy === 0 || dx === width - 1 || dy === height - 1;
+
+        if (!edge) {
+          plan[at] = PAVED;
+          continue;
+        }
+
+        // A wall with no gaps in it is a building rather than its remains. The
+        // gap keeps the paving, so it reads as a doorway and not as a hole.
+        plan[at] = mix(col + 313, row + 641) % WALL_GAP === 0 ? PAVED : WALL;
+      }
+    }
+  }
+
+  return plan;
+}
+
+/** Whether any of the four neighbours is masonry. */
+function touchesWall(plan: Uint8Array, col: number, row: number): boolean {
+  const size = FLOOR_PATCH_TILES;
+  const left = (col + size - 1) % size;
+  const right = (col + 1) % size;
+  const up = (row + size - 1) % size;
+  const down = (row + 1) % size;
+
+  return (
+    plan[row * size + left] === WALL ||
+    plan[row * size + right] === WALL ||
+    plan[up * size + col] === WALL ||
+    plan[down * size + col] === WALL
+  );
+}
+
+/** Walks the patch once, in the order the cells are painted. */
+function forEachCell(visit: (col: number, row: number, at: number) => void): void {
+  const size = FLOOR_PATCH_TILES;
+
+  for (let row = 0; row < size; row++) {
+    for (let col = 0; col < size; col++) {
+      visit(col, row, row * size + col);
+    }
+  }
+}
+
+/** Doubles one source tile onto the cell at `col`,`row`, wrapping the patch. */
 function blitFloorTile(
   ctx: CanvasRenderingContext2D,
   artwork: CanvasImageSource,
   tile: number,
-  x: number,
-  y: number,
+  col: number,
+  row: number,
 ): void {
+  const size = FLOOR_PATCH_TILES;
   const origin = tileOrigin(tile);
+
   ctx.drawImage(
     artwork,
     origin.x,
     origin.y,
     TILE_SIZE,
     TILE_SIZE,
-    x,
-    y,
+    ((col % size) + size) % size * FLOOR_TILE_SIZE,
+    ((row % size) + size) % size * FLOOR_TILE_SIZE,
     FLOOR_TILE_SIZE,
     FLOOR_TILE_SIZE,
   );
