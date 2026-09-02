@@ -1,18 +1,23 @@
 /**
  * What each boss can do besides walk at you.
  *
- * Ten of them, and the nth boss of a run takes the nth entry — so the first ten
- * duels are ten different fights and nobody sees the same trick twice before
- * they have seen all of them. Deliberately a rotation and not a draw: a random
- * pick would spend numbers from the run's generator, and every seed in the
+ * Ten of them, and each boss of a run takes the next entry — so ten duels are
+ * ten different fights and nobody sees the same trick twice before they have
+ * seen all of them. Deliberately a rotation and not a draw: a random pick per
+ * boss would spend numbers from the run's generator, and every seed in the
  * balance table would move the moment this file was touched. It also means a
  * player can learn the order, which is the point of a boss being an event
  * rather than a bigger grunt.
+ *
+ * Where the rotation *starts* is the run's, not the list's. See
+ * `rotationStart`, and the note there about the nine fights nobody was ever
+ * shown.
  *
  * Definitions carry numbers only. `src/systems/bossAbility.ts` switches on the
  * id and does the work, the same way `weaponSystem` switches on a weapon's kind
  * — which is what keeps this file free of any import from the simulation.
  */
+import { Rng } from '../core/rng';
 
 export type BossAbilityId =
   | 'charge'
@@ -52,13 +57,16 @@ export interface BossAbilityDef {
 }
 
 /**
- * In the order the first ten duels meet them.
+ * In the order a run meets them, from wherever that run begins.
  *
- * The order is a difficulty curve as much as a list. The first boss only moves
- * differently; shots and summons come once the player has a weapon or two;
- * `ward` and `thorns`, which punish how the player is fighting rather than
- * where they are standing, come last because they are the two that need the
- * player to already have a habit for them to interrupt.
+ * The order is a shape as much as a list: `charge` only moves differently,
+ * shots and summons add something to dodge, and `ward` and `thorns` punish how
+ * the player is fighting rather than where they are standing. It used to be a
+ * difficulty curve, on the reasoning that the first duel meets a player with
+ * one weapon. That reasoning has not been true for a long time — the first duel
+ * lands at minute ten, against a level-thirty player carrying a full kit — and
+ * it was the excuse for pinning every run to the top of the list. What is left
+ * is a good order to meet ten things in, which is all it needs to be.
  */
 export const BOSS_ABILITIES: readonly BossAbilityDef[] = [
   {
@@ -167,11 +175,12 @@ export const BOSS_ABILITIES: readonly BossAbilityDef[] = [
 ];
 
 /**
- * The ability the nth boss of a run carries, counting from zero.
+ * The ability at a place in the rotation, counting from zero.
  *
- * Wraps after ten, so the eleventh duel is the first fight again — against a
+ * Wraps, so the eleventh duel of a run is its first fight again — against a
  * boss with eleven times the health, which is a different fight even with the
- * same trick in it.
+ * same trick in it. Negative indices wrap the same way, which is what lets a
+ * caller subtract a run's starting point to ask for a fight by name.
  */
 export function bossAbility(index: number): BossAbilityDef {
   const count = BOSS_ABILITIES.length;
@@ -181,4 +190,40 @@ export function bossAbility(index: number): BossAbilityDef {
 
 export function bossAbilityById(id: string): BossAbilityDef | undefined {
   return BOSS_ABILITIES.find((ability) => ability.id === id);
+}
+
+/**
+ * Decorrelates a run's rotation from the run itself.
+ *
+ * Without it `rotationStart` would be reading the same first number the run's
+ * own generator produces, and which fight a seed brings would move in lockstep
+ * with its first spawn angle. Any odd constant does; this one is arbitrary and
+ * must not change, because changing it reshuffles which fight every seed brings
+ * and moves every stand table for no reason.
+ */
+const ROTATION_SALT = 0x5f3a7c1d;
+
+/**
+ * Where a run's rotation begins.
+ *
+ * This exists because of a measurement. The rotation was written for a game
+ * whose runs reached minute a hundred: ten duels, one every ten minutes. Runs
+ * end between minute seven and minute fourteen, so a run has **one** duel in
+ * it — and with every run pinned to the top of the list, that duel was always
+ * `charge`. Nine of the ten fights were content nobody had ever seen, and no
+ * stand covered them because a stand plays runs too.
+ *
+ * A run with one duel in it cannot be shown ten fights. What it can be shown is
+ * a different one of them each time. So the starting point belongs to the run
+ * and the order does not: inside a single run the rotation is exactly what it
+ * always was, and a player who has seen the first duel knows what the second
+ * brings.
+ *
+ * Its own generator, seeded off the run's seed rather than drawn from it. The
+ * run's generator is spent by spawn angles, enemy types and upgrade offers, and
+ * taking a number out of it here would move every seed in the balance table —
+ * see the test that holds that line.
+ */
+export function rotationStart(seed: number): number {
+  return new Rng(seed ^ ROTATION_SALT).int(0, BOSS_ABILITIES.length);
 }

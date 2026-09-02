@@ -15,6 +15,7 @@ import {
 import { cssColor, starterChoices } from './starters';
 import type { SpritePainter, StarterChoice } from './starters';
 import type { SpoilDef } from '../data/spoils';
+import type { StringId } from '../i18n/en';
 import type { UpgradeDef } from '../data/upgrades';
 import type { World } from '../world/world';
 
@@ -56,8 +57,14 @@ export class StartScreen {
   private readonly keys = requireElement('start-keys');
   private readonly modePanel = requireElement('step-mode');
   private readonly weaponsPanel = requireElement('step-weapons');
-  /** The board and the account, which belong to no step. See `step`. */
-  private readonly extras = requireElement('start-actions');
+  /**
+   * The account, which is the half of `extras` that is still a decision.
+   *
+   * The board is not: looking at records is a look, and hiding it until a mode
+   * is chosen meant somebody who opened the game to see whether their record
+   * still stood had to answer a question first.
+   */
+  private readonly accountButton = requireElement('start-account');
   /** The briefing, which belongs to every step but the first. */
   private readonly rules = requireElement('help-start');
   private readonly lobby: LobbyView;
@@ -130,7 +137,11 @@ export class StartScreen {
     this.weaponsPanel.hidden = step !== 'weapons';
 
     const answered = step !== 'mode';
-    this.extras.hidden = !answered;
+    // The board is always reachable, including from the very first screen —
+    // it is the one thing here that asks nothing of the player. The account
+    // and the briefing still wait for the mode question to be answered, so
+    // that screen keeps having one question on it.
+    this.accountButton.hidden = !answered;
     this.rules.hidden = !answered;
 
     if (step !== 'party') {
@@ -468,45 +479,98 @@ export class ChestMenu {
  * gets one button that says what it does, and nothing else on the overlay
  * responds.
  */
-export class PauseScreen {
-  private readonly root = requireElement('pause');
-  private readonly resumeButton = requireElement('pause-resume');
-  private readonly restartButton = requireElement('pause-restart');
-
-  /** True once restart has been asked for and is waiting to be confirmed. */
+/**
+ * A button that asks twice before doing something with no undo.
+ *
+ * The first press arms it and the label says what the second one will cost;
+ * the second does it. A dialog would be the other way to ask, and it would put
+ * a second panel over a screen the player opened to make one decision.
+ *
+ * Extracted when the pause screen grew a second door out of a run. One flag and
+ * one copy of the arm/disarm dance served restart alone; two copies of it is
+ * where they would start behaving differently, and a confirmation that behaves
+ * differently in two places is worse than none.
+ */
+class ConfirmingButton {
   private armed = false;
 
   constructor(
-    onResume: () => void,
-    private readonly onRestart: () => void,
+    private readonly element: HTMLElement,
+    private readonly calm: StringId,
+    private readonly warning: StringId,
+    private readonly act: () => void,
+    /** Called on arming, so the other button on the panel stands down. */
+    private readonly onArm: () => void,
   ) {
-    this.resumeButton.addEventListener('click', onResume);
-    this.restartButton.addEventListener('click', () => this.requestRestart());
+    element.addEventListener('click', () => this.press());
+    this.disarm();
   }
 
-  /**
-   * Restart takes two presses: the first arms the button, the second throws the
-   * run away.
-   *
-   * A ten-minute run is a lot to lose to a stray click on a menu the player
-   * opened to do something else, and there is no undo. The button says what the
-   * second press will do rather than opening a dialog, so the pause screen stays
-   * one panel.
-   */
-  requestRestart(): void {
+  press(): void {
     if (!this.armed) {
+      this.onArm();
       this.armed = true;
-      this.restartButton.textContent = t('pause.restartArmed');
-      this.restartButton.classList.add('action--armed');
+      this.element.textContent = t(this.warning);
+      this.element.classList.add('action--armed');
       return;
     }
 
     this.disarm();
-    this.onRestart();
+    this.act();
+  }
+
+  disarm(): void {
+    this.armed = false;
+    this.element.textContent = t(this.calm);
+    this.element.classList.remove('action--armed');
+  }
+}
+
+export class PauseScreen {
+  private readonly root = requireElement('pause');
+  private readonly resumeButton = requireElement('pause-resume');
+  private readonly restart: ConfirmingButton;
+  private readonly toMenu: ConfirmingButton;
+
+  constructor(
+    onResume: () => void,
+    onRestart: () => void,
+    onMainMenu: () => void,
+  ) {
+    this.resumeButton.addEventListener('click', onResume);
+
+    /*
+     * Two doors out of a run, and they are not the same one.
+     *
+     * Restart starts another immediately; the menu puts the team down and goes
+     * back to the choice of mode. Both cost the run, so both ask twice — and
+     * arming either stands the other down, because two buttons sitting armed
+     * beside each other saying "sure?" is a screen asking which sure.
+     */
+    this.restart = new ConfirmingButton(
+      requireElement('pause-restart'),
+      'pause.restart',
+      'pause.restartArmed',
+      onRestart,
+      () => this.toMenu.disarm(),
+    );
+
+    this.toMenu = new ConfirmingButton(
+      requireElement('pause-menu'),
+      'menu.toMenu',
+      'menu.toMenuArmed',
+      onMainMenu,
+      () => this.restart.disarm(),
+    );
+  }
+
+  /** The R key, which is the restart button by another name. */
+  requestRestart(): void {
+    this.restart.press();
   }
 
   show(): void {
-    // Only on the way in, so a repeated sync cannot silently disarm the button
+    // Only on the way in, so a repeated sync cannot silently disarm a button
     // between the player arming it and pressing again.
     if (this.root.hidden) this.disarm();
     this.root.hidden = false;
@@ -520,16 +584,16 @@ export class PauseScreen {
   /**
    * Public because a language change has to reach it.
    *
-   * The armed button is the one piece of text on the page that is not a
+   * An armed button is the one piece of text on the page that is not a
    * translation of what the markup says — re-stamping the panel would put the
    * calm label back under a player who had already asked twice.
    */
   disarm(): void {
-    this.armed = false;
-    this.restartButton.textContent = t('pause.restart');
-    this.restartButton.classList.remove('action--armed');
+    this.restart.disarm();
+    this.toMenu.disarm();
   }
 }
+
 
 /**
  * End-of-run screen.

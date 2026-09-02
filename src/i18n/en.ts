@@ -120,6 +120,8 @@ export const EN = {
   'pause.resume': 'Resume',
   'pause.restart': 'Restart run',
   'pause.restartArmed': 'Sure? The run is lost',
+  'menu.toMenu': 'Main menu',
+  'menu.toMenuArmed': 'Sure? The run is lost',
 
   'result.title': 'Run Over',
   'result.died': 'You Died',

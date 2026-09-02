@@ -1,8 +1,9 @@
 import { CONFIG } from '../config';
 import { TAU } from '../core/math';
 import { BOSS, ENEMIES } from '../data/enemies';
-import { bossAbility } from '../data/bossAbilities';
+import { bossAbility, rotationStart } from '../data/bossAbilities';
 import { arrivalScale, healthScale, partyAnchor, partySize } from '../world/party';
+import type { BossAbilityDef } from '../data/bossAbilities';
 import type { EnemyDef } from '../data/enemies';
 import type { PartyAnchor } from '../world/party';
 import type { World } from '../world/world';
@@ -148,6 +149,22 @@ export function bossHpScale(world: World): number {
 }
 
 /**
+ * Which fight the boss arriving now is.
+ *
+ * `bossesKilled` is the duel's number: only one boss lives at a time and the
+ * next is not scheduled until this one is down, so the count of the fallen is
+ * the number of the one arriving. What that number indexes is offset by where
+ * this run's rotation starts — see `rotationStart`, which exists because with
+ * every run starting at the top, nine of the ten fights were unreachable.
+ *
+ * One function for the two things a boss needs on arrival, its ability and its
+ * first cooldown, so they cannot answer differently.
+ */
+export function arrivingAbility(world: World): BossAbilityDef {
+  return bossAbility(world.bossesKilled + rotationStart(world.seed));
+}
+
+/**
  * A boss dying is a checkpoint, not an ending.
  *
  * The horde resumes — the difficulty curve never stopped climbing while the
@@ -276,11 +293,7 @@ export function spawnEnemyAt(
   enemy.flash = 0;
   enemy.hitTag = 0;
   enemy.boss = def.id === BOSS.id;
-  // The nth boss of a run takes the nth ability, so the first ten duels are ten
-  // different fights. `bossesKilled` is that index: only one boss lives at a
-  // time and the next is not scheduled until this one is down, so the count of
-  // the fallen is the number of the one arriving.
-  enemy.ability = enemy.boss ? bossAbility(world.bossesKilled).id : '';
+  enemy.ability = enemy.boss ? arrivingAbility(world).id : '';
   enemy.abilityTimer = 0;
   enemy.standoff = def.ranged?.range ?? 0;
   // A boss waits one full cooldown before its first use: arriving and charging
@@ -291,7 +304,7 @@ export function spawnEnemyAt(
   // that arrived in the same batch throws on the same tick for the rest of the
   // run. Everything else attacks by walking into somebody and never reads this.
   if (enemy.boss) {
-    enemy.attackCooldown = bossAbility(world.bossesKilled).cooldown;
+    enemy.attackCooldown = arrivingAbility(world).cooldown;
   } else {
     enemy.attackCooldown = def.ranged === undefined ? 0 : world.rng.next() * def.ranged.cooldown;
   }
