@@ -184,6 +184,21 @@ describe('the ways out of a run', () => {
   });
 
   /**
+   * Every screen a player can be looking at while not playing.
+   *
+   * The board asks nothing and costs nothing, so there is no screen it earns
+   * its way onto — the question is only which ones it was missing from. It was
+   * missing from all three at some point: the opening screen until a mode was
+   * chosen, and the pause screen entirely, which is exactly when somebody
+   * wonders whether the run they are in the middle of is beating anything.
+   */
+  it('offers the board from every screen a player stops on', () => {
+    for (const id of ['start-records', 'pause-records', 'result-records']) {
+      expect(html, `${id} is missing`).toContain(`id="${id}"`);
+    }
+  });
+
+  /**
    * The pause one is filled by `PauseScreen`, because its label changes when
    * it is armed and a stamped one would put the calm word back. The result one
    * never arms, so it carries its text in the markup like any other button.

@@ -122,6 +122,9 @@ async function main(): Promise<void> {
   // No confirmation on this one: the run is already over, so there is nothing
   // left for a stray click to cost.
   document.getElementById('result-menu')?.addEventListener('click', toMainMenu);
+  // From a pause the board opens on the run in progress: somebody who stopped
+  // to wonder whether this one is beating anything is asking about this one.
+  document.getElementById('pause-records')?.addEventListener('click', openRecordsForThisRun);
   // And from the opening screen, so the board is a thing you can look at before
   // you have anything to put on it — which is the whole reason to chase it.
   document.getElementById('start-records')?.addEventListener('click', openRecords);
