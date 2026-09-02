@@ -40,12 +40,13 @@ export interface BodyMotion {
 /**
  * Bounce cycles per second at a full run.
  *
- * One cycle is two footfalls, so this is a little over three steps a second —
- * quick enough to read as scurrying at the size these things are drawn, slow
- * enough that a single bounce lasts several frames at sixty hertz instead of
- * turning into a vibration.
+ * One cycle is two footfalls, so this is a little over two and a half steps a
+ * second — a gait rather than a scurry. It was half again as fast to begin
+ * with, which read as a vibration on the small bodies: below about a fifth of
+ * a second in the air, the eye stops seeing a creature leave the ground and
+ * starts seeing the sprite shake.
  */
-const STRIDE_HZ = 1.7;
+const STRIDE_HZ = 1.3;
 
 /** Height of the bounce at a full run, as a fraction of the body's radius. */
 const HOP = 0.17;
