@@ -67,22 +67,34 @@ const FLOOR_BASE = '#3a2c20';
 const RUIN_COUNT = 7;
 
 /** Shortest and longest side of one of them, in cells. */
-const RUIN_MIN_SIDE = 4;
-const RUIN_MAX_SIDE = 9;
+const RUIN_MIN_SIDE = 5;
+const RUIN_MAX_SIDE = 10;
 
 /**
- * One cell of every this many along a wall is missing.
+ * How many places to try before giving up on a building.
  *
- * The number that decides whether this is a ruin or a floor plan. Too high and
- * the walls are intact, which reads as a building nobody has finished; too low
- * and they are dashes. The gap is left paved rather than bare, so what is left
- * behind reads as a doorway or a collapse rather than as a hole in the world.
+ * Buildings are not allowed to overlap or even to touch, so a placement can
+ * fail, and a patch with six buildings in it is no worse than one with seven.
+ * Giving up quietly is the right answer; growing the patch until everything
+ * fits would make the repeat visible again.
  */
-const WALL_GAP = 6;
+const RUIN_PLACEMENT_TRIES = 24;
+
+/**
+ * Breaches knocked through one building's walls, and the longest run of them.
+ *
+ * A breach is a contiguous stretch, never a single hole in a random place.
+ * That distinction is the whole difference between a wall that has fallen down
+ * somewhere and a wall drawn by a coin toss: the first has a shape, the second
+ * is a dashed line. Corners are never breached, so the rectangle still reads
+ * as a rectangle from across the screen.
+ */
+const RUIN_MAX_BREACHES = 3;
+const BREACH_MAX_RUN = 3;
 
 /** Chances of loose stone: at the foot of a wall, and out in the open. */
-const RUBBLE_AT_WALL = 3;
-const RUBBLE_IN_OPEN = 23;
+const RUBBLE_AT_WALL = 4;
+const RUBBLE_IN_OPEN = 29;
 
 /** One crate or barrel per this many cells that have a wall to stand against. */
 const PROP_RARITY = 9;
@@ -98,6 +110,7 @@ const PILLAR_RARITY = 31;
  */
 const WALL = 1;
 const PAVED = 2;
+const BREACH = 3;
 
 export interface TextureSet {
   /**
@@ -182,17 +195,17 @@ export async function createTextures(): Promise<TextureSet> {
  * Built once at startup and handed to a single TilingSprite, so the whole
  * ground under the run stays one draw call however far the player walks.
  *
- * The first version of this scattered single tiles at random, and the verdict
- * on it was that it did not look like ruins — correctly, because ruins are not
- * a density of debris. They are walls that run in straight lines, meet at
- * corners, enclose a floor somebody laid, and have fallen down in places. So
- * the patch is planned before it is painted: rooms first, then their walls
- * with gaps knocked in them, then what leans against those walls.
+ * The plan comes before the paint, and the plan is buildings: a room of cut
+ * paving, masonry around it, breaches knocked through that masonry. Two rules
+ * do most of the work of making them look built rather than assembled. A
+ * building is made of **one** cut of masonry and **one** cut of paving, chosen
+ * once for the whole building — five kinds of block shuffled along a wall is a
+ * pile of blocks, not a wall. And buildings never overlap or touch, so each
+ * rectangle is one thing with ground around it.
  *
- * Every decision is hashed from the cell's own coordinates rather than drawn.
- * The run's PRNG is the balance table's, and one extra draw from the renderer
- * would move every seed the stand has measured; a hash also means the ground
- * is the same on every machine and in every run.
+ * Every decision is hashed from coordinates or from the building's own number
+ * rather than drawn. The run's PRNG is the balance table's, and one extra draw
+ * from the renderer would move every seed the stand has measured.
  *
  * Everything wraps by the patch width, so a wall running off one edge carries
  * on at the other and the patch tiles against itself.
@@ -210,20 +223,34 @@ function drawFloor(artwork: CanvasImageSource): HTMLCanvasElement {
     // than one because a column is two cells tall: painting it in the same
     // sweep would put the next cell's floor over its capital.
     forEachCell((col, row, at) => {
-      const ground = plan[at] === PAVED ? PAVING_TILES : FLOOR_TILES;
-      blitFloorTile(ctx, artwork, pick(ground, mix(col, row)), col, row);
+      const owner = plan.owner[at];
+      const tile =
+        owner === 0
+          ? pick(FLOOR_TILES, mix(col, row))
+          : pick(PAVING_TILES, mix(owner, 17));
+
+      blitFloorTile(ctx, artwork, tile, col, row);
     });
 
     forEachCell((col, row, at) => {
-      if (plan[at] === WALL) {
-        blitFloorTile(ctx, artwork, pick(WALL_TILES, mix(col + 7, row + 11)), col, row);
+      const kind = plan.kind[at];
+
+      // One cut of masonry for the whole building, keyed on which building it
+      // is. This is the line that decides whether a wall reads as a wall.
+      if (kind === WALL) {
+        blitFloorTile(ctx, artwork, pick(WALL_TILES, mix(plan.owner[at], 29)), col, row);
         return;
       }
 
-      // A second, unrelated hash of the same cell. One key for both would tie
-      // what lies on a stone to which stone it is.
       const litter = mix(col + 101, row + 57);
-      const sheltered = touchesWall(plan, col, row);
+
+      // A breach is where the wall came down, so that is where its stones are.
+      if (kind === BREACH) {
+        blitFloorTile(ctx, artwork, pick(RUBBLE_TILES, litter), col, row);
+        return;
+      }
+
+      const sheltered = touchesWall(plan.kind, col, row);
 
       if (sheltered && litter % PROP_RARITY === 0) {
         blitFloorTile(ctx, artwork, pick(PROP_TILES, litter), col, row);
@@ -232,14 +259,13 @@ function drawFloor(artwork: CanvasImageSource): HTMLCanvasElement {
 
       // Rubble gathers where something fell, which is against the walls. Out
       // in the open it is rare enough to read as one stone rather than as a
-      // scattering, which is the thing that made the field look like gravel.
-      const rarity = sheltered ? RUBBLE_AT_WALL : RUBBLE_IN_OPEN;
-      if (litter % rarity === 0) {
+      // scattering, which is what made the field look like gravel.
+      if (litter % (sheltered ? RUBBLE_AT_WALL : RUBBLE_IN_OPEN) === 0) {
         blitFloorTile(ctx, artwork, pick(RUBBLE_TILES, litter), col, row);
         return;
       }
 
-      if (plan[at] === PAVED && litter % PILLAR_RARITY === 0) {
+      if (kind === PAVED && litter % PILLAR_RARITY === 0) {
         blitFloorTile(ctx, artwork, PILLAR_SHAFT, col, row);
         blitFloorTile(ctx, artwork, PILLAR_CAPITAL, col, row - 1);
       }
@@ -250,49 +276,153 @@ function drawFloor(artwork: CanvasImageSource): HTMLCanvasElement {
   });
 }
 
+/** The plan: what each cell is, and which building put it there. */
+interface RuinPlan {
+  readonly kind: Uint8Array;
+  /** Building number plus one, so zero can mean open ground. */
+  readonly owner: Uint8Array;
+}
+
 /**
  * Decides what every cell of the patch is before a pixel is drawn.
  *
- * Rooms are laid whole and allowed to overlap: two of them sharing ground is
- * one building put up inside the remains of another, which is what an old site
- * actually looks like and costs nothing to allow.
+ * Buildings are placed one at a time and refused if they would touch one
+ * already standing — the earlier version let them overlap, on the theory that
+ * a site built over twice is what an old site looks like. It is, and it also
+ * turned every rectangle into a ragged shape sharing walls with its
+ * neighbours, which is most of why the result read as random blocks. Clear
+ * ground around each building is what lets the eye see one.
  */
-function planRuins(): Uint8Array {
+function planRuins(): RuinPlan {
   const size = FLOOR_PATCH_TILES;
-  const plan = new Uint8Array(size * size);
+  const plan: RuinPlan = { kind: new Uint8Array(size * size), owner: new Uint8Array(size * size) };
+  const span = RUIN_MAX_SIDE - RUIN_MIN_SIDE + 1;
 
   for (let k = 0; k < RUIN_COUNT; k++) {
-    const seed = mix(k * 977 + 13, k * 31 + 7);
-    const left = seed % size;
-    const top = (seed >>> 5) % size;
-    const span = RUIN_MAX_SIDE - RUIN_MIN_SIDE + 1;
-    const width = RUIN_MIN_SIDE + ((seed >>> 11) % span);
-    const height = RUIN_MIN_SIDE + ((seed >>> 17) % span);
+    for (let attempt = 0; attempt < RUIN_PLACEMENT_TRIES; attempt++) {
+      const seed = mix(k * 977 + 13, attempt * 31 + 7);
+      const width = RUIN_MIN_SIDE + ((seed >>> 3) % span);
+      const height = RUIN_MIN_SIDE + ((seed >>> 9) % span);
+      const left = (seed >>> 15) % size;
+      const top = (seed >>> 21) % size;
 
-    for (let dy = 0; dy < height; dy++) {
-      for (let dx = 0; dx < width; dx++) {
-        const col = (left + dx) % size;
-        const row = (top + dy) % size;
-        const at = row * size + col;
-        const edge = dx === 0 || dy === 0 || dx === width - 1 || dy === height - 1;
+      if (!isClear(plan.owner, left, top, width, height)) continue;
 
-        if (!edge) {
-          plan[at] = PAVED;
-          continue;
-        }
-
-        // A wall with no gaps in it is a building rather than its remains. The
-        // gap keeps the paving, so it reads as a doorway and not as a hole.
-        plan[at] = mix(col + 313, row + 641) % WALL_GAP === 0 ? PAVED : WALL;
-      }
+      stampRuin(plan, k + 1, seed, left, top, width, height);
+      break;
     }
   }
 
   return plan;
 }
 
+/**
+ * Whether a building would fit here, with a cell of daylight all round it.
+ *
+ * The margin is the point: two buildings sharing a wall are one confusing
+ * shape, and a gap of a single cell is enough for the eye to separate them.
+ */
+function isClear(
+  owner: Uint8Array,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+): boolean {
+  const size = FLOOR_PATCH_TILES;
+
+  for (let dy = -1; dy <= height; dy++) {
+    for (let dx = -1; dx <= width; dx++) {
+      const col = (((left + dx) % size) + size) % size;
+      const row = (((top + dy) % size) + size) % size;
+      if (owner[row * size + col] !== 0) return false;
+    }
+  }
+
+  return true;
+}
+
+/** Writes one building into the plan, breaches and all. */
+function stampRuin(
+  plan: RuinPlan,
+  owner: number,
+  seed: number,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+): void {
+  const size = FLOOR_PATCH_TILES;
+
+  for (let dy = 0; dy < height; dy++) {
+    for (let dx = 0; dx < width; dx++) {
+      const col = (left + dx) % size;
+      const row = (top + dy) % size;
+      const at = row * size + col;
+      const edge = dx === 0 || dy === 0 || dx === width - 1 || dy === height - 1;
+
+      plan.owner[at] = owner;
+      plan.kind[at] = edge ? WALL : PAVED;
+    }
+  }
+
+  const perimeter = 2 * (width + height) - 4;
+  const breaches = 1 + ((seed >>> 27) % RUIN_MAX_BREACHES);
+
+  for (let b = 0; b < breaches; b++) {
+    const bite = mix(owner * 613 + b * 97, 41);
+    const start = bite % perimeter;
+    const run = 1 + ((bite >>> 7) % BREACH_MAX_RUN);
+
+    for (let i = 0; i < run; i++) {
+      const step = walkPerimeter((start + i) % perimeter, width, height);
+      // Corners hold the rectangle up. Knock one out and the shape stops
+      // reading as a building from any distance at all.
+      if (step.corner) continue;
+
+      const col = (left + step.dx) % size;
+      const row = (top + step.dy) % size;
+      plan.kind[row * size + col] = BREACH;
+    }
+  }
+}
+
+/**
+ * Turns a step count into a cell on the rectangle's border, clockwise from the
+ * top-left, and says whether that cell is a corner.
+ */
+function walkPerimeter(
+  step: number,
+  width: number,
+  height: number,
+): { dx: number; dy: number; corner: boolean } {
+  const top = width;
+  const right = top + height - 1;
+  const bottom = right + width - 1;
+
+  let dx: number;
+  let dy: number;
+
+  if (step < top) {
+    dx = step;
+    dy = 0;
+  } else if (step < right) {
+    dx = width - 1;
+    dy = step - top + 1;
+  } else if (step < bottom) {
+    dx = width - 1 - (step - right);
+    dy = height - 1;
+  } else {
+    dx = 0;
+    dy = height - 1 - (step - bottom);
+  }
+
+  const corner = (dx === 0 || dx === width - 1) && (dy === 0 || dy === height - 1);
+  return { dx, dy, corner };
+}
+
 /** Whether any of the four neighbours is masonry. */
-function touchesWall(plan: Uint8Array, col: number, row: number): boolean {
+function touchesWall(kind: Uint8Array, col: number, row: number): boolean {
   const size = FLOOR_PATCH_TILES;
   const left = (col + size - 1) % size;
   const right = (col + 1) % size;
@@ -300,10 +430,10 @@ function touchesWall(plan: Uint8Array, col: number, row: number): boolean {
   const down = (row + 1) % size;
 
   return (
-    plan[row * size + left] === WALL ||
-    plan[row * size + right] === WALL ||
-    plan[up * size + col] === WALL ||
-    plan[down * size + col] === WALL
+    kind[row * size + left] === WALL ||
+    kind[row * size + right] === WALL ||
+    kind[up * size + col] === WALL ||
+    kind[down * size + col] === WALL
   );
 }
 
