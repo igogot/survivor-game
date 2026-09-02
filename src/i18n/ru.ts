@@ -110,6 +110,8 @@ export const RU: Record<StringId, string> = {
   'pause.sub': '{esc} или {p} — продолжить · {r} — начать заново',
   'pause.resume': 'Продолжить',
   'pause.restart': 'Начать заново',
+  'menu.toMenu': 'Главное меню',
+  'menu.toMenuArmed': 'Точно? Забег потерян',
   'pause.restartArmed': 'Точно? Забег пропадёт',
 
   'result.title': 'Забег окончен',
