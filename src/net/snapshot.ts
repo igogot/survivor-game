@@ -4,6 +4,7 @@ import { SPOILS } from '../data/spoils';
 import { UPGRADES } from '../data/upgrades';
 import { WEAPONS, createWeaponState, weaponById } from '../data/weapons';
 import { FLASH_TIME } from '../systems/damage';
+import { arrivingAbility } from '../systems/spawn';
 import type { EnemyDef } from '../data/enemies';
 import type { World } from '../world/world';
 
@@ -485,6 +486,12 @@ export function applySnapshot(world: World, bytes: Uint8Array): void {
     enemy.color = def.color;
     enemy.radius = def.radius;
     enemy.boss = def.id === BOSS.id;
+    // Worked out rather than sent. A guest builds its world from the host's
+    // seed and has just read `bossesKilled` off this very snapshot, so it can
+    // name the fight without a byte on the wire — and it has to, because the
+    // boss bar is titled after the ability and an enemy taken from the pool
+    // carries whatever the last one in that slot left behind.
+    enemy.ability = enemy.boss ? arrivingAbility(world).id : '';
 
     enemy.flash = (read.u8() / 255) * FLASH_TIME;
     // Rebuilt as a fraction of a nominal bar, because a fraction is all that is

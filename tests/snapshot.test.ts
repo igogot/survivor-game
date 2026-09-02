@@ -4,7 +4,7 @@ import { SPRITE_NAMES, spriteIndex } from '../src/data/sprites';
 import { SPRITE_SPECS } from '../src/render/atlas';
 import { VIEW_RADIUS, applySnapshot, encodeSnapshot } from '../src/net/snapshot';
 import { applyUpgrade } from '../src/systems/progression';
-import { ENEMIES } from '../src/data/enemies';
+import { BOSS, ENEMIES } from '../src/data/enemies';
 import { rollEnemyDef, spawnEnemy, spawnEnemyAt } from '../src/systems/spawn';
 import { stepWorld } from '../src/world/step';
 import { World } from '../src/world/world';
@@ -381,5 +381,51 @@ describe('what a snapshot costs', () => {
 
   it('costs almost nothing on an empty field', () => {
     expect(encodeSnapshot(new World(1)).byteLength).toBeLessThan(128);
+  });
+});
+
+/**
+ * The one thing about a boss that is worked out rather than sent.
+ *
+ * The boss bar is titled after the ability, and the ability is a function of the
+ * seed and the count of the fallen — both of which a guest already has. So it
+ * costs nothing on the wire and must not be skipped: an enemy comes out of a
+ * pool, and a field left unwritten carries whatever the last occupant of that
+ * slot had.
+ */
+describe('naming the fight on a guest', () => {
+  function duel(seed: number, killed: number): { host: World; guest: World } {
+    const host = new World(seed);
+    host.bossesKilled = killed;
+    spawnEnemyAt(host, BOSS, 1, 300, 0);
+    return { host, guest: received(host) };
+  }
+
+  it('calls the boss what the host calls it', () => {
+    for (const killed of [0, 1, 4, 9, 17]) {
+      const { host, guest } = duel(2024, killed);
+
+      expect(guest.enemies).toHaveLength(1);
+      expect(guest.enemies[0].ability, `duel ${killed}`).toBe(host.enemies[0].ability);
+      expect(guest.enemies[0].ability).not.toBe('');
+    }
+  });
+
+  /**
+   * And does not leave a stale one on a body that is not a boss. This is the
+   * pool hazard written as a test: a slot that held a boss is reused for a
+   * grunt, and a grunt with an ability would be a grunt that wards.
+   */
+  it('leaves nothing behind on the grunt that reuses the slot', () => {
+    const { guest } = duel(2024, 3);
+    expect(guest.enemies[0].ability).not.toBe('');
+
+    const host = new World(2024);
+    spawnEnemyAt(host, ENEMIES[0], 1, 300, 0);
+    applySnapshot(guest, encodeSnapshot(host));
+
+    expect(guest.enemies).toHaveLength(1);
+    expect(guest.enemies[0].boss).toBe(false);
+    expect(guest.enemies[0].ability).toBe('');
   });
 });

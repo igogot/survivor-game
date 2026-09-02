@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS } from '../src/data/enemies';
-import { BOSS_ABILITIES, bossAbility } from '../src/data/bossAbilities';
+import { BOSS_ABILITIES, bossAbility, rotationStart } from '../src/data/bossAbilities';
 import { CONFIG } from '../src/config';
 import { applyDamage } from '../src/systems/damage';
 import { bossAbilitySystem } from '../src/systems/bossAbility';
@@ -15,13 +15,24 @@ import type { Enemy } from '../src/world/types';
  * The promise the feature is built on is that a player meets every trick once
  * before meeting any of them twice, and it is a promise about a rotation rather
  * than about a draw — so it is checkable exactly, not statistically.
+ *
+ * Where a run's rotation starts is the run's own business, so every test below
+ * that wants a *named* fight asks for it by name rather than by counting from
+ * the top of the list. See `placeBoss`.
  */
 
 const DT = 1 / CONFIG.tickRate;
 
-/** A boss carrying the ability the nth duel would bring, at an exact spot. */
+/**
+ * A boss carrying the ability at `index` in the rotation, at an exact spot.
+ *
+ * The count of the fallen is walked back by where this run's rotation begins,
+ * so the boss that arrives is the one the test asked for rather than the one
+ * this seed happens to open with. Wrapping handles the negative — that is what
+ * the note on `bossAbility` is about.
+ */
 function placeBoss(world: World, index: number, x: number, y: number): Enemy {
-  world.bossesKilled = index;
+  world.bossesKilled = index - rotationStart(world.seed);
   spawnEnemyAt(world, BOSS, 1, x, y);
   const boss = world.enemies[world.enemies.length - 1];
   expect(boss.boss).toBe(true);
@@ -61,12 +72,97 @@ describe('the rotation', () => {
     expect(bossAbility(23).id).toBe(bossAbility(3).id);
   });
 
-  it('hands the arriving boss the ability its number calls for', () => {
+  it('hands the arriving boss the ability its place in the rotation calls for', () => {
     const world = new World(5);
     for (let index = 0; index < 10; index++) {
       const boss = placeBoss(world, index, 400 + index * 50, 0);
       expect(boss.ability, `boss ${index}`).toBe(bossAbility(index).id);
     }
+  });
+
+  /**
+   * The order inside one run is untouched by any of this. A player who has seen
+   * the first duel of a run knows what the second brings; what they cannot know
+   * before the first is which of the ten it will be.
+   */
+  it('advances one step per duel within a run', () => {
+    const world = new World(77);
+    const opening = bossAbility(rotationStart(77)).id;
+
+    const met: string[] = [];
+    for (let killed = 0; killed < 12; killed++) {
+      world.bossesKilled = killed;
+      spawnEnemyAt(world, BOSS, 1, 400, 0);
+      met.push(world.enemies[world.enemies.length - 1].ability);
+      world.enemies.length = 0;
+    }
+
+    expect(met[0]).toBe(opening);
+    for (let duel = 1; duel < met.length; duel++) {
+      const before = BOSS_ABILITIES.findIndex((ability) => ability.id === met[duel - 1]);
+      const after = BOSS_ABILITIES.findIndex((ability) => ability.id === met[duel]);
+
+      expect(after, `duel ${duel} does not follow duel ${duel - 1}`).toBe(
+        (before + 1) % BOSS_ABILITIES.length,
+      );
+    }
+  });
+});
+
+/**
+ * The measurement this rotation was rebuilt around.
+ *
+ * A boss arrives at minute ten and runs end between minute seven and minute
+ * fourteen, so a run has one duel in it. With every run starting at the top of
+ * the list, that duel was always `charge` — nine of the ten fights were content
+ * nobody had ever met, and no stand caught it because a stand plays runs too.
+ */
+describe('reaching the rotation at all', () => {
+  it('does not open every run with the same fight', () => {
+    const opened = new Set(
+      [42, 1337, 99, 7, 11, 2024, 5, 808].map((seed) => bossAbility(rotationStart(seed)).id),
+    );
+
+    expect(opened.size, `eight seeds, ${opened.size} different opening duels`).toBeGreaterThan(1);
+  });
+
+  /**
+   * The one that would have caught the bug. Every fight has to be the opening
+   * fight of *some* run, or it is decoration on a list nobody reads.
+   */
+  it('puts every one of the ten in front of somebody', () => {
+    const opened = new Set<string>();
+    for (let seed = 0; seed < 200; seed++) opened.add(bossAbility(rotationStart(seed)).id);
+
+    const missing = BOSS_ABILITIES.filter((ability) => !opened.has(ability.id)).map(
+      (ability) => ability.id,
+    );
+    expect(missing, `unreachable in the first 200 seeds: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  /** Same seed, same fight — a party of four builds four worlds and one duel. */
+  it('answers the same for the same seed', () => {
+    for (const seed of [0, 1, 42, 1337, 0xffffffff]) {
+      expect(rotationStart(seed)).toBe(rotationStart(seed));
+      expect(rotationStart(seed)).toBeGreaterThanOrEqual(0);
+      expect(rotationStart(seed)).toBeLessThan(BOSS_ABILITIES.length);
+    }
+  });
+
+  /**
+   * And it costs the run nothing. The starting point comes from its own
+   * generator seeded off the run's, never from the run's — a number taken out
+   * of that stream would move every seed in the balance table.
+   */
+  it('spends nothing from the run’s generator', () => {
+    const untouched = new World(31);
+    const before = untouched.rng.next();
+
+    const spawning = new World(31);
+    spawning.bossesKilled = 3;
+    spawnEnemyAt(spawning, BOSS, 1, 300, 0);
+
+    expect(spawning.rng.next()).toBe(before);
   });
 
   /**
