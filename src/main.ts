@@ -72,7 +72,7 @@ async function main(): Promise<void> {
   const hud = new Hud(renderer.paintSprite);
   const stick = new StickView();
   const resultScreen = new ResultScreen(restart);
-  const pauseScreen = new PauseScreen(resumeGame, restart);
+  const pauseScreen = new PauseScreen(resumeGame, restart, toMainMenu);
   const upgradeMenu = new UpgradeMenu(pickUpgrade);
   const chestMenu = new ChestMenu(pickSpoil);
 
@@ -119,6 +119,9 @@ async function main(): Promise<void> {
   // The button beside "Run again". A phone has no L key, and the board is the
   // one screen a player is meant to want to look at twice.
   document.getElementById('result-records')?.addEventListener('click', openRecordsForThisRun);
+  // No confirmation on this one: the run is already over, so there is nothing
+  // left for a stray click to cost.
+  document.getElementById('result-menu')?.addEventListener('click', toMainMenu);
   // And from the opening screen, so the board is a thing you can look at before
   // you have anything to put on it — which is the whole reason to chase it.
   document.getElementById('start-records')?.addEventListener('click', openRecords);
@@ -742,6 +745,27 @@ async function main(): Promise<void> {
    * one. A harness has nobody to ask, so it restarts into the default and
    * keeps going.
    */
+  /**
+   * Leaves the run, and the team with it.
+   *
+   * `restart` already lands on the mode choice — `StartScreen.show` opens
+   * there, because a restart is a chance to play differently. What it does not
+   * do is put the connection down: the mesh and the session outlive it, so a
+   * player who restarted out of a party arrived at the menu still wired to
+   * everybody they had just left.
+   *
+   * Named for where it goes rather than what it ends, because that is the
+   * question somebody paused in a coop run is asking. `startRun` already tears
+   * the mesh down for the solo path; this is the same teardown reached from a
+   * run rather than from a weapon card.
+   */
+  function toMainMenu(): void {
+    mesh?.close();
+    mesh = null;
+    net = null;
+    restart();
+  }
+
   function restart(): void {
     if (unattended) {
       startRun(STARTER_WEAPON_ID);

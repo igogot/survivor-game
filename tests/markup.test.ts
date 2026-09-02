@@ -140,15 +140,22 @@ describe('the stylesheet', () => {
   });
 
   /**
-   * And the first step is only the question.
+   * And none of them sits inside a step.
    *
    * The board, the account and the briefing hang below the steps rather than
-   * inside one, which is what lets `StartScreen` show them the moment a mode is
-   * chosen. Inside `step-mode` they would be part of the question; inside
+   * inside one. Inside `step-mode` they would be part of the question; inside
    * `step-weapons` they would be unreachable from the multiplayer half of the
    * screen.
+   *
+   * What differs between the three is *when* they appear, and that is
+   * `StartScreen.step`'s business rather than the markup's. The board is shown
+   * on every step including the first, because looking at records asks nothing
+   * of the player — somebody opening the game to see whether their record still
+   * stood had to answer a mode question first, which is a toll on a look. The
+   * account and the briefing still wait, so the opening screen keeps having one
+   * question on it.
    */
-  it('keeps the board, the account and the briefing out of the mode choice', () => {
+  it('keeps the board, the account and the briefing out of the steps', () => {
     const mode = /<div class="step" id="step-mode">([\s\S]*?)<div class="step" id="step-weapons"/.exec(
       html,
     );
@@ -158,8 +165,31 @@ describe('the stylesheet', () => {
       expect(mode[1], `${id} is inside the mode choice`).not.toContain(id);
     }
 
-    // Below the steps, and shut until one is chosen.
-    expect(html).toMatch(/<div class="actions" id="start-actions" hidden>/);
+    // Below the steps, and no longer shut: the board is reachable from the
+    // first screen, and `StartScreen` hides the account by itself.
+    expect(html).toMatch(/<div class="actions" id="start-actions">/);
     expect(html).toMatch(/<div class="help" id="help-start" hidden><\/div>/);
+  });
+});
+
+describe('the ways out of a run', () => {
+  /**
+   * A run can be left from two screens and there has to be a door on each.
+   * Restarting already landed on the mode choice, but it is not labelled as a
+   * way back, and from a party it left the connection standing.
+   */
+  it('offers the main menu from the pause screen and the result screen', () => {
+    expect(html).toContain('id="pause-menu"');
+    expect(html).toContain('id="result-menu"');
+  });
+
+  /**
+   * The pause one is filled by `PauseScreen`, because its label changes when
+   * it is armed and a stamped one would put the calm word back. The result one
+   * never arms, so it carries its text in the markup like any other button.
+   */
+  it('leaves the pause button empty and stamps the result one', () => {
+    expect(html).toMatch(/id="pause-menu"[^>]*><\/button>/);
+    expect(html).toMatch(/id="result-menu"[^>]*data-i18n="menu.toMenu"/);
   });
 });

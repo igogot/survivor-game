@@ -1683,11 +1683,13 @@
         <!-- Everything that is not the question the panel is asking.
 
              It hangs below the steps rather than inside one because it belongs
-             to all of them but the first: the opening screen asks solo or
-             company, and a screen with one question on it should have one
-             question on it. Both are shown by `StartScreen.step` the moment
-             that question is answered. -->
-        <div class="actions" id="start-actions" hidden>
+             to all of them. The board is shown on every step including the
+             first: looking at records asks nothing of the player, and hiding it
+             until a mode was chosen meant somebody opening the game to see
+             whether their record still stood had to answer a question first.
+             The account is still a decision, so `StartScreen.step` holds it
+             back until the mode one is answered. -->
+        <div class="actions" id="start-actions">
           <button class="action" id="start-records" type="button" data-i18n="board.open">
             Records
           </button>
@@ -1713,6 +1715,10 @@
             Resume
           </button>
           <button class="action" id="pause-restart" type="button">Restart run</button>
+          <!-- Two ways out of a run and they are not the same door: one starts
+               another straight away, the other puts the team down and goes back
+               to the choice of mode. Both cost the run, so both ask twice. -->
+          <button class="action action--quiet" id="pause-menu" type="button"></button>
         </div>
         <div class="help" id="help-pause"></div>
       </div>
@@ -1765,6 +1771,11 @@
           </button>
           <button class="action" id="result-records" type="button" data-i18n="board.open">
             Records
+          </button>
+          <!-- No confirmation here: the run is already over, so there is
+               nothing left for a stray click to cost. -->
+          <button class="action action--quiet" id="result-menu" type="button" data-i18n="menu.toMenu">
+            Main menu
           </button>
         </div>
         <div class="help" id="help-result"></div>
