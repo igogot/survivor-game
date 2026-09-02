@@ -14,8 +14,16 @@ export const CONFIG = {
    * buys the next interval, so the only way a run ends is the player dying.
    */
   boss: {
-    /** Seconds between arrivals. The first boss lands at this mark. */
-    interval: 600,
+    /**
+     * Seconds between arrivals. The first boss lands at this mark.
+     *
+     * Halved from ten minutes, and the halving is not the whole change — see
+     * `duelGrace`. A duel is quiet: the spawner is off while the boss lives, so
+     * twice as many bosses is twice as much time with the horde switched off.
+     * Measured on twenty seeds, the interval alone took deaths inside the
+     * stand's window from 9 to 3. More bosses, less game.
+     */
+    interval: 300,
     /** Quiet seconds before each arrival. */
     lull: 12,
     /**
@@ -30,8 +38,15 @@ export const CONFIG = {
      * Long enough to hold most first duels whole (measured at 37s, 73s and
      * 89s), short enough that one the player cannot finish is fought in
      * traffic.
+     *
+     * Cut from 60 when the interval halved, to pay some of the quiet back. The
+     * number was chosen by measuring rather than by taste, and the interesting
+     * part is what happened at 30: deaths went from 9 to 14, because below
+     * about forty seconds the horde is back before most duels end and every
+     * boss is fought in traffic. That is not "less rest", it is a different
+     * fight. 45 stays on the near side of that edge.
      */
-    duelGrace: 60,
+    duelGrace: 45,
     /**
      * Extra HP each boss carries over the one before it, as a fraction.
      *
