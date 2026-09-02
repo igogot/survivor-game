@@ -67,13 +67,11 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
 };
 
 /**
- * The ground of the ruin, as tiles from the same sheet.
+ * The bare ground outside anything that was ever built.
  *
- * Kenney's pack draws a room rather than a field, so there is no tile meant to
- * repeat forever вЂ” these are the ones that can. The five below are the sheet's
- * sand floor at five densities of grit, which is exactly the variation a floor
- * needs: near-identical, so no single cut of it becomes a pattern the eye
- * starts following across the screen.
+ * Five cuts of the sheet's sand at five densities of grit. Near-identical on
+ * purpose: this is the stuff between the ruins, and the moment one cut of it
+ * is distinctive it becomes a pattern the eye follows across the screen.
  *
  * 52 is the sixth and is left out. It carries the dark curve where the sand
  * meets something else, and an edge with nothing on the other side of it tiles
@@ -82,22 +80,52 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
 export const FLOOR_TILES: readonly number[] = [48, 49, 50, 51, 53];
 
 /**
- * Loose stone scattered over that floor.
+ * Cut stone, laid inside whatever the walls still enclose.
  *
- * Both sit on the backing colour in the sheet, which is what makes them usable
- * here at all: keyed out, a tile of rubble becomes rubble and nothing else, and
- * can be laid over the sand instead of punching a dark square into it.
+ * A ruin is not rubble sitting on a field — it is a floor somebody laid, with
+ * a wall around it. Paving is what tells the player they have walked inside
+ * something, and it is the single largest reason the first attempt at this
+ * read as litter rather than as architecture.
+ */
+export const PAVING_TILES: readonly number[] = [36, 37, 38, 39];
+
+/**
+ * Masonry, laid whole rather than keyed.
+ *
+ * A block of wall needs its own edges to read as a block of wall, so these go
+ * down opaque and cover the ground under them. Five cuts, so a run of six does
+ * not look extruded from one.
+ */
+export const WALL_TILES: readonly number[] = [28, 40, 57, 58, 59];
+
+/**
+ * Loose stone, for the foot of a wall and the gap where one fell.
+ *
+ * Keyed, unlike the masonry: rubble has to lie *on* the floor rather than
+ * replace it, and in the sheet it is drawn on the backing colour, so punching
+ * that out leaves the stones and nothing else.
  */
 export const RUBBLE_TILES: readonly number[] = [12, 24];
 
 /**
- * What is left standing of the walls.
+ * Things somebody left behind, keyed the same way.
  *
- * Broken paving and three cuts of masonry, laid whole rather than keyed: a
- * block of wall lying in the floor is the thing that says this was a building
- * once, and it needs its own edges to say it.
+ * Crates and a barrel. The point of them is recognition: a floor of stone and
+ * broken stone is texture, and texture alone never quite reads as a place.
+ * One barrel standing against a wall does more for that than another hundred
+ * chips of gravel.
  */
-export const RUIN_TILES: readonly number[] = [42, 57, 58, 59];
+export const PROP_TILES: readonly number[] = [54, 55, 66];
+
+/**
+ * The two halves of a standing column, shaft below and capital above.
+ *
+ * The only thing here built from more than one tile, and worth the exception:
+ * a column is the one silhouette that reads as a ruin from any distance,
+ * because nothing else in a field is tall, straight and alone.
+ */
+export const PILLAR_SHAFT = 18;
+export const PILLAR_CAPITAL = 6;
 
 /**
  * The flat colour every tile is painted on.
