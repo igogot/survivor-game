@@ -24,6 +24,30 @@ function fail(int $status, string $reason): void
     respond($status, ['error' => $reason]);
 }
 
+/*
+ * Anything that gets this far still answers in JSON.
+ *
+ * Every query used to sit inside a try/catch that happened to cover it, which
+ * held right up until there were two tables and a host that had run only the
+ * first migration: the party board's SELECT threw, nothing caught it, and the
+ * endpoint answered 500 with an empty body. The client is fine with that — it
+ * reports the board unreachable either way — but an endpoint that answers
+ * nothing tells whoever is setting it up nothing either.
+ *
+ * A handler rather than another try/catch, because the next query added will
+ * not remember to bring one. Throwable covers Error too, so a missing class or
+ * a call to something that is not there lands here as well.
+ *
+ * The message goes to the host's log and never into the response: a PDO error
+ * names the database, the user and the table.
+ */
+set_exception_handler(static function (Throwable $thrown): void {
+    error_log('leaderboard: ' . $thrown->getMessage());
+    if (!headers_sent()) {
+        fail(503, 'database-unavailable');
+    }
+});
+
 /**
  * The bounds the build wrote out of the game's constants.
  *
