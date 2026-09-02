@@ -3,7 +3,7 @@
  *
  * `src/render/atlas.ts` owns the shapes this game falls back to; this file owns
  * the artwork it prefers. Both feed the same packed atlas, so the renderer
- * never learns which one it got — see `createTextures()`.
+ * never learns which one it got вЂ” see `createTextures()`.
  *
  * The art is Kenney's "Tiny Dungeon" (CC0), shipped as the sheet it comes in
  * rather than re-exported: 16px tiles in a 12-column grid, already packed. The
@@ -33,7 +33,7 @@ export const SHEET_TILES = 132;
  * dungeon tileset. The lance is stretched to the reach of its thrust, and a
  * 16px icon smeared eight times along one axis reads as a smudge rather than
  * as a weapon. The harpoon is the interesting one: the sheet does have spikes,
- * and that is the problem — every one of them is grey on brown like the
+ * and that is the problem вЂ” every one of them is grey on brown like the
  * dagger below, so at ten pixels against eighteen the shot read as a larger
  * bolt. A drawn frame is a white mask and takes the weapon's own colour, which
  * is the one thing that tells two small shapes apart across a screen. The
@@ -67,10 +67,43 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
 };
 
 /**
+ * The ground of the ruin, as tiles from the same sheet.
+ *
+ * Kenney's pack draws a room rather than a field, so there is no tile meant to
+ * repeat forever вЂ” these are the ones that can. The five below are the sheet's
+ * sand floor at five densities of grit, which is exactly the variation a floor
+ * needs: near-identical, so no single cut of it becomes a pattern the eye
+ * starts following across the screen.
+ *
+ * 52 is the sixth and is left out. It carries the dark curve where the sand
+ * meets something else, and an edge with nothing on the other side of it tiles
+ * into a grid of scars.
+ */
+export const FLOOR_TILES: readonly number[] = [48, 49, 50, 51, 53];
+
+/**
+ * Loose stone scattered over that floor.
+ *
+ * Both sit on the backing colour in the sheet, which is what makes them usable
+ * here at all: keyed out, a tile of rubble becomes rubble and nothing else, and
+ * can be laid over the sand instead of punching a dark square into it.
+ */
+export const RUBBLE_TILES: readonly number[] = [12, 24];
+
+/**
+ * What is left standing of the walls.
+ *
+ * Broken paving and three cuts of masonry, laid whole rather than keyed: a
+ * block of wall lying in the floor is the thing that says this was a building
+ * once, and it needs its own edges to say it.
+ */
+export const RUIN_TILES: readonly number[] = [42, 57, 58, 59];
+
+/**
  * The flat colour every tile is painted on.
  *
  * Kenney's tiles are drawn for a dungeon floor, so each one sits on an opaque
- * rounded card — 57% of the boss tile is this single colour. Left in, every
+ * rounded card вЂ” 57% of the boss tile is this single colour. Left in, every
  * entity would carry a visible dark tile around it and a crowd would read as a
  * grid. It appears nowhere inside the sprites themselves, which is what makes
  * removing it safe.

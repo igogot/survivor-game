@@ -15,7 +15,7 @@ import { FLASH_TIME } from '../systems/damage';
 import { EMBER_FRAMES } from './atlas';
 import { bodyMotion } from './liveliness';
 import type { BodyMotion } from './liveliness';
-import { GRID_TEXTURE_SIZE, createTextures } from './textures';
+import { createTextures } from './textures';
 import type { TextureSet } from './textures';
 import type { SpriteName } from '../data/sprites';
 import type { Enemy, MoveTarget, Player } from '../world/types';
@@ -124,7 +124,7 @@ export class GameRenderer {
     this.textures = await createTextures();
 
     this.background = new TilingSprite({
-      texture: this.textures.grid,
+      texture: this.textures.ground,
       width: this.app.screen.width,
       height: this.app.screen.height,
     });
@@ -201,7 +201,13 @@ export class GameRenderer {
     this.camera.position.set(cameraX, cameraY);
     // Scrolling the tile offset instead of moving a huge sprite keeps the
     // background one draw call regardless of how far the player has travelled.
-    this.background.tilePosition.set(cameraX % GRID_TEXTURE_SIZE, cameraY % GRID_TEXTURE_SIZE);
+    //
+    // Taken off the texture rather than from a constant: the floor is a patch
+    // of the sheet when the artwork loaded and the old empty grid when it did
+    // not, and the two are not the same size. Wrapping by the wrong one would
+    // slide the ground a fraction of a tile every time the modulo rolled over.
+    const patch = this.background.texture;
+    this.background.tilePosition.set(cameraX % patch.width, cameraY % patch.height);
 
     // Drawn straight from the order rather than faded out on arrival: the mark
     // disappearing is how the player learns the order is spent. Only the
