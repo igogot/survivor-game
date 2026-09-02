@@ -1,19 +1,81 @@
 import { Spritesheet, Texture } from 'pixi.js';
 import type { SpritesheetData, SpritesheetFrameData } from 'pixi.js';
 import { SPRITE_DRAWERS, SPRITE_SPECS, packFrames } from './atlas';
-import { SPRITE_TILES, TILE_SIZE, loadSpriteSheet, stripTileBacking, tileOrigin } from './artwork';
+import {
+  FLOOR_TILES,
+  RUBBLE_TILES,
+  RUIN_TILES,
+  SPRITE_TILES,
+  TILE_SIZE,
+  loadSpriteSheet,
+  stripTileBacking,
+  tileOrigin,
+} from './artwork';
 import type { AtlasLayout, Frame } from './atlas';
 import type { SpriteName } from '../data/sprites';
 
-export const GRID_TEXTURE_SIZE = 64;
+/** Side of the empty grid drawn when there is no sheet to build a floor from. */
+const GRID_TEXTURE_SIZE = 64;
+
+/**
+ * Side of one flagstone on screen, in pixels.
+ *
+ * Twice the 16px source tile, and the camera is at 1:1, so a stone is 32 world
+ * units across — a little wider than the player and wider than everything in
+ * the horde but the boss. Big enough to read as masonry rather than as noise,
+ * small enough that the ground still streams past at speed.
+ *
+ * A whole multiple of the source on purpose: the pixels double instead of
+ * being interpolated, which is what keeps the floor as sharp as what stands
+ * on it.
+ */
+const FLOOR_TILE_SIZE = 32;
+
+/**
+ * Flagstones along one side of the repeating patch.
+ *
+ * The patch is what a TilingSprite repeats, so this is the distance before the
+ * floor says the same thing twice: twelve stones is 384px, wider than a third
+ * of most screens. Smaller and the scattered rubble turns into wallpaper; the
+ * cost of larger is one canvas built once at startup, so the number is chosen
+ * by eye rather than by budget.
+ */
+const FLOOR_PATCH_TILES = 12;
+
+/**
+ * How the floor is dimmed once it is laid.
+ *
+ * The sheet's sand is bright — it was drawn to be looked at, in a room lit for
+ * the purpose. Everything this game puts on top of it is small, saturated and
+ * has to be found in a crowd, so the ground is taken down to roughly a quarter
+ * of its own brightness and pulled towards the cold of the old empty
+ * background. What survives is the texture, which is all the floor was for.
+ */
+const FLOOR_SHADE = 'rgba(10, 12, 20, 0.74)';
+
+/**
+ * Painted under the tiles, in case one lets the canvas through.
+ *
+ * Keying the backing colour out is a comparison against one exact colour, and
+ * nothing guarantees a stray pixel of floor art is not that colour. A dark
+ * ground underneath means such a pixel reads as a gap between stones instead
+ * of as a hole into nothing.
+ */
+const FLOOR_BASE = '#2a2018';
+
+/** One rubble tile per this many flagstones, on average. */
+const RUBBLE_RARITY = 11;
+
+/** One block of fallen masonry per this many flagstones, on average. */
+const RUIN_RARITY = 17;
 
 export interface TextureSet {
   /**
-   * The background tile, deliberately outside the atlas: a TilingSprite repeats
-   * its whole source texture, so a frame would drag its neighbours into every
-   * tile.
+   * The floor the run is fought on, deliberately outside the atlas: a
+   * TilingSprite repeats its whole source texture, so a frame packed beside
+   * others would drag its neighbours into every tile.
    */
-  readonly grid: Texture;
+  readonly ground: Texture;
   readonly sprites: Readonly<Record<SpriteName, Texture>>;
   /** False when the atlas failed to build and the per-shape fallback is in use. */
   readonly packed: boolean;
@@ -51,12 +113,19 @@ export interface TextureSet {
  * arrive without touching the renderer.
  */
 export async function createTextures(): Promise<TextureSet> {
-  const grid = Texture.from(drawToCanvas(GRID_TEXTURE_SIZE, GRID_TEXTURE_SIZE, drawGrid));
   const sheet = await loadArtwork();
+  // The floor is the sheet's or it is nothing: without artwork there are no
+  // stones to lay, and the empty grid this game shipped with is a better
+  // answer than a field of flat colour pretending to be a ruin.
+  const ground = Texture.from(
+    sheet === null
+      ? drawToCanvas(GRID_TEXTURE_SIZE, GRID_TEXTURE_SIZE, drawGrid)
+      : drawFloor(sheet),
+  );
 
   try {
     return {
-      grid,
+      ground,
       sprites: await packedSprites(sheet),
       packed: true,
       masked: (name) => tileFor(sheet, name) === undefined,
@@ -67,7 +136,7 @@ export async function createTextures(): Promise<TextureSet> {
     // a broken atlas degrades to individual textures rather than a blank screen.
     console.warn('Sprite atlas unavailable; falling back to separate textures.', error);
     return {
-      grid,
+      ground,
       sprites: separateSprites(),
       packed: false,
       // Nothing was cut from a sheet, so every frame is a mask again.
@@ -75,6 +144,95 @@ export async function createTextures(): Promise<TextureSet> {
       paint: painter(null),
     };
   }
+}
+
+/**
+ * Lays one patch of ruined floor for the background to repeat.
+ *
+ * Built once at startup and then handed to a single TilingSprite, so the whole
+ * ground under the run stays one draw call however far the player walks.
+ *
+ * Every cell is decided by hashing its own coordinates rather than by drawing
+ * from anything: the run's PRNG is the balance table's, and reaching into it
+ * from the renderer would move every seed the stand has ever measured. A hash
+ * also means the patch is the same floor on every machine and in every run,
+ * which is one less thing a screenshot can disagree about.
+ *
+ * Decoration is laid as whole tiles and never crosses a cell edge, which is
+ * what lets the patch tile seamlessly against itself: the sheet's tiles were
+ * cut to sit side by side, and nothing here does anything they were not
+ * already drawn to do.
+ */
+function drawFloor(artwork: CanvasImageSource): HTMLCanvasElement {
+  const side = FLOOR_TILE_SIZE * FLOOR_PATCH_TILES;
+
+  return drawToCanvas(side, side, (ctx) => {
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = FLOOR_BASE;
+    ctx.fillRect(0, 0, side, side);
+
+    for (let row = 0; row < FLOOR_PATCH_TILES; row++) {
+      for (let col = 0; col < FLOOR_PATCH_TILES; col++) {
+        const x = col * FLOOR_TILE_SIZE;
+        const y = row * FLOOR_TILE_SIZE;
+
+        blitFloorTile(ctx, artwork, pick(FLOOR_TILES, mix(col, row)), x, y);
+
+        // A second, unrelated hash of the same cell. One key for both would
+        // tie what lies on a stone to which stone it is, and the floor would
+        // show five combinations instead of five times six.
+        const litter = mix(col + 101, row + 57);
+        if (litter % RUIN_RARITY === 0) {
+          blitFloorTile(ctx, artwork, pick(RUIN_TILES, litter), x, y);
+        } else if (litter % RUBBLE_RARITY === 0) {
+          blitFloorTile(ctx, artwork, pick(RUBBLE_TILES, litter), x, y);
+        }
+      }
+    }
+
+    ctx.fillStyle = FLOOR_SHADE;
+    ctx.fillRect(0, 0, side, side);
+  });
+}
+
+/** Doubles one source tile onto the patch. */
+function blitFloorTile(
+  ctx: CanvasRenderingContext2D,
+  artwork: CanvasImageSource,
+  tile: number,
+  x: number,
+  y: number,
+): void {
+  const origin = tileOrigin(tile);
+  ctx.drawImage(
+    artwork,
+    origin.x,
+    origin.y,
+    TILE_SIZE,
+    TILE_SIZE,
+    x,
+    y,
+    FLOOR_TILE_SIZE,
+    FLOOR_TILE_SIZE,
+  );
+}
+
+function pick(tiles: readonly number[], hash: number): number {
+  return tiles[hash % tiles.length];
+}
+
+/**
+ * A stable, well-spread number from a pair of cell coordinates.
+ *
+ * `Math.imul` rather than plain multiplication because the constants are large
+ * enough that a double would silently lose the low bits — which are the only
+ * ones a modulo reads, so the floor would come out in stripes.
+ */
+function mix(x: number, y: number): number {
+  let h = Math.imul(x, 0x27d4eb2d) ^ Math.imul(y, 0x165667b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h ^= h >>> 13;
+  return h >>> 0;
 }
 
 /**
