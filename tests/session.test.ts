@@ -151,16 +151,24 @@ describe('a snapshot with a name on it', () => {
 describe('what a guest may do', () => {
   it('drives the player it owns', () => {
     const net = wire(45, ['a', 'b']);
+    // Where everybody is standing before a word is said. A party begins spread
+    // out rather than stacked on the origin, so both "moved" and "did not move"
+    // are comparisons against this rather than against zero — and a test that
+    // said zero would be measuring the layout instead of the input.
+    const before = net.hostWorld.players.map((player) => player.x);
+
     net.guest.sendInput(1, 0, null);
     net.play(1);
 
-    expect(net.hostWorld.players[1].x).toBeGreaterThan(50);
+    expect(net.hostWorld.players[1].x - before[1]).toBeGreaterThan(50);
     // And nobody else's.
-    expect(net.hostWorld.players[0].x).toBe(0);
+    expect(net.hostWorld.players[0].x).toBe(before[0]);
   });
 
   it('is ignored when it claims to be somebody else', () => {
     const net = wire(46, ['a', 'b']);
+    const before = net.hostWorld.players.map((player) => player.x);
+
     net.host.receive(net.hostWorld, {
       kind: 'input',
       from: 'nobody-in-this-room',
@@ -171,7 +179,7 @@ describe('what a guest may do', () => {
 
     for (let i = 0; i < 60; i++) stepWorld(net.hostWorld, DT);
 
-    for (const player of net.hostWorld.players) expect(player.x).toBe(0);
+    net.hostWorld.players.forEach((player, seat) => expect(player.x).toBe(before[seat]));
   });
 
   it('says nothing while its hand is still', () => {

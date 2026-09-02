@@ -18,7 +18,7 @@ import {
   partyAnchor,
 } from '../src/world/party';
 import { rebuildGrid, stepWorld } from '../src/world/step';
-import { World } from '../src/world/world';
+import { PARTY_SPREAD, World } from '../src/world/world';
 import type { Enemy, Player } from '../src/world/types';
 
 /**
@@ -480,5 +480,95 @@ describe('a party stepped through a real run', () => {
     // The boss is not part of this window, so nothing here should have spawned
     // one — the run is still the horde.
     expect(world.enemies.some((enemy) => enemy.sprite === BOSS.sprite)).toBe(false);
+  });
+});
+
+/**
+ * Where a party is standing when the run begins.
+ *
+ * Everybody used to be created at the origin. On a solo run that is invisible;
+ * with four players it is one pixel with four people inside it, and the first
+ * thing a team saw of each other was a figure they could not tell apart from
+ * their own.
+ */
+describe('where a party starts', () => {
+  function positions(count: number): { x: number; y: number }[] {
+    const world = new World(1, Array.from({ length: count }, () => 'bolt'));
+    return world.players.map((player) => ({ x: player.x, y: player.y }));
+  }
+
+  /**
+   * The one that guards the measurements. Every stand in this project plays a
+   * solo run, and moving where it begins would move every number they print
+   * without a single one of them meaning anything different.
+   */
+  it('leaves a solo run at the origin, exactly', () => {
+    expect(positions(1)).toEqual([{ x: 0, y: 0 }]);
+  });
+
+  it('gives everybody in a party their own spot', () => {
+    for (const count of [2, 3, 4]) {
+      const seen = new Set(positions(count).map((at) => `${at.x},${at.y}`));
+      expect(seen.size, `a party of ${count} shares a spot`).toBe(count);
+    }
+  });
+
+  /**
+   * Far enough apart to be told apart. A player is 12 units across, so two of
+   * them closer than that are one shape on the screen.
+   */
+  it('stands them further apart than they are wide', () => {
+    for (const count of [2, 3, 4]) {
+      const at = positions(count);
+
+      for (let i = 0; i < at.length; i++) {
+        for (let j = i + 1; j < at.length; j++) {
+          const gap = Math.hypot(at[i].x - at[j].x, at[i].y - at[j].y);
+          expect(gap, `players ${i} and ${j} of ${count} overlap`).toBeGreaterThan(
+            CONFIG.player.radius * 2,
+          );
+        }
+      }
+    }
+  });
+
+  /**
+   * And close enough to be one team. A screen is about twelve hundred units
+   * across, so a party that began further apart than a few hundred would begin
+   * as separate runs that happen to share a seed.
+   */
+  it('keeps them within sight of each other', () => {
+    for (const count of [2, 3, 4]) {
+      for (const at of positions(count)) {
+        expect(Math.hypot(at.x, at.y), `a party of ${count} starts scattered`).toBeLessThan(200);
+      }
+    }
+  });
+
+  /**
+   * Laid out around the origin rather than from it, so the horde still arrives
+   * the way it did: spawning is measured from `partyAnchor`, the middle of the
+   * living.
+   */
+  it('leaves the middle of the party where it was', () => {
+    for (const count of [1, 2, 3, 4]) {
+      const world = new World(1, Array.from({ length: count }, () => 'bolt'));
+      const anchor = partyAnchor(world);
+
+      expect(Math.hypot(anchor.x, anchor.y), `a party of ${count}`).toBeLessThan(PARTY_SPREAD);
+    }
+  });
+
+  /**
+   * The interpolated pair moves with them. Left behind, the first frame of a
+   * party run is drawn mid-stride in from the middle of the map.
+   */
+  it('does not draw them walking in from the origin', () => {
+    const world = new World(1, ['bolt', 'bolt', 'bolt', 'bolt']);
+
+    for (const player of world.players) {
+      expect(player.px).toBe(player.x);
+      expect(player.py).toBe(player.y);
+    }
   });
 });

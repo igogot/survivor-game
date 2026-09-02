@@ -158,6 +158,7 @@ export class World {
 
     const ids = typeof starters === 'string' ? [starters] : starters;
     for (const id of ids) this.players.push(createPlayer(id));
+    spreadParty(this.players);
   }
 
   nextDamageEvent(): number {
@@ -172,6 +173,83 @@ export class World {
  * that names none: the player would be granted nothing and stand there unarmed
  * while the horde arrived.
  */
+/**
+ * How far apart a party stands when the run begins, in world units.
+ *
+ * A body's width and a bit — the same answer `RESPAWN_OFFSET` gives to the same
+ * question, and for the same reason: close enough to read as one team, far
+ * enough that four figures are four figures. Before this everybody was created
+ * at the origin, which on a solo run is invisible and in a party of four is one
+ * pixel with four people inside it.
+ *
+ * Exported for the same reason `RESPAWN_OFFSET` is: a test should be able to
+ * say where a party stands without redoing the arithmetic that put them there.
+ */
+export const PARTY_SPREAD = 48;
+
+/**
+ * Where each player stands, as multiples of `PARTY_SPREAD`, by party size.
+ *
+ * A table rather than a ring, for two reasons. It is exact — no trigonometry,
+ * so the positions are the same numbers on every machine that builds this world
+ * rather than the same numbers to fifteen places — and it lets each size have
+ * the shape that suits it: a pair side by side, three in a wedge, four in a
+ * square.
+ *
+ * The first row is the one that matters most. A solo run starts at the origin,
+ * unchanged, because every stand in this project measures a solo run: moving
+ * where it begins would shift every number they print, and none of those
+ * numbers would mean anything different.
+ */
+const PARTY_START: readonly (readonly (readonly [number, number])[])[] = [
+  [[0, 0]],
+  [
+    [-1, 0],
+    [1, 0],
+  ],
+  [
+    [-1, 0],
+    [1, 0],
+    [0, 1],
+  ],
+  [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ],
+];
+
+/**
+ * Stands a party where they can see each other.
+ *
+ * Laid out around the origin rather than from it, so the party's centre is
+ * still the origin and the horde arrives the same way it always did — spawning
+ * is measured from `partyAnchor`, which is the middle of the living.
+ *
+ * A world can be built with more players than there is a shape for; nothing
+ * here enforces `MAX_PARTY`, which is the lobby's rule rather than the world's.
+ * Those stand at the origin as everybody used to. It is not a thing the game
+ * can do, and inventing a shape for it would be inventing a requirement.
+ */
+function spreadParty(players: readonly Player[]): void {
+  const layout = PARTY_START[players.length - 1];
+  if (layout === undefined) return;
+
+  for (let index = 0; index < players.length; index++) {
+    const player = players[index];
+    const spot = layout[index];
+    if (spot === undefined) continue;
+
+    player.x = spot[0] * PARTY_SPREAD;
+    player.y = spot[1] * PARTY_SPREAD;
+    // The interpolated pair with them. Left at the origin, the first frame of
+    // every party run would be drawn mid-stride in from the middle.
+    player.px = player.x;
+    player.py = player.y;
+  }
+}
+
 function createPlayer(starterId: string): Player {
   const starter = starterWeapon(starterId);
 
