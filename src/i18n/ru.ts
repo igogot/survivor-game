@@ -126,7 +126,9 @@ export const RU: Record<StringId, string> = {
 
   // Таблица рекордов.
   'board.title': 'Рекорды',
-  'board.sub': 'Сто самых долгих забегов',
+  'board.sub': 'Самые долгие забеги',
+  'board.tabSolo': 'Соло',
+  'board.tabParty': 'Группа',
   'board.open': 'Рекорды',
   'board.back': 'Назад',
   'board.loading': 'Загрузка…',

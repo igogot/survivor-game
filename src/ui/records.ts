@@ -4,7 +4,7 @@ import { weaponById } from '../data/weapons';
 import { loadIdentity } from '../net/identity';
 import { t, weaponName } from '../i18n';
 import type { Leaderboard, SubmitFailure } from '../net/leaderboard';
-import type { Score } from '../core/scores';
+import type { BoardKind, Score } from '../core/scores';
 import type { StringId } from '../i18n/en';
 import type { World } from '../world/world';
 
@@ -33,6 +33,9 @@ export function scoreOfRun(world: World, name: string): Score {
     bosses: world.bossesKilled,
     weapon: world.players[0].starterId,
     seed: world.seed,
+    // The roster, not the survivors. A four that lost two still set a record
+    // as a four, and scoring it as a pair would flatter it.
+    party: world.players.length,
   };
 }
 
@@ -42,16 +45,38 @@ export class RecordsScreen {
   private readonly body = requireElement('records-body');
   private readonly status = requireElement('records-status');
   private readonly closeButton = requireElement('records-close');
+  private readonly tabs = new Map<BoardKind, HTMLElement>([
+    ['solo', requireElement('records-tab-solo')],
+    ['party', requireElement('records-tab-party')],
+  ]);
 
-  /** The last board fetched, so reopening is instant and offline still shows it. */
-  private cached: readonly Score[] = [];
+  /**
+   * The last board of each kind, so reopening is instant and offline still
+   * shows something. Kept per kind rather than one slot, or switching tabs
+   * would blank the one you came from every time.
+   */
+  private readonly cached = new Map<BoardKind, readonly Score[]>();
+
+  /** Which board is on screen. Solo, because most runs are. */
+  private showing: BoardKind = 'solo';
 
   constructor(
     private readonly board: Leaderboard,
     onClose: () => void,
   ) {
     this.closeButton.addEventListener('click', onClose);
+
+    for (const [kind, tab] of this.tabs) {
+      tab.addEventListener('click', () => {
+        if (this.showing === kind) return;
+        this.showing = kind;
+        void this.show(this.highlight);
+      });
+    }
   }
+
+  /** The name to pick out of the rows, remembered across a tab switch. */
+  private highlight: string | undefined;
 
   get isOpen(): boolean {
     return !this.root.hidden;
@@ -59,32 +84,54 @@ export class RecordsScreen {
 
   /** Shows what is known immediately, then refreshes behind it. */
   async show(highlight?: string): Promise<void> {
+    this.highlight = highlight;
     this.root.hidden = false;
-    this.render(this.cached, highlight);
+
+    const kind = this.showing;
+    this.markTabs();
+    const held = this.cached.get(kind) ?? [];
+    this.render(held, highlight);
     this.status.textContent = t('board.loading');
 
-    const result = await this.board.read();
-    if (this.root.hidden) return;
+    const result = await this.board.read(kind);
+    // Gone, or the player switched tabs while this was in the air — either way
+    // this answer is about a screen that is no longer up.
+    if (this.root.hidden || this.showing !== kind) return;
 
     if (!result.reachable) {
-      this.status.textContent = t(
-        this.cached.length > 0 ? 'board.offlineStale' : 'board.offlineEmpty',
-      );
+      this.status.textContent = t(held.length > 0 ? 'board.offlineStale' : 'board.offlineEmpty');
       return;
     }
 
-    this.cached = result.board;
+    this.cached.set(kind, result.board);
     this.status.textContent = result.board.length === 0 ? t('board.empty') : '';
     this.render(result.board, highlight);
+  }
+
+  /**
+   * Opens on the board a run belongs to.
+   *
+   * Somebody who just finished a party run wants to see where it landed, not
+   * the solo hundred it was never on.
+   */
+  async showFor(kind: BoardKind, highlight?: string): Promise<void> {
+    this.showing = kind;
+    await this.show(highlight);
+  }
+
+  private markTabs(): void {
+    for (const [kind, tab] of this.tabs) {
+      tab.setAttribute('aria-pressed', String(kind === this.showing));
+    }
   }
 
   hide(): void {
     this.root.hidden = true;
   }
 
-  /** The board this screen last saw, for deciding whether a run qualifies. */
-  get known(): readonly Score[] {
-    return this.cached;
+  /** A board this screen last saw, for deciding whether a run qualifies. */
+  known(kind: BoardKind): readonly Score[] {
+    return this.cached.get(kind) ?? [];
   }
 
   private render(board: readonly Score[], highlight?: string): void {
@@ -104,7 +151,11 @@ function row(entry: Score, index: number, mine: boolean): HTMLElement {
 
   line.append(
     cell('rank', `${index + 1}`),
-    cell('who', entry.name),
+    // The host's name, and how many of them there were. Written as a figure
+    // rather than a word because the row is narrow and "×4" needs no
+    // translating — the alternative is a plural rule per language for a label
+    // two characters wide.
+    who(entry),
     cell('when', formatTime(entry.timeMs / 1000)),
     cell('with', weaponFor(entry.weapon)),
     cell('felled', entry.bosses > 0 ? `${entry.bosses}★` : ''),
@@ -123,6 +174,24 @@ function row(entry: Score, index: number, mine: boolean): HTMLElement {
 function weaponFor(id: string): string {
   const def = weaponById(id);
   return def === undefined ? '—' : weaponName(def);
+}
+
+/**
+ * The name, plus the size of the party behind it on the party board.
+ *
+ * Only the host's name is on a party row: names do not travel between players,
+ * so the host is the one who filed it and the one accountable for it. The
+ * count is what says it was not a solo run.
+ */
+function who(entry: Score): HTMLElement {
+  const holder = cell('who', entry.name);
+  if (entry.party > 1) {
+    const size = document.createElement('span');
+    size.className = 'party-size';
+    size.textContent = ` ×${entry.party}`;
+    holder.append(size);
+  }
+  return holder;
 }
 
 function cell(className: string, text: string): HTMLElement {

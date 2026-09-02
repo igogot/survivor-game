@@ -73,13 +73,35 @@ require __DIR__ . '/config.php';
 require __DIR__ . '/validate.php';
 require __DIR__ . '/auth.php';
 
-function readBoard(PDO $pdo, int $limit): array
+/**
+ * Which table a board lives in.
+ *
+ * A fixed map, and the only place a board name ever becomes SQL. The value
+ * from the request selects a key here and is never itself interpolated —
+ * `$board` reaching a query would be an injection with a table name in it.
+ */
+function tableFor(string $board): string
 {
+    return $board === 'party' ? 'party_scores' : 'scores';
+}
+
+/** How many rows that board keeps. */
+function sizeFor(array $limits, string $board): int
+{
+    $sizes = $limits['boardSizes'] ?? [];
+    return (int) ($sizes[$board] ?? $limits['boardSize'] ?? 100);
+}
+
+function readBoard(PDO $pdo, string $board, int $limit): array
+{
+    $table = tableFor($board);
+    $party = $board === 'party' ? 'party' : '1 AS party';
     $statement = $pdo->prepare(
-        'SELECT name, time_ms, kills, level, bosses, weapon, seed, UNIX_TIMESTAMP(created_at) AS at
-           FROM scores
+        "SELECT name, time_ms, kills, level, bosses, weapon, seed, {$party},
+                UNIX_TIMESTAMP(created_at) AS at
+           FROM {$table}
           ORDER BY time_ms DESC, bosses DESC, kills DESC
-          LIMIT :limit'
+          LIMIT :limit"
     );
     $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
     $statement->execute();
@@ -94,6 +116,7 @@ function readBoard(PDO $pdo, int $limit): array
             'bosses' => (int) $row['bosses'],
             'weapon' => (string) $row['weapon'],
             'seed' => (int) $row['seed'],
+            'party' => (int) $row['party'],
             'at' => (int) $row['at'],
         ];
     }
@@ -101,9 +124,18 @@ function readBoard(PDO $pdo, int $limit): array
     return $board;
 }
 
+/**
+ * Which board is being asked about.
+ *
+ * Anything that is not the party board is the solo one, so a stray or missing
+ * parameter reads the table that was there before parties existed rather than
+ * failing — an old link should still show a board.
+ */
+$board = ($_GET['board'] ?? '') === 'party' ? 'party' : 'solo';
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $limits = limits();
-    respond(200, ['board' => readBoard(db(), (int) $limits['boardSize'])]);
+    respond(200, ['board' => readBoard(db(), $board, sizeFor($limits, $board))]);
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -130,12 +162,24 @@ if ($fault !== null) {
     fail(422, $fault);
 }
 
+/*
+ * The board a run belongs on is decided by the run, not by the caller.
+ *
+ * Reading `?board=` here would let a party run be filed against the solo
+ * table, where nobody could ever match it. The party size is already checked
+ * by `faultInRun` above, so this cannot be steered by asking nicely.
+ */
+$board = (int) $body['party'] > 1 ? 'party' : 'solo';
+$table = tableFor($board);
+$keep = sizeFor($limits, $board);
+
 $name = (string) $body['name'];
 $timeMs = (int) $body['timeMs'];
 $kills = (int) $body['kills'];
 $level = (int) $body['level'];
 $bosses = (int) $body['bosses'];
 $seed = (int) $body['seed'];
+$party = (int) $body['party'];
 $weapon = is_string($body['weapon'] ?? null) ? substr($body['weapon'], 0, 16) : '';
 
 $token = is_string($body['token'] ?? null) ? $body['token'] : '';
@@ -207,7 +251,7 @@ $pdo->beginTransaction();
 
 try {
     $held = $pdo->prepare(
-        'SELECT time_ms, bosses, kills FROM scores WHERE name = ? FOR UPDATE'
+        "SELECT time_ms, bosses, kills FROM {$table} WHERE name = ? FOR UPDATE"
     );
     $held->execute([$name]);
     $previous = $held->fetch();
@@ -222,14 +266,23 @@ try {
             && $kills > (int) $previous['kills']);
 
     if ($better) {
-        $pdo->prepare(
-            'INSERT INTO scores (name, time_ms, kills, level, bosses, weapon, seed, created_at)
-                  VALUES (:name, :time_ms, :kills, :level, :bosses, :weapon, :seed, NOW())
+        // The party table carries one more column; the solo one has no room
+        // for it, and a run on it is a party of one by definition.
+        $columns = $board === 'party' ? ', party' : '';
+        $values = $board === 'party' ? ', :party' : '';
+        $update = $board === 'party' ? ', party = VALUES(party)' : '';
+
+        $insert = $pdo->prepare(
+            "INSERT INTO {$table}
+                    (name, time_ms, kills, level, bosses, weapon, seed{$columns}, created_at)
+                  VALUES (:name, :time_ms, :kills, :level, :bosses, :weapon, :seed{$values}, NOW())
              ON DUPLICATE KEY UPDATE
                   time_ms = VALUES(time_ms), kills = VALUES(kills), level = VALUES(level),
-                  bosses = VALUES(bosses), weapon = VALUES(weapon), seed = VALUES(seed),
-                  created_at = VALUES(created_at)'
-        )->execute([
+                  bosses = VALUES(bosses), weapon = VALUES(weapon), seed = VALUES(seed){$update},
+                  created_at = VALUES(created_at)"
+        );
+
+        $fields = [
             ':name' => $name,
             ':time_ms' => $timeMs,
             ':kills' => $kills,
@@ -237,7 +290,12 @@ try {
             ':bosses' => $bosses,
             ':weapon' => $weapon,
             ':seed' => $seed,
-        ]);
+        ];
+        if ($board === 'party') {
+            $fields[':party'] = $party;
+        }
+
+        $insert->execute($fields);
     }
 
     $pdo->commit();
@@ -252,11 +310,10 @@ try {
  * accumulating forever on a shared host. The subselect is wrapped because
  * MySQL will not delete from a table it is also selecting from directly.
  */
-$keep = (int) $limits['boardSize'];
 $pdo->exec(
-    "DELETE FROM scores WHERE id NOT IN (
+    "DELETE FROM {$table} WHERE id NOT IN (
         SELECT id FROM (
-            SELECT id FROM scores
+            SELECT id FROM {$table}
              ORDER BY time_ms DESC, bosses DESC, kills DESC
              LIMIT {$keep}
         ) AS survivors
@@ -268,10 +325,10 @@ $pdo->exec(
 $keepFor = max((int) SUBMIT_WINDOW_MINUTES, (int) AUTH_WINDOW_MINUTES);
 $pdo->exec("DELETE FROM submissions WHERE created_at < (NOW() - INTERVAL {$keepFor} MINUTE)");
 
-$board = readBoard($pdo, (int) $limits['boardSize']);
+$ranked = readBoard($pdo, $board, $keep);
 
 $rank = -1;
-foreach ($board as $index => $entry) {
+foreach ($ranked as $index => $entry) {
     if (mb_strtolower($entry['name'], 'UTF-8') === mb_strtolower($name, 'UTF-8')) {
         $rank = $index;
         break;
@@ -285,7 +342,7 @@ foreach ($board as $index => $entry) {
  * to cross the wire again once the client has it, and every extra copy is
  * another place it can be read out of.
  */
-$answer = ['board' => $board, 'rank' => $rank, 'name' => $name];
+$answer = ['board' => $ranked, 'rank' => $rank, 'name' => $name];
 if ($granted !== null) {
     $answer['token'] = $granted;
 }

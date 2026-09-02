@@ -12,6 +12,7 @@ import { takeSpoil } from './systems/chests';
 import { mountLanguageSwitch } from './ui/language';
 import { HttpAccounts } from './net/accounts';
 import { HttpLeaderboard } from './net/leaderboard';
+import { boardFor } from './core/scores';
 import { Hud, requireElement } from './ui/hud';
 import { t } from './i18n';
 import { AccountScreen } from './ui/account';
@@ -117,7 +118,7 @@ async function main(): Promise<void> {
 
   // The button beside "Run again". A phone has no L key, and the board is the
   // one screen a player is meant to want to look at twice.
-  document.getElementById('result-records')?.addEventListener('click', openRecords);
+  document.getElementById('result-records')?.addEventListener('click', openRecordsForThisRun);
   // And from the opening screen, so the board is a thing you can look at before
   // you have anything to put on it — which is the whole reason to chase it.
   document.getElementById('start-records')?.addEventListener('click', openRecords);
@@ -465,11 +466,16 @@ async function main(): Promise<void> {
       }
 
       if (input.consumePressed('KeyL')) {
-        openRecords();
+        openRecordsForThisRun();
         return;
       }
       if (input.consumePressed('KeyR')) restart();
     }
+  }
+
+  /** Opens the board a finished run belongs on, rather than always the solo one. */
+  function openRecordsForThisRun(): void {
+    void recordsScreen.showFor(boardFor(world.players.length), placedAs);
   }
 
   function openRecords(): void {
@@ -708,8 +714,19 @@ async function main(): Promise<void> {
    * flight while the horde is on screen is a request that can cost a frame.
    */
   async function offerTheBoard(world: World): Promise<void> {
+    /*
+     * A guest never submits.
+     *
+     * The run belongs to one party, so four people offering it would be four
+     * rows for one run — and the guest's world is a copy of the host's, told
+     * to it after the fact. The host has the authority and the roster, so the
+     * host is the one who files it.
+     */
+    if (net?.guest === true) return;
+
     const finished = world;
-    const result = await leaderboard.read();
+    const kind = boardFor(world.players.length);
+    const result = await leaderboard.read(kind);
 
     // The player may have restarted while this was in the air. Anything shown
     // now would be about a run that is already over and gone.

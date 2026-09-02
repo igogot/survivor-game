@@ -136,7 +136,9 @@ export const EN = {
   // The leaderboard. One row per name, and the only screen in the game that
   // shows anybody else.
   'board.title': 'Records',
-  'board.sub': 'The hundred longest runs anybody has finished',
+  'board.sub': 'The longest runs anybody has finished',
+  'board.tabSolo': 'Solo',
+  'board.tabParty': 'Party',
   'board.open': 'Records',
   'board.back': 'Back',
   'board.loading': 'Loading…',

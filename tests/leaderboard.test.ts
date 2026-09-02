@@ -36,6 +36,7 @@ function row(over: Record<string, unknown> = {}): Record<string, unknown> {
     bosses: Math.floor(seconds / CONFIG.boss.interval),
     weapon: 'bolt',
     seed: 42,
+    party: 1,
     ...over,
   };
 }
@@ -125,5 +126,39 @@ describe('parseBoard', () => {
 
     expect(board).toHaveLength(1);
     expect(board[0].timeMs).toBe(800_000);
+  });
+});
+
+describe('keeping the boards apart', () => {
+  /**
+   * A party row on the solo table would be a record nobody could match, and a
+   * solo row on the party table would be one anybody could. Whichever way a
+   * stray row arrives, the screen it lands on refuses it.
+   */
+  it('drops party rows from the solo board', () => {
+    const mixed = { board: [row({ name: 'solo' }), row({ name: 'four', party: 4 })] };
+    expect(parseBoard(mixed, 'solo').map((entry) => entry.name)).toEqual(['solo']);
+  });
+
+  it('drops solo rows from the party board', () => {
+    const mixed = { board: [row({ name: 'solo' }), row({ name: 'four', party: 4 })] };
+    expect(parseBoard(mixed, 'party').map((entry) => entry.name)).toEqual(['four']);
+  });
+
+  it('cuts the party board at fifty', () => {
+    const many = Array.from({ length: 120 }, (_, i) =>
+      row({ name: `p${i}`, timeMs: 10_000 + i, party: 3 }),
+    );
+    expect(parseBoard({ board: many }, 'party')).toHaveLength(50);
+  });
+
+  /** Rows written before parties existed carry no size, and all of them were solo. */
+  it('reads a row from before parties as a solo run', () => {
+    const old = row();
+    delete (old as Record<string, unknown>).party;
+
+    const board = parseBoard({ board: [old] }, 'solo');
+    expect(board).toHaveLength(1);
+    expect(board[0].party).toBe(1);
   });
 });

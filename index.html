@@ -774,6 +774,33 @@
         font-size: 12px;
       }
 
+      .tabs {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        margin-bottom: 12px;
+      }
+
+      /* Quieter than an action button: switching boards is a look, not a
+         decision, and two loud buttons here would compete with the rows. */
+      .tab {
+        pointer-events: auto;
+        padding: 5px 14px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        font-family: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .tab[aria-pressed='true'] {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: rgba(110, 231, 160, 0.08);
+      }
+
       .record {
         display: grid;
         grid-template-columns: 2.5em minmax(0, 1fr) 4.5em minmax(0, 8.5em) 2.5em;
@@ -817,6 +844,10 @@
       /* "Siege Harpoon" and "Orbit Blades" are two words and wrapped, which
          made those rows taller than the rest and the whole column ragged. A
          hundred rows only scan if every one of them is the same height. */
+      .party-size {
+        color: var(--muted);
+      }
+
       .record .with {
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1475,7 +1506,27 @@
     <div class="overlay overlay--above" id="records" hidden>
       <div class="panel panel--help">
         <h2 data-i18n="board.title">Records</h2>
-        <p class="sub" data-i18n="board.sub">The hundred longest runs anybody has finished</p>
+        <p class="sub" data-i18n="board.sub">The longest runs anybody has finished</p>
+        <div class="tabs" role="group">
+          <button
+            class="tab"
+            id="records-tab-solo"
+            type="button"
+            aria-pressed="true"
+            data-i18n="board.tabSolo"
+          >
+            Solo
+          </button>
+          <button
+            class="tab"
+            id="records-tab-party"
+            type="button"
+            aria-pressed="false"
+            data-i18n="board.tabParty"
+          >
+            Party
+          </button>
+        </div>
         <ol id="records-body" class="records"></ol>
         <p class="hint" id="records-status"></p>
         <div class="actions">

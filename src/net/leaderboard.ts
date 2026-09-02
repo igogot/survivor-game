@@ -1,6 +1,6 @@
-import { BOARD_SIZE, cleanName, faultInScore, rankScores } from '../core/scores';
+import { BOARD_SIZES, boardFor, cleanName, faultInScore, rankScores } from '../core/scores';
 import { saveIdentity, tokenFor } from './identity';
-import type { Score } from '../core/scores';
+import type { BoardKind, Score } from '../core/scores';
 
 /**
  * The board, as the rest of the game sees it.
@@ -11,9 +11,14 @@ import type { Score } from '../core/scores';
  * file changes.
  */
 export interface Leaderboard {
-  /** The top hundred, best first. Empty when the board cannot be reached. */
-  read(): Promise<BoardResult>;
-  /** Sends a run. Returns where it landed, or why it was refused. */
+  /** One board, best first. Empty when it cannot be reached. */
+  read(kind: BoardKind): Promise<BoardResult>;
+  /**
+   * Sends a run to whichever board it belongs on.
+   *
+   * The caller does not choose: the party size on the score decides, so a run
+   * cannot be filed against the wrong table by a screen that forgot to ask.
+   */
   submit(score: Score): Promise<SubmitResult>;
 }
 
@@ -54,13 +59,13 @@ const TIMEOUT_MS = 6000;
 export class HttpLeaderboard implements Leaderboard {
   constructor(private readonly endpoint: string = ENDPOINT) {}
 
-  async read(): Promise<BoardResult> {
+  async read(kind: BoardKind): Promise<BoardResult> {
     try {
-      const response = await this.request({ method: 'GET' });
+      const response = await this.request({ method: 'GET' }, kind);
       if (!response.ok) return UNREACHABLE;
 
       const body: unknown = await response.json();
-      return { board: parseBoard(body), reachable: true };
+      return { board: parseBoard(body, kind), reachable: true };
     } catch {
       // Offline, blocked, timed out, CORS — all the same to a player looking
       // at a run they just finished, and none of them is worth a stack trace.
@@ -75,6 +80,7 @@ export class HttpLeaderboard implements Leaderboard {
     if (faultInScore(score) !== null) return { ok: false, reason: 'invalid' };
 
     try {
+      const kind = boardFor(score.party);
       const response = await this.request({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -82,7 +88,7 @@ export class HttpLeaderboard implements Leaderboard {
         // name — see `tokenFor`. A free name arrives with an empty one, which
         // is what claims it.
         body: JSON.stringify({ ...score, token: tokenFor(score.name) }),
-      });
+      }, kind);
 
       if (response.status === 429) return { ok: false, reason: 'too-many' };
       // Somebody else holds this name. A different refusal from a disbelieved
@@ -104,7 +110,7 @@ export class HttpLeaderboard implements Leaderboard {
 
       return {
         ok: true,
-        board: parseBoard(body),
+        board: parseBoard(body, kind),
         rank: typeof body.rank === 'number' ? body.rank : -1,
       };
     } catch {
@@ -120,8 +126,12 @@ export class HttpLeaderboard implements Leaderboard {
    * frozen. The run is already over by then, so there is nothing to protect
    * except the player's patience.
    */
-  private request(init: RequestInit): Promise<Response> {
-    return fetch(this.endpoint, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+  private request(init: RequestInit, kind: BoardKind): Promise<Response> {
+    // Which board, as a query parameter rather than a second URL: one endpoint
+    // means one place that knows how to rank, prune and refuse, and a second
+    // copy of that is where the two boards would start disagreeing.
+    const url = `${this.endpoint}?board=${kind}`;
+    return fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
   }
 }
 
@@ -136,7 +146,7 @@ const UNREACHABLE: BoardResult = { board: [], reachable: false };
  * missing field or a name full of control characters is skipped, and one bad
  * row never costs the other ninety-nine.
  */
-export function parseBoard(body: unknown): readonly Score[] {
+export function parseBoard(body: unknown, kind: BoardKind = 'solo'): readonly Score[] {
   if (typeof body !== 'object' || body === null) return [];
 
   const rows = (body as { board?: unknown }).board;
@@ -152,7 +162,12 @@ export function parseBoard(body: unknown): readonly Score[] {
   // sorts by the same rule, so this normally changes nothing — but it is the
   // one line that guarantees the board on screen is in the order this game
   // says it should be in.
-  return rankScores(scores, BOARD_SIZE);
+  // Cut to the size of the board it came from, and only rows that belong on
+  // it: a party run on the solo table would be a record nobody could match.
+  return rankScores(
+    scores.filter((score) => boardFor(score.party) === kind),
+    BOARD_SIZES[kind],
+  );
 }
 
 function parseScore(row: unknown): Score | null {
@@ -170,6 +185,8 @@ function parseScore(row: unknown): Score | null {
     bosses: whole(value.bosses),
     weapon: typeof value.weapon === 'string' ? value.weapon : '',
     seed: whole(value.seed),
+    // Absent on rows written before parties existed, and those were all solo.
+    party: typeof value.party === 'number' ? value.party : 1,
   };
 
   return faultInScore(score) === null ? score : null;

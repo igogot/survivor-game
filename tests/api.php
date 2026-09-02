@@ -65,6 +65,7 @@ function run(array $over = []): array
         'bosses' => (int) floor($seconds / 600),
         'weapon' => 'bolt',
         'seed' => 42,
+        'party' => 1,
     ], $over);
 }
 
@@ -125,6 +126,33 @@ is('a missing field', faultInRun(['name' => 'x'], $limits), 'shape');
 is('an uncleaned name', faultInRun(run(['name' => '  padded  ']), $limits), 'name');
 is('an empty name', faultInRun(run(['name' => '']), $limits), 'name');
 is('a name with an override in it', faultInRun(run(['name' => "bad\u{202e}name"]), $limits), 'name');
+
+echo "parties
+";
+is('a solo run passes', faultInRun(run(['party' => 1]), $limits), null);
+is('a party of four passes', faultInRun(run(['party' => 4]), $limits), null);
+is('a party of nobody is refused', faultInRun(run(['party' => 0]), $limits), 'party');
+is('an impossible party is refused', faultInRun(run(['party' => 99]), $limits), 'party');
+is('a fractional party is refused', faultInRun(run(['party' => 2.5]), $limits), 'shape');
+is('a missing party is refused', faultInRun(array_diff_key(run(), ['party' => 0]), $limits), 'shape');
+
+/*
+ * The coupling. perPlayerArrivals splits a party's multiplier between more
+ * bodies arriving and tougher ones; at 0 a party meets a solo player's crowd
+ * with more health in it, so the kill ceiling does not move. Read from the
+ * limits file so raising that exponent moves this with it.
+ */
+$soloKills = ceilingFrom($limits['killCeiling'], 600.0);
+$fourKills = $soloKills * pow(4, (float) $limits['perPlayerArrivals']);
+if ((float) $limits['perPlayerArrivals'] === 0.0) {
+    check('a party gets the same kill ceiling while arrivals do not scale', $fourKills === $soloKills);
+} else {
+    check('a party gets a larger kill ceiling once arrivals scale', $fourKills > $soloKills);
+}
+
+is('the party board keeps fifty', (int) $limits['boardSizes']['party'], 50);
+is('the solo board keeps a hundred', (int) $limits['boardSizes']['solo'], 100);
+
 
 echo "the exact bound, spelled out\n";
 $interval = (int) $limits['bossIntervalSeconds'];
