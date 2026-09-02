@@ -15,12 +15,19 @@ const SEEDS = [42, 1337, 99, 7, 11, 2024, 5, 808];
  * How long each run is watched.
  *
  * A run has no length any more — the only ending is death — so this is a
- * window, not a duration. It holds the first boss and the two minutes after it,
- * which is where the interesting part of the table has always been, and it
- * keeps the stand at about a minute and a half. A bot still alive at the bell
- * is reported as alive rather than counted as a loss.
+ * window, not a duration. A bot still alive at the bell is reported as alive
+ * rather than counted as a loss.
+ *
+ * Twelve minutes, stated rather than derived. It used to be
+ * `CONFIG.boss.interval + 120` — the first boss and the two minutes after it —
+ * which was the same twelve minutes back when a boss came every ten. Halving
+ * the interval would have quietly halved this too, and every table in the
+ * README would have become incomparable with every table before it, for a
+ * reason nobody would have found written down anywhere. The window is a
+ * question about the run, not about the boss clock: twelve minutes now holds
+ * two duels and what follows them.
  */
-const WINDOW = CONFIG.boss.interval + 120;
+const WINDOW = 12 * 60;
 
 it('plays a full run on every seed', () => {
   const rows: string[] = ['seed      time   outcome   kills   level   bosses'];

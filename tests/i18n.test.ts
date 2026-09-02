@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import markup from '../index.html?raw';
+import { CONFIG } from '../src/config';
 import { SPOILS } from '../src/data/spoils';
 import { UPGRADES } from '../src/data/upgrades';
 import { WEAPONS } from '../src/data/weapons';
@@ -205,8 +206,12 @@ describe('what the screens say', () => {
       .map((row) => row.detail)
       .join('\n');
 
-    // The boss cadence, which the English panel is already pinned to.
-    expect(details).toContain('10:00');
+    // The boss cadence, read from the constant the panel reads rather than
+    // typed out. Written as a literal it would have to be edited every time
+    // somebody retunes the clock — which is the exact rot the panel keeps its
+    // own numbers out of `CONFIG` to avoid, and this test existed to guard.
+    const minutes = Math.floor(CONFIG.boss.interval / 60);
+    expect(details).toContain(`${String(minutes).padStart(2, '0')}:00`);
   });
 });
 
