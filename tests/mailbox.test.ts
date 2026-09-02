@@ -13,7 +13,7 @@ import type { LobbyMessage } from '../src/net/lobby';
  * rather than a broken game.
  */
 
-const HELLO: LobbyMessage = { kind: 'hello', code: 'ABC234', from: 'GUEST' };
+const HELLO: LobbyMessage = { kind: 'hello', code: 'ABC234', from: 'GUEST', starter: 'bolt' };
 
 function wrapped(message: LobbyMessage): Envelope {
   return { n: nonce(), m: message };

@@ -53,7 +53,7 @@ export const EN = {
   'mode.title': 'Survivor',
   'mode.sub': 'One life, no finish line. Alone or with company.',
   'mode.solo': 'Solo run',
-  'mode.soloHint': 'One player against the horde. Everything below is about this.',
+  'mode.soloHint': 'One player against the horde.',
   'mode.party': 'Multiplayer',
   'mode.partyHint': 'Up to four in one horde. Gather a team by code.',
   'mode.back': 'Back',
@@ -102,9 +102,12 @@ export const EN = {
   'room.beginAlone': 'Waiting for somebody to join',
   'room.beginHint': 'Everyone plays in one world. This machine runs it.',
   'room.guestWait': 'Waiting for the host to start.',
+  'room.weapon': 'You bring',
+  'room.change': 'Change',
   'room.leave': 'Leave the team',
   'room.notYet': 'The team gathers, but the run itself is not networked yet — that is the next piece of work, and this screen is the door it opens onto.',
-  'room.reach': 'A code reaches the other windows of this browser. It does not leave this machine yet.',
+  'room.reach':
+    'A code reaches anybody, on any machine. A few networks will not let two players through to each other.',
 
   'start.title': 'Survivor',
   'start.sub': 'One life, no finish line. Choose what you open with.',
