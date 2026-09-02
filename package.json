@@ -15,6 +15,7 @@
     "test:api": "php tests/api.php",
     "test:watch": "vitest",
     "balance": "vitest run --config vitest.balance.config.ts",
+    "curve": "vitest run --config vitest.curve.config.ts",
     "endless": "vitest run --config vitest.endless.config.ts",
     "perf": "vitest run --config vitest.perf.config.ts"
   },

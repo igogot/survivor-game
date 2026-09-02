@@ -145,8 +145,30 @@ export const CONFIG = {
     /** Hard ceiling that protects the frame rate. */
     maxEnemies: 600,
     baseInterval: 0.8,
-    /** Spawn frequency grows linearly with this. Quadratic growth pins the cap. */
-    pressurePerMinute: 0.45,
+    /**
+     * Spawn frequency grows linearly with this. Quadratic growth pins the cap.
+     *
+     * Raised from 0.45, and the number came from `npm run curve` rather than from
+     * taste. The probe said the game is thin at the start rather than soft at
+     * the end: two minutes in, a tenth of the ceiling is occupied, and it stays
+     * under a third until minute eight. The cap only binds around twelve, so
+     * there was headroom to spend.
+     *
+     * Raising this alone costs boss kills badly — runs start ending before
+     * minute ten, which is where the boss used to be. It only pays for itself
+     * alongside a boss every five minutes, which is why the two landed
+     * together. See the README for both halves.
+     *
+     * Why 0.55 and not more. The stand cannot tell 0.55 from 0.7: an
+     * intermediate 0.58 measured *worse* than 0.7 on twenty seeds, which is
+     * impossible and is therefore the size of the noise. What can tell them
+     * apart is the opening. A player who has not learned to kite — the circling
+     * bot in `runHeadless` — reaches level two on three seeds of four at 0.55
+     * and on none at all at 0.7. Losing a run is the game; never seeing a
+     * level-up screen is the game failing to teach itself. When one measure is
+     * blind and the other is not, the number comes from the one that can see.
+     */
+    pressurePerMinute: 0.55,
     /** Enemies added per spawn tick, growing with this. */
     batchPerMinute: 0.3,
     hpScalePerMinute: 0.5,

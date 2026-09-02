@@ -9,7 +9,7 @@ import { runBot } from './bot';
  * this table comes from a change in the game and not from luck. Run it with
  * `npm run balance` after touching a spawn curve, a weapon or an upgrade.
  */
-const SEEDS = [42, 1337, 99, 7, 11, 2024, 5, 808];
+const SEEDS = [42, 1337, 99, 7, 11, 2024, 5, 808, 3, 17, 23, 55, 71, 88, 101, 202, 303, 404, 505, 606];
 
 /**
  * How long each run is watched.
