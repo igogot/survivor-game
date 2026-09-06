@@ -6,7 +6,8 @@ import type { SpriteName } from '../src/data/sprites';
 /**
  * The sprites with no artwork behind them, and why each one has none.
  *
- * A shockwave is an expanding outline and a dungeon tileset has no such thing.
+ * A shockwave is an expanding outline and a dungeon tileset has no such thing;
+ * the halo under a hostile shot is not a thing at all, only a glow around one.
  * The lance is worse: it is the one frame stretched to fit its own reach, and a
  * 16px icon smeared eight times along one axis reads as a smudge rather than as
  * a weapon. The harpoon is neither — the sheet has spikes and one of them was
@@ -14,16 +15,24 @@ import type { SpriteName } from '../src/data/sprites';
  * sheet and both are grey on brown, and at ten pixels against eighteen that is
  * the entire silhouette. Drawn, the spike is a white mask and takes the
  * weapon's own green, which no tile could have given it. The trail's fire is
- * the plainest of the four: the only flame on the sheet is a wall sconce,
- * mortared into its own bricks.
+ * the plainest: the only flame on the sheet is a wall sconce, mortared into its
+ * own bricks.
+ *
+ * The hex is the harpoon's problem twice over. It was tile 114, a green flask,
+ * while `gem` is a blue flask and `gemRich` a red one — so the horde's shot was
+ * the same object as the two things lying in the grass, at nearly the same
+ * size, and green in a field whose commonest body is a green slime. A tile
+ * cannot be tinted out of that. A mask can.
  *
  * Listing them here rather than allowing any gap is the point — a sprite that
  * quietly lost its art would otherwise look like a deliberate choice.
  */
 const DRAWN_ONLY: readonly SpriteName[] = [
   'ring',
+  'threat',
   'spear',
   'harpoon',
+  'hex',
   'ember',
   'ember2',
   'ember3',

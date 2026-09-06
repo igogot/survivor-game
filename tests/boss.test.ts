@@ -3,6 +3,7 @@ import { BOSS } from '../src/data/enemies';
 import { BOSS_ABILITIES, bossAbility, rotationStart } from '../src/data/bossAbilities';
 import { CONFIG } from '../src/config';
 import { applyDamage } from '../src/systems/damage';
+import { HOSTILE_COLOR } from '../src/systems/enemyAttack';
 import { bossAbilitySystem } from '../src/systems/bossAbility';
 import { spawnEnemyAt } from '../src/systems/spawn';
 import { World } from '../src/world/world';
@@ -220,6 +221,9 @@ describe('what each boss does', () => {
 
     const shots = hostileShots(aimed);
     expect(shots).toHaveLength(volley.power);
+    // A boss's shot is a hostile shot, and wears what every hostile shot wears
+    // — the boss goes through the caster's own `hurlHex` to get it.
+    for (const shot of shots) expect(shot.color).toBe(HOSTILE_COLOR);
     const angles = shots.map((shot) => Math.atan2(shot.vy, shot.vx));
     // All of them within a narrow fan: one aimed attack, not three.
     expect(Math.max(...angles) - Math.min(...angles)).toBeLessThan(0.6);

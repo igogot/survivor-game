@@ -3,7 +3,7 @@
  *
  * `src/render/atlas.ts` owns the shapes this game falls back to; this file owns
  * the artwork it prefers. Both feed the same packed atlas, so the renderer
- * never learns which one it got вЂ” see `createTextures()`.
+ * never learns which one it got — see `createTextures()`.
  *
  * The art is Kenney's "Tiny Dungeon" (CC0), shipped as the sheet it comes in
  * rather than re-exported: 16px tiles in a 12-column grid, already packed. The
@@ -28,20 +28,30 @@ export const SHEET_TILES = 132;
  * crab so it looks like it takes a while to kill, and the boss is a spider so
  * it cannot be mistaken for a large brute.
  *
- * `ring`, `spear`, `harpoon` and `ember` are absent on purpose, each for its
- * own reason. The shockwave is an expanding outline with no equivalent in a
- * dungeon tileset. The lance is stretched to the reach of its thrust, and a
- * 16px icon smeared eight times along one axis reads as a smudge rather than
- * as a weapon. The harpoon is the interesting one: the sheet does have spikes,
- * and that is the problem вЂ” every one of them is grey on brown like the
- * dagger below, so at ten pixels against eighteen the shot read as a larger
- * bolt. A drawn frame is a white mask and takes the weapon's own colour, which
- * is the one thing that tells two small shapes apart across a screen. The
- * trail's fire is the plainest case of the four: the only flame on the sheet
- * is a wall sconce, mortared into its own bricks.
+ * `ring`, `threat`, `spear`, `harpoon`, `ember` and `hex` are absent on purpose,
+ * each for its own reason. The shockwave is an expanding outline with no
+ * equivalent in a dungeon tileset, and the halo under a hostile shot is not a
+ * thing at all, only a glow around one. The lance is stretched to the reach of
+ * its
+ * thrust, and a 16px icon smeared eight times along one axis reads as a smudge
+ * rather than as a weapon. The harpoon is the interesting one: the sheet does
+ * have spikes, and that is the problem — every one of them is grey on brown
+ * like the dagger below, so at ten pixels against eighteen the shot read as a
+ * larger bolt. A drawn frame is a white mask and takes the weapon's own colour,
+ * which is the one thing that tells two small shapes apart across a screen. The
+ * trail's fire is the plainest case: the only flame on the sheet is a wall
+ * sconce, mortared into its own bricks.
  *
- * All four keep their drawn shape even when the artwork loads. Anything
- * missing here falls through to `SPRITE_DRAWERS`.
+ * The hex is the harpoon's mistake made twice over, and it took a screenshot of
+ * a full field to see it. It was tile 114, a green flask — while `gem` is a
+ * blue flask and `gemRich` a red one. So the horde's shot was the same object
+ * as the two things lying in the grass, at nearly the same size, and green in a
+ * field whose commonest body is a green slime. Cut from the sheet it could not
+ * be tinted out of that; drawn, it is a white mask and takes the one colour
+ * nothing else on the field wears. See `HOSTILE_COLOR`.
+ *
+ * All six keep their drawn shape even when the artwork loads. Anything missing
+ * here falls through to `SPRITE_DRAWERS`.
  */
 export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
   playerBolt: 98, // bare-headed soldier: the one who shoots first
@@ -57,7 +67,6 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
   spawnling: 124, // small round blob, the spore itself
   caster: 109, // robed figure, the only humanoid in the horde
   bomber: 121, // pale wisp, the least solid thing in the sheet
-  hex: 114, // green flask, which reads as something thrown
   boss: 122, // spider
   bolt: 103, // dagger, rotated to face its travel
   orb: 118, // axe head, which reads as a blade when it circles
@@ -70,7 +79,7 @@ export const SPRITE_TILES: Readonly<Partial<Record<SpriteName, number>>> = {
  * The flat colour every tile is painted on.
  *
  * Kenney's tiles are drawn for a dungeon floor, so each one sits on an opaque
- * rounded card вЂ” 57% of the boss tile is this single colour. Left in, every
+ * rounded card — 57% of the boss tile is this single colour. Left in, every
  * entity would carry a visible dark tile around it and a crowd would read as a
  * grid. It appears nowhere inside the sprites themselves, which is what makes
  * removing it safe.

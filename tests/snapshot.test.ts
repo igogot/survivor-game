@@ -5,6 +5,8 @@ import { SPRITE_SPECS } from '../src/render/atlas';
 import { VIEW_RADIUS, applySnapshot, encodeSnapshot } from '../src/net/snapshot';
 import { applyUpgrade } from '../src/systems/progression';
 import { BOSS, ENEMIES } from '../src/data/enemies';
+import { enemyAttackSystem } from '../src/systems/enemyAttack';
+import { enemyById } from '../src/data/enemies';
 import { rollEnemyDef, spawnEnemy, spawnEnemyAt } from '../src/systems/spawn';
 import { stepWorld } from '../src/world/step';
 import { World } from '../src/world/world';
@@ -146,12 +148,26 @@ describe('what survives the journey', () => {
 
   it('carries the shots, the gems, the fire and the rings', () => {
     const host = midRun(99, 260);
+    // A caster, put there on purpose: the bot's run ends long before one would
+    // unlock, and without a hex in the air the hostility assertion below would
+    // be comparing false to false.
+    const caster = enemyById('caster');
+    if (caster === undefined) throw new Error('the enemy table lost the caster');
+    spawnEnemyAt(host, caster, 1, host.players[0].x + 200, host.players[0].y);
+    host.enemies[host.enemies.length - 1].attackCooldown = 0;
+    enemyAttackSystem(host, DT);
+    expect(host.projectiles.some((shot) => shot.hostile)).toBe(true);
+
     const guest = received(host);
 
     expect(guest.projectiles).toHaveLength(host.projectiles.length);
     for (let i = 0; i < guest.projectiles.length; i++) {
       expect(guest.projectiles[i].sprite).toBe(host.projectiles[i].sprite);
       expect(guest.projectiles[i].color).toBe(host.projectiles[i].color);
+      // Whose shot it is travels too. A guest never steps a simulation, so it
+      // has no other way to know — and this is what decides whether the shot
+      // arrives wearing the halo that makes it findable.
+      expect(guest.projectiles[i].hostile).toBe(host.projectiles[i].hostile);
       expectPlaced(guest.projectiles[i].x, host.projectiles[i].x, `shot ${i}`);
     }
 

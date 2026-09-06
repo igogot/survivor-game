@@ -212,6 +212,76 @@ function paintEmber(ctx: CanvasRenderingContext2D, size: number, index: number):
 }
 
 /**
+ * The halo every hostile shot wears, as bands on the ember's own grid.
+ *
+ * A glow rather than an outline, and that distinction is the whole licence for
+ * it. A hex is fourteen pixels across in a field that holds six hundred bodies,
+ * and no amount of shaping fourteen pixels makes them findable — at that size a
+ * frame can say hollow or solid and nothing finer. So the shot keeps being
+ * drawn at exactly the radius that damages, and the thing that makes it visible
+ * sits outside that radius announcing nothing: a halo hits nobody, so it is
+ * free to be twice the size.
+ *
+ * Banded on the tile grid rather than smoothly faded, for the reason the ember
+ * stopped being a curve. Everything on this screen is 16px art blown up, and a
+ * soft radial gradient would be the one thing in the game with no pixels in it.
+ */
+const THREAT_GRID = 16;
+
+/** How bright each band is, from the middle out. */
+const THREAT_RINGS: readonly number[] = [1, 0.72, 0.46, 0.26, 0.12];
+
+/**
+ * Which band a cell falls in, or -1 when it lies outside the halo.
+ *
+ * Measured to the middle of the cell, which is the opposite of what
+ * `emberCellFits` does and deliberately so: the ember may not paint a pixel
+ * past the ground it burns, and the halo burns nothing at all. What it does owe
+ * is roundness — measured to the corner, the outermost band would square off
+ * and a dozen shots would read as a row of tiles.
+ */
+export function threatBand(col: number, row: number): number {
+  const middle = THREAT_GRID / 2;
+  const reach = Math.hypot(col + 0.5 - middle, row + 0.5 - middle) / middle;
+  if (reach > 1) return -1;
+  return Math.min(THREAT_RINGS.length - 1, Math.floor(reach * THREAT_RINGS.length));
+}
+
+export { THREAT_GRID, THREAT_RINGS };
+
+function paintThreat(ctx: CanvasRenderingContext2D, size: number): void {
+  const cell = size / THREAT_GRID;
+
+  ctx.save();
+  ctx.fillStyle = WHITE;
+  for (let row = 0; row < THREAT_GRID; row++) {
+    for (let col = 0; col < THREAT_GRID; col++) {
+      const band = threatBand(col, row);
+      if (band < 0) continue;
+      ctx.globalAlpha = THREAT_RINGS[band];
+      // Whole cells, so the glow scales up in steps rather than in a smear.
+      ctx.fillRect(col * cell, row * cell, cell, cell);
+    }
+  }
+  ctx.restore();
+}
+
+/** How thick the horde's shot is drawn, as a fraction of its own frame. */
+const HEX_RIM = 0.18;
+
+/**
+ * The ring a hex is drawn as, sized so its outer edge lands on the radius that
+ * hits.
+ *
+ * Exported because it is the one promise a projectile frame makes to the
+ * simulation, and this project keeps those in tests rather than in comments.
+ */
+export function hexRing(size: number): { readonly radius: number; readonly width: number } {
+  const width = size * HEX_RIM;
+  return { width, radius: size / 2 - width / 2 };
+}
+
+/**
  * Regular polygon, first vertex pointing up.
  */
 function polygon(ctx: CanvasRenderingContext2D, size: number, sides: number, inset: number): void {
@@ -481,13 +551,27 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     ctx.fill();
   },
 
-  // A small ring rather than a solid dot: the one projectile the player must
-  // read as incoming, so it must not look like their own bolt.
+  /**
+   * A ring rather than a solid dot: the one projectile the player must read as
+   * incoming, so it must not look like their own bolt.
+   *
+   * That was already written here, and it stopped being true of anything on
+   * screen the moment the artwork loaded: the frame lost to tile 114, and tile
+   * 114 is a green flask, on a field whose commonest body is a green slime and
+   * whose two pickups are flasks as well. See `SPRITE_TILES`.
+   *
+   * The stroke is laid inside the frame the way the shockwave's is, so scaling
+   * the sprite to `radius * 2` puts its outer edge exactly on the radius that
+   * damages. It used to be inset by a whole further stroke width, which drew
+   * the shot at six sevenths of what it hit — small, in the one direction a
+   * projectile must never be drawn small.
+   */
   hex: (ctx, size) => {
+    const ring = hexRing(size);
     ctx.strokeStyle = WHITE;
-    ctx.lineWidth = Math.max(2, size * 0.16);
+    ctx.lineWidth = ring.width;
     ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2 - ctx.lineWidth, 0, Math.PI * 2);
+    ctx.arc(size / 2, size / 2, ring.radius, 0, TAU);
     ctx.stroke();
   },
 
@@ -651,6 +735,9 @@ export const SPRITE_DRAWERS: Readonly<Record<SpriteName, Draw>> = {
     ctx.fillRect(size / 2 - size * 0.08, size * 0.38, size * 0.16, size * 0.24);
   },
 
+  // Bands out to the frame's edge, drawn under a hostile shot and nothing else.
+  threat: (ctx, size) => paintThreat(ctx, size),
+
   // Stroked just inside the frame, so scaling the sprite to `radius * 2` puts
   // the outer edge of the stroke exactly on the shockwave's radius.
   ring: (ctx, size) => {
@@ -690,6 +777,7 @@ export const SPRITE_SPECS: readonly FrameSpec[] = [
   { name: 'gemRich', size: 32 },
   { name: 'chest', size: 48 },
   { name: 'ring', size: 96 },
+  { name: 'threat', size: 64 },
 ];
 
 /**

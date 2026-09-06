@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import { enemyById } from '../src/data/enemies';
-import { enemyAttackSystem } from '../src/systems/enemyAttack';
+import { HOSTILE_COLOR, enemyAttackSystem } from '../src/systems/enemyAttack';
 import { movementSystem } from '../src/systems/movement';
 import { projectileSystem } from '../src/systems/projectiles';
 import { hordeHpScale, spawnEnemyAt } from '../src/systems/spawn';
@@ -170,6 +170,27 @@ describe('hostile projectiles', () => {
     expect(world.phase).toBe('dead');
   });
 
+  /**
+   * A warning has to mean one thing.
+   *
+   * Every hostile shot in the game leaves through `hurlHex` — the caster's and
+   * all three of the boss's — so this is the single place a new one could
+   * forget to be recognisable. It used to carry the thrower's own colour, and
+   * that was invisible twice: the frame came off the sheet, so the tint was
+   * discarded unseen, and a warning that changes with whoever gave it is one
+   * the player has to learn several times over.
+   */
+  it('paints every hostile shot the one warning colour', () => {
+    const world = new World(12);
+    const caster = place(world, 'caster', 300, 0);
+
+    enemyAttackSystem(world, DT);
+
+    expect(world.projectiles).toHaveLength(1);
+    expect(world.projectiles[0].color).toBe(HOSTILE_COLOR);
+    expect(world.projectiles[0].color).not.toBe(caster.color);
+  });
+
   it('does not leak hostility back into the player through the pool', () => {
     const world = new World(11);
     hexOnPlayer(world);
@@ -184,6 +205,8 @@ describe('hostile projectiles', () => {
     for (const projectile of world.projectiles) {
       expect(projectile.hostile).toBe(false);
       expect(projectile.sprite).toBe('bolt');
+      // Nor the warning colour: the player's own shots must never wear it.
+      expect(projectile.color).not.toBe(HOSTILE_COLOR);
     }
   });
 });

@@ -334,6 +334,12 @@ export function encodeSnapshot(world: World, focus: Focus | null = null): Uint8A
       out.u8(spriteIndex(shot.sprite));
       out.u8(shot.radius * 2);
       out.u32(shot.color);
+      // Whose shot it is, which a guest cannot work out for itself: it never
+      // steps a simulation, so `hostile` would stay at whatever the pooled
+      // object was last used for — false, always. It used to matter to nobody
+      // on this side of the wire and now it decides whether the shot is drawn
+      // with the halo that makes it findable.
+      out.u8(shot.hostile ? 1 : 0);
       sent++;
     }
     return sent;
@@ -513,6 +519,7 @@ export function applySnapshot(world: World, bytes: Uint8Array): void {
     shot.sprite = SPRITE_NAMES[read.u8()];
     shot.radius = read.u8() / 2;
     shot.color = read.u32();
+    shot.hostile = read.u8() === 1;
   }
 
   const gemCount = read.u16();

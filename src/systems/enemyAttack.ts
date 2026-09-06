@@ -5,6 +5,26 @@ import type { Enemy } from '../world/types';
 import type { World } from '../world/world';
 
 /**
+ * The colour every hostile shot wears, whoever threw it.
+ *
+ * It used to be the thrower's own, and that was invisible twice over. The frame
+ * came off the sheet, so it brought its own green and the tint was discarded
+ * without a word; and even had it landed, a warning that changes colour with
+ * whoever gave it is a warning the player has to learn several times.
+ *
+ * Magenta because it is what the field has left. The land `drawGround` lays,
+ * every tile the horde and the pickups are cut from, and the player's own six
+ * weapon colours were sampled into OKLab and every hue on the circle measured
+ * against them. Magenta sits about twice as far from its nearest neighbour as
+ * anything already in the palette, and — the half that matters for a small fast
+ * object — a quarter of the lightness range above the grass it crosses. Deep
+ * blue scored higher on hue alone and was dropped for exactly that reason: it
+ * lands at the same lightness as the ground, and a warning the brightness of
+ * the floor is a hole rather than a warning.
+ */
+export const HOSTILE_COLOR = 0xff3ddf;
+
+/**
  * The horde's own attacks — everything it does that is not walking into the
  * player.
  *
@@ -107,7 +127,7 @@ export function hurlHex(world: World, enemy: Enemy, shot: HexShot): void {
   projectile.life = shot.life;
   projectile.pierce = 0;
   projectile.lastHitId = 0;
-  projectile.color = enemy.color;
+  projectile.color = HOSTILE_COLOR;
   projectile.hostile = true;
   projectile.sprite = 'hex';
 }
