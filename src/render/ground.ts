@@ -18,6 +18,13 @@
  * on its own is what produced floating crowns, goblets and headless masonry.
  * Everything below is either a whole stamp or a tile that is genuinely one
  * cell: a bush, a sprout, a cluster of mushrooms.
+ *
+ * The fourth try taught the other half of it: **a whole stamp of the wrong art
+ * is no better.** Every building here is drawn from the front, and the pale
+ * grey nine-slice at 96–122 is the one thing in the pack that is not — it is
+ * the inside of a walled yard seen from above. Stamped among houses it came out
+ * as blank plates with a dotted edge, and knocking a gap through one to make it
+ * a ruin only tore the plate in two.
  */
 
 import townUrl from '../assets/kenney-tiny-town.png';
@@ -92,11 +99,51 @@ const HOUSES: readonly (readonly (readonly number[])[])[] = [
   ],
 ];
 
-/** Old stone wall: battlements, body, footing. Ends cap, middles repeat. */
-const WALL_ROWS: readonly (readonly number[])[] = [
-  [96, 97, 98],
-  [108, 109, 110],
-  [120, 121, 122],
+/**
+ * The stone every wall here is built of, and the crown that runs along its top.
+ *
+ * Ends cap, the middle repeats — so a curtain wall of any length is still one
+ * wall rather than a row of separate pieces.
+ */
+const KEEP = 126;
+const CROWN: readonly number[] = [99, 100, 101];
+
+/**
+ * The open half of the archway.
+ *
+ * It is half transparent, because it is a hole in a wall and the pack expects
+ * something behind it. Brick would brick the gate up; bare earth is a road
+ * going through, which is what the pack's own sample puts there.
+ */
+const GATEWAY: readonly number[] = [123, 124];
+
+/** Nothing is drawn here: the sky over the gate, between the two towers. */
+const EMPTY = -1;
+
+/**
+ * The castle, laid out the way the pack's sample image lays one out: two towers
+ * standing over a gatehouse, with the road running out through the arch.
+ *
+ *   99 100 101  the battlemented crown
+ *   125 126     a window, and the plain brick behind everything
+ *   111 112     the arch and its portcullis
+ *   123 124     the opening under it
+ */
+const CASTLE: readonly (readonly number[])[] = [
+  [99, 100, 101, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, 99, 100, 101],
+  [126, 125, 126, 99, 100, 100, 100, 100, 101, 126, 125, 126],
+  [126, 126, 126, 126, 125, 126, 126, 125, 126, 126, 126, 126],
+  [126, 125, 126, 126, 126, 111, 112, 126, 126, 126, 125, 126],
+  [126, 126, 126, 126, 126, 123, 124, 126, 126, 126, 126, 126],
+];
+
+/** A watchtower, standing on its own. */
+const TOWER: readonly (readonly number[])[] = [
+  [99, 100, 101],
+  [126, 125, 126],
+  [126, 126, 126],
+  [126, 125, 126],
+  [126, 126, 126],
 ];
 
 /** A stretch of fence, two rows deep. */
@@ -113,7 +160,8 @@ const FENCE: readonly (readonly number[])[] = [
  * background is one the player has to look past for forty minutes.
  */
 const HOUSE_COUNT = 3;
-const WALL_COUNT = 3;
+const TOWER_COUNT = 2;
+const WALL_COUNT = 2;
 const GROVE_COUNT = 9;
 const FENCE_COUNT = 3;
 const PROP_COUNT = 5;
@@ -124,6 +172,10 @@ const GROVE_MIN = 2;
 const GROVE_MAX = 4;
 const TREE_RARITY = 53;
 const SCRUB_RARITY = 29;
+
+/** How long a length of curtain wall runs, in cells. */
+const WALL_MIN = 5;
+const WALL_SPAN = 4;
 
 /** Tries before a thing gives up on finding room. */
 const PLACEMENT_TRIES = 40;
@@ -192,12 +244,12 @@ class Land {
 
     this.layGrass();
     this.layEarth();
+    this.layMasonry();
 
     for (let k = 0; k < HOUSE_COUNT; k++) {
       this.place(HOUSES[k % HOUSES.length], mix(1000 + k, 17));
     }
 
-    this.layWalls();
     this.layGroves();
 
     for (let k = 0; k < FENCE_COUNT; k++) this.place(FENCE, mix(3000 + k, 41));
@@ -246,21 +298,31 @@ class Land {
       }
       rows.push(widen(EARTH_EDGES[2], width));
 
-      this.place(rows, seed, false);
+      this.place(rows, seed, { claim: false });
     }
   }
 
-  /** Old walls, each with a stretch knocked out of it. */
-  private layWalls(): void {
+  /**
+   * The stonework: one castle, a tower or two, a length of curtain wall.
+   *
+   * The castle is laid before the houses because it is the largest thing on the
+   * patch, and something twelve cells across only finds room while the field is
+   * still empty.
+   */
+  private layMasonry(): void {
+    this.place(CASTLE, mix(2000, 29), { solid: true });
+
+    for (let k = 0; k < TOWER_COUNT; k++) {
+      this.place(TOWER, mix(2100 + k, 29), { solid: true });
+    }
+
     for (let k = 0; k < WALL_COUNT; k++) {
-      const seed = mix(2000 + k, 29);
-      const width = 4 + ((seed >>> 4) % 3);
-      const gap = 1 + ((seed >>> 9) % (width - 2));
+      const seed = mix(2200 + k, 29);
+      const width = WALL_MIN + ((seed >>> 4) % WALL_SPAN);
       this.place(
-        WALL_ROWS.map((line) => widen(line, width)),
+        [widen(CROWN, width), filled(KEEP, width), filled(KEEP, width)],
         seed,
-        true,
-        gap,
+        { solid: true },
       );
     }
   }
@@ -313,8 +375,7 @@ class Land {
   private place(
     rows: readonly (readonly number[])[],
     seed: number,
-    claim = true,
-    gap = -1,
+    { claim = true, solid = false }: { claim?: boolean; solid?: boolean } = {},
   ): void {
     const height = rows.length;
     const width = rows[0].length;
@@ -329,21 +390,33 @@ class Land {
         this.claim(col, row, width, height);
       }
 
-      this.stamp(rows, col, row, gap);
+      this.stamp(rows, col, row, solid);
       return;
     }
   }
 
+  /**
+   * Puts a stamp down, cell by cell.
+   *
+   * `solid` is for masonry, and paints the wall's own stone under every cell
+   * first. The arch is the reason: its lower half is a hole, and without
+   * something behind it the gate shows the meadow through the castle.
+   */
   private stamp(
     rows: readonly (readonly number[])[],
     col: number,
     row: number,
-    gap = -1,
+    solid = false,
   ): void {
     for (let dy = 0; dy < rows.length; dy++) {
       for (let dx = 0; dx < rows[dy].length; dx++) {
-        if (dx === gap) continue;
-        this.blit(rows[dy][dx], col + dx, row + dy);
+        const tile = rows[dy][dx];
+        if (tile === EMPTY) continue;
+
+        if (solid) {
+          this.blit(GATEWAY.includes(tile) ? EARTH_FILL : KEEP, col + dx, row + dy);
+        }
+        this.blit(tile, col + dx, row + dy);
       }
     }
   }
