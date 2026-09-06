@@ -33,7 +33,14 @@ export type SpriteName =
   | 'caster'
   /** Costs something to kill: it goes off where it falls. */
   | 'bomber'
-  /** What a caster throws. The only projectile that belongs to the horde. */
+  /**
+   * What a caster throws, and what a boss throws ten of at once.
+   *
+   * Drawn rather than cut from the sheet, which is the whole of its legibility:
+   * tile 114 is a green flask and both gems are flasks too, so the one thing
+   * the player has to see coming was the same rack of glassware as the two
+   * things lying on the floor. See `SPRITE_TILES`.
+   */
   | 'hex'
   | 'boss'
   | 'bolt'
@@ -66,7 +73,15 @@ export type SpriteName =
   | 'gemRich'
   /** The one thing standing still in the world, holding one of three spoils. */
   | 'chest'
-  | 'ring';
+  | 'ring'
+  /**
+   * The halo a hostile shot wears.
+   *
+   * Nothing in the world is one — like `ring` it is a frame the renderer asks
+   * for and the data never names. It is drawn under every hex, twice as wide,
+   * so that a fourteen-pixel object can be found in a crowd of six hundred.
+   */
+  | 'threat';
 
 /**
  * Every frame name, in a fixed order.
@@ -105,6 +120,7 @@ export const SPRITE_NAMES = [
   'gemRich',
   'chest',
   'ring',
+  'threat',
 ] as const satisfies readonly SpriteName[];
 
 /** Where a frame sits in `SPRITE_NAMES`, for putting one into a byte. */

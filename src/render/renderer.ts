@@ -45,6 +45,28 @@ const FLAME_ALPHA = 0.42;
  */
 const EMBER_FRAME_TIME = 0.11;
 
+/**
+ * The halo under a hostile shot: how much wider than the shot it sits, how much
+ * of that it breathes, and how long one breath takes.
+ *
+ * The shot is drawn at the radius that damages and not a pixel more, which is
+ * this project's rule for everything that hits. The halo is what makes it
+ * findable, and it is allowed to be twice the size precisely because it hits
+ * nothing — it is a glow, not a claim.
+ *
+ * They breathe in step, which is the opposite of what the horde does. Bodies
+ * are given a phase each so that a crowd does not march in time; shots are
+ * given none, so that the ten a boss bursts out at once read as one thing to
+ * get away from rather than as ten separate ones.
+ */
+const THREAT_SCALE = 2.2;
+const THREAT_SWELL = 0.16;
+const THREAT_PULSE = 0.6;
+
+/** What the halo fades between over one breath. */
+const THREAT_DIM = 0.62;
+const THREAT_BRIGHT = 0.9;
+
 /** Diameter of the mark left where a click sent the player, in world units. */
 const MARKER_SIZE = 26;
 
@@ -93,6 +115,7 @@ export class GameRenderer {
   private readonly playerLayer = new Container();
   private readonly orbLayer = new Container();
   private readonly spearLayer = new Container();
+  private readonly threatLayer = new Container();
   private readonly projectileLayer = new Container();
 
   private markerSprite!: Sprite;
@@ -106,6 +129,7 @@ export class GameRenderer {
   private readonly effectSprites: Sprite[] = [];
   private readonly orbSprites: Sprite[] = [];
   private readonly spearSprites: Sprite[] = [];
+  private readonly threatSprites: Sprite[] = [];
 
   async init(host: HTMLElement): Promise<void> {
     await this.app.init({
@@ -158,6 +182,11 @@ export class GameRenderer {
     // trip is going to cost. Then gems, then the horde. Shockwaves draw over
     // the horde or the crowd would swallow them; the player and their blades
     // stay on top of both.
+    //
+    // The horde's shots are last, and their halos immediately under them. A
+    // warning has to be above the thing it warns about or the thing hides it,
+    // and the halo is additive, so being on top of the player brightens them
+    // rather than covering them up.
     this.camera.addChild(
       this.markerSprite,
       this.flameLayer,
@@ -169,6 +198,7 @@ export class GameRenderer {
       this.playerLayer,
       this.orbLayer,
       this.spearLayer,
+      this.threatLayer,
       this.projectileLayer,
     );
     this.app.stage.addChild(this.background, this.camera);
@@ -470,6 +500,52 @@ export class GameRenderer {
       // The blade points up in the sheet; turn it to face where it is going.
       sprite.rotation = Math.atan2(projectile.vy, projectile.vx) + Math.PI / 2;
       sprite.tint = this.tintFor(projectile.sprite, projectile.color);
+    }
+
+    this.drawThreats(world, alpha);
+  }
+
+  /**
+   * The halo under every hostile shot, as a second pass over the ones that have
+   * one.
+   *
+   * A pass of its own for the same reason the damage flash has one: only some
+   * of the list wants it, so counting first keeps the pool at the number
+   * actually on screen instead of one per projectile in the world.
+   *
+   * Additive, so it brightens the ground and the crowd underneath rather than
+   * hiding either. A warning that covered what it warns about would cost more
+   * than it bought — and the crowd standing in a hex's path is exactly the
+   * information the player is using to decide where to stand.
+   */
+  private drawThreats(world: World, alpha: number): void {
+    const projectiles = world.projectiles;
+
+    let needed = 0;
+    for (let i = 0; i < projectiles.length; i++) {
+      if (projectiles[i].hostile) needed++;
+    }
+
+    this.resize(this.threatSprites, this.threatLayer, needed, this.textures.sprites.threat);
+
+    // One breath shared by all of them, off the run's own clock rather than a
+    // wall one, so the pulse stops with a paused game the way the fire does.
+    const breath = 0.5 - 0.5 * Math.cos((world.time / THREAT_PULSE) * TAU);
+
+    let next = 0;
+    for (let i = 0; i < projectiles.length; i++) {
+      const projectile = projectiles[i];
+      if (!projectile.hostile) continue;
+
+      const sprite = this.threatSprites[next++];
+      sprite.blendMode = 'add';
+      sprite.position.set(
+        lerp(projectile.px, projectile.x, alpha),
+        lerp(projectile.py, projectile.y, alpha),
+      );
+      fit(sprite, projectile.radius * 2 * THREAT_SCALE * (1 + THREAT_SWELL * breath));
+      sprite.tint = this.tintFor('threat', projectile.color);
+      sprite.alpha = THREAT_DIM + (THREAT_BRIGHT - THREAT_DIM) * breath;
     }
   }
 

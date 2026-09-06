@@ -4,9 +4,13 @@ import {
   EMBER_GRID,
   SPRITE_DRAWERS,
   SPRITE_SPECS,
+  THREAT_GRID,
+  THREAT_RINGS,
   emberCellFits,
   emberFramePixels,
+  hexRing,
   packFrames,
+  threatBand,
 } from '../src/render/atlas';
 import type { Frame } from '../src/render/atlas';
 
@@ -114,6 +118,87 @@ describe('sprite catalogue', () => {
     const names = [...ENEMIES, BOSS].map((def) => def.sprite);
 
     expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+/**
+ * The two frames a hostile shot is made of, and the line between them.
+ *
+ * One makes a promise to the simulation and the other deliberately makes none,
+ * which is the whole of the design. The ring is the shot: it is drawn at the
+ * radius that damages, because this project's rule is that a thing hits where
+ * it is drawn, and the rule does not soften for something aimed *at* the
+ * player. The halo hits nobody, and that is its licence to be twice the size —
+ * fourteen pixels cannot be made findable in a crowd of six hundred by shaping
+ * them, only by putting something around them.
+ */
+describe("the horde's shot", () => {
+  it('draws the ring at exactly the radius it hits', () => {
+    for (const size of [16, 32, 64]) {
+      const ring = hexRing(size);
+
+      // The sprite is scaled so the frame spans `radius * 2`, so the outer edge
+      // of the stroke has to land on the frame's own edge. It used to sit a
+      // whole further stroke width inside, which drew the shot smaller than it
+      // hit — wrong in the one direction a projectile must never be wrong.
+      expect(ring.radius + ring.width / 2, `${size}px`).toBeCloseTo(size / 2);
+      // Still a ring: a stroke thick enough to close over the middle would be a
+      // dot, and a dot is what the frame exists not to be.
+      expect(ring.radius - ring.width / 2, `${size}px`).toBeGreaterThan(0);
+    }
+  });
+
+  it('fades the halo outward and never brightens on the way', () => {
+    expect(THREAT_RINGS.length).toBeGreaterThan(1);
+
+    THREAT_RINGS.forEach((alpha, band) => {
+      expect(alpha, `band ${band}`).toBeGreaterThan(0);
+      expect(alpha, `band ${band}`).toBeLessThanOrEqual(1);
+      if (band > 0) expect(alpha, `band ${band}`).toBeLessThan(THREAT_RINGS[band - 1]);
+    });
+  });
+
+  /**
+   * A square halo would read as a tile, and a dozen shots as a row of tiles.
+   * The corners are the whole test: they are what a distance measured to the
+   * cell's corner rather than its middle would light.
+   */
+  it('keeps the halo round', () => {
+    expect(threatBand(0, 0)).toBe(-1);
+    expect(threatBand(THREAT_GRID - 1, 0)).toBe(-1);
+    expect(threatBand(0, THREAT_GRID - 1)).toBe(-1);
+    expect(threatBand(THREAT_GRID - 1, THREAT_GRID - 1)).toBe(-1);
+    expect(threatBand(THREAT_GRID / 2, THREAT_GRID / 2)).toBe(0);
+  });
+
+  /**
+   * The band is a function of distance and of nothing else, which is what makes
+   * the halo read as one glow instead of as a pattern. Checked over every pair
+   * of cells rather than by inspection: a glow with a bright ring loose in it
+   * is the sort of thing a retune leaves behind and no eye catches at 30px.
+   */
+  it('never puts a brighter cell further out than a dimmer one', () => {
+    const middle = THREAT_GRID / 2;
+    const lit: { reach: number; alpha: number }[] = [];
+
+    for (let row = 0; row < THREAT_GRID; row++) {
+      for (let col = 0; col < THREAT_GRID; col++) {
+        const band = threatBand(col, row);
+        if (band < 0) continue;
+        expect(band, `(${col}, ${row})`).toBeLessThan(THREAT_RINGS.length);
+        lit.push({
+          reach: Math.hypot(col + 0.5 - middle, row + 0.5 - middle),
+          alpha: THREAT_RINGS[band],
+        });
+      }
+    }
+
+    expect(lit.length).toBeGreaterThan(THREAT_GRID * 2);
+    for (const a of lit) {
+      for (const b of lit) {
+        if (a.reach < b.reach) expect(a.alpha).toBeGreaterThanOrEqual(b.alpha);
+      }
+    }
   });
 });
 
